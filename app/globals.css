@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #0e6037;
+  --secondary: #008c45;
+  --background: #f5f5f5;
+  --card-bg: #ffffff;
+  --text: #333333;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .text-primary {
+    color: var(--primary);
+  }
+
+  .text-secondary {
+    color: var(--secondary);
+  }
+
+  .bg-primary {
+    background-color: var(--primary);
+  }
+
+  .bg-secondary {
+    background-color: var(--secondary);
+  }
+
+  .border-primary {
+    border-color: var(--primary);
+  }
+
+  .border-secondary {
+    border-color: var(--secondary);
+  }
+
+  .hover\:bg-primary:hover {
+    background-color: var(--primary);
+  }
+
+  .hover\:bg-secondary:hover {
+    background-color: var(--secondary);
+  }
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 480px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* Ensure minimum touch target sizes for accessibility */
+button,
+.btn {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* High contrast for accessibility */
+.high-contrast {
+  color: #333333;
+  background-color: #ffffff;
+}
