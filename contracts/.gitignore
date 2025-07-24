@@ -1,0 +1,16 @@
+# Hardhat files
+cache/
+artifacts/
+
+
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Hardhat ignition
+ignition/deployments/
+
+# Logs
+*.log

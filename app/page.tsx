@@ -314,8 +314,8 @@ export default function HomePage() {
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 px-3 py-4 sticky top-0 z-40">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between max-w-6xl mx-auto">
           <div className="flex items-center space-x-3 mb-3 sm:mb-0">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 flex items-center justify-center">
+              <img src="/minilend-logo.png" alt="Minilend Logo" className="w-10 h-10 object-contain" />
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-primary">

@@ -561,13 +561,11 @@ export function ContractProvider({ children }: { children: ReactNode }) {
   // Safe approve function that handles tokens requiring allowance reset
   const safeApprove = async (token: string, spender: string, amount: bigint): Promise<void> => {
     if (!walletClient) throw new Error("Wallet not connected");
-    
     try {
       // For USDC and potentially other tokens that require setting allowance to 0 first
       // This mimics the behavior of OpenZeppelin's forceApprove
       if (token.toLowerCase() === ALL_SUPPORTED_TOKENS.USDC.address.toLowerCase()) {
         console.log("Using safe approval pattern for USDC token");
-        
         try {
           // First set allowance to 0
           const resetTx = await walletClient.writeContract({
@@ -584,6 +582,12 @@ export function ContractProvider({ children }: { children: ReactNode }) {
           console.log("Successfully reset USDC allowance to 0");
         } catch (resetError: any) {
           console.error("Error resetting allowance:", resetError);
+          // Check for disk space errors
+          if (resetError.message?.includes("FILE_ERROR_NO_SPACE") ||
+              resetError.message?.includes("QuotaExceededError") ||
+              resetError.message?.includes("no space")) {
+            throw new Error("Your device is running out of disk space. Please free up some space and try again.");
+          }
           // If resetting fails, we'll still try to set the allowance directly
           // Some implementations might not require the reset
         }
@@ -604,8 +608,14 @@ export function ContractProvider({ children }: { children: ReactNode }) {
       console.log(`Successfully approved ${amount} tokens for ${spender}`);
     } catch (error: any) {
       console.error("Safe approve error:", error);
-      if (error.message.includes("User rejected")) {
-        throw new Error("Transaction was cancelled.");
+      if (error.message?.includes("FILE_ERROR_NO_SPACE") ||
+          error.message?.includes("QuotaExceededError") ||
+          error.message?.includes("no space")) {
+        throw new Error("Your device is running out of disk space. Please free up some space and try again.");
+      } else if (error.message?.includes("User rejected") ||
+                error.message?.includes("rejected the request")) {
+        console.log("User cancelled the transaction in their wallet");
+        throw new Error("Transaction was cancelled. You rejected the request in your wallet.");
       } else if (error.message.includes("chain")) {
         throw new Error("Please switch to the Celo network in your wallet settings.");
       } else {

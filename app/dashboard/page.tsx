@@ -156,11 +156,14 @@ export default function DashboardPage() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-primary">Pool Dashboard</h1>
-            <p className="text-sm text-gray-600">
-              {formatAddress(address || "")}
-            </p>
+          <div className="flex items-center flex-1">
+            <img src="/minilend-logo.png" alt="Minilend Logo" className="w-8 h-8 object-contain mr-2" />
+            <div>
+              <h1 className="text-xl font-bold text-primary">Pool Dashboard</h1>
+              <p className="text-sm text-gray-600">
+                {formatAddress(address || "")}
+              </p>
+            </div>
           </div>
         </div>
       </header>

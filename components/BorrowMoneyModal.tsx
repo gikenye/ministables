@@ -73,8 +73,36 @@ export function BorrowMoneyModal({
       return;
     }
 
-    await onDepositCollateral(form.collateralToken, form.collateralAmount);
-    setForm((prev) => ({ ...prev, collateralAmount: "" }));
+    try {
+      await onDepositCollateral(form.collateralToken, form.collateralAmount);
+      setForm((prev) => ({ ...prev, collateralAmount: "" }));
+    } catch (error: any) {
+      console.error("Deposit collateral error:", error);
+      
+      // Check for specific errors
+      if (error.message?.includes("FILE_ERROR_NO_SPACE") ||
+          error.message?.includes("QuotaExceededError") ||
+          error.message?.includes("no space")) {
+        toast({
+          title: "Storage Error",
+          description: "Your device is running out of disk space. Please free up some space and try again.",
+          variant: "destructive",
+        });
+      } else if (error.message?.includes("User rejected") ||
+                error.message?.includes("rejected the request")) {
+        toast({
+          title: "Transaction Cancelled",
+          description: "You cancelled the transaction in your wallet.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to deposit collateral. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const handleBorrow = async () => {
@@ -96,14 +124,42 @@ export function BorrowMoneyModal({
       return;
     }
 
-    await onBorrow(form.token, form.amount, form.collateralToken);
-    setForm({
-      token: "",
-      collateralToken: "",
-      amount: "",
-      collateralAmount: "",
-    });
-    onClose();
+    try {
+      await onBorrow(form.token, form.amount, form.collateralToken);
+      setForm({
+        token: "",
+        collateralToken: "",
+        amount: "",
+        collateralAmount: "",
+      });
+      onClose();
+    } catch (error: any) {
+      console.error("Borrow error:", error);
+      
+      // Check for specific errors
+      if (error.message?.includes("FILE_ERROR_NO_SPACE") ||
+          error.message?.includes("QuotaExceededError") ||
+          error.message?.includes("no space")) {
+        toast({
+          title: "Storage Error",
+          description: "Your device is running out of disk space. Please free up some space and try again.",
+          variant: "destructive",
+        });
+      } else if (error.message?.includes("User rejected") ||
+                error.message?.includes("rejected the request")) {
+        toast({
+          title: "Transaction Cancelled",
+          description: "You cancelled the transaction in your wallet.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to borrow money. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   return (
