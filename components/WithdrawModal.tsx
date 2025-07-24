@@ -18,63 +18,68 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TrendingUp } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useContract, ensureCeloNetwork } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 
-interface SaveMoneyModalProps {
+interface WithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (token: string, amount: string, lockPeriod: number) => Promise<void>;
-  userBalances: Record<string, string>;
+  onWithdraw: (token: string, amount: string) => Promise<void>;
+  userDeposits: Record<string, string>;
+  depositLockEnds: Record<string, number>;
   tokenInfos: Record<string, { symbol: string; decimals: number }>;
   loading: boolean;
 }
 
-export function SaveMoneyModal({
+export function WithdrawModal({
   isOpen,
   onClose,
-  onSave,
-  userBalances,
+  onWithdraw,
+  userDeposits,
+  depositLockEnds,
   tokenInfos,
   loading,
-}: SaveMoneyModalProps) {
-  const { supportedStablecoins, defaultLockPeriods, allTokens } = useContract();
+}: WithdrawModalProps) {
+  const { supportedStablecoins, allTokens } = useContract();
 
   const [form, setForm] = useState({
     token: "",
     amount: "",
-    lockPeriod: "2592000", // 30 days default
   });
 
   const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
-  const handleSave = async () => {
-    if (!form.token || !form.amount || !form.lockPeriod) return;
+  const handleWithdraw = async () => {
+    if (!form.token || !form.amount) return;
 
     setError(null);
-    setIsSaving(true);
+    setIsWithdrawing(true);
 
     try {
       // Ensure we're on the Celo network before proceeding
       await ensureCeloNetwork();
 
-      // Proceed with the save operation
-      await onSave(form.token, form.amount, Number.parseInt(form.lockPeriod));
-      setForm({ token: "", amount: "", lockPeriod: "2592000" });
+      // Proceed with the withdrawal
+      await onWithdraw(form.token, form.amount);
+      setForm({ token: "", amount: "" });
       onClose();
     } catch (err: any) {
-      console.error("Error saving money:", err);
-      setError(err.message || "Failed to save money. Please try again.");
+      console.error("Error withdrawing money:", err);
+      setError(err.message || "Failed to withdraw money. Please try again.");
     } finally {
-      setIsSaving(false);
+      setIsWithdrawing(false);
     }
   };
 
-  const getLockPeriodText = (seconds: string) => {
-    const days = Number.parseInt(seconds) / 86400;
-    return `${days} days`;
+  const isLocked = (timestamp: number) => {
+    return timestamp > 0 && timestamp > Date.now() / 1000;
+  };
+
+  const formatDate = (timestamp: number) => {
+    if (timestamp === 0) return "No lock";
+    return new Date(timestamp * 1000).toLocaleDateString();
   };
 
   const getTokenCategory = (tokenAddress: string) => {
@@ -110,8 +115,13 @@ export function SaveMoneyModal({
     }
   };
 
+  // Filter tokens to show all with deposits (even if locked)
+  const availableTokens = supportedStablecoins.filter(
+    (token) => userDeposits[token] && userDeposits[token] !== "0"
+  );
+
   // Group tokens by category
-  const groupedTokens = supportedStablecoins.reduce(
+  const groupedTokens = availableTokens.reduce(
     (acc, tokenAddress) => {
       const category = getTokenCategory(tokenAddress);
       if (!acc[category]) acc[category] = [];
@@ -126,12 +136,10 @@ export function SaveMoneyModal({
       <DialogContent className="max-w-sm mx-auto bg-white border-0 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center text-gray-900 text-lg font-semibold">
-            <TrendingUp className="w-5 h-5 mr-2 text-primary" />
-            Save Money
+            <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
+            Withdraw Money
           </DialogTitle>
-          <DialogDescription>
-            Deposit money to earn interest over time
-          </DialogDescription>
+          <DialogDescription>Withdraw your available funds</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -143,7 +151,7 @@ export function SaveMoneyModal({
         <div className="space-y-4">
           <div>
             <Label
-              htmlFor="save-token"
+              htmlFor="withdraw-token"
               className="text-sm font-medium text-gray-700"
             >
               Money Type
@@ -155,6 +163,34 @@ export function SaveMoneyModal({
               <SelectTrigger className="mt-1 min-h-[48px]">
                 <SelectValue placeholder="Select money type" />
               </SelectTrigger>
+              {/* Show available balances summary before selection */}
+              {availableTokens.length > 0 && !form.token && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-md text-sm">
+                  <p className="font-medium text-primary mb-1">
+                    Available balances:
+                  </p>
+                  {availableTokens.slice(0, 3).map((token) => (
+                    <div
+                      key={token}
+                      className="flex justify-between items-center mb-1"
+                    >
+                      <span>{tokenInfos[token]?.symbol}</span>
+                      <span className="font-medium">
+                        {formatAmount(
+                          userDeposits[token],
+                          tokenInfos[token]?.decimals || 18
+                        )}
+                        {isLocked(depositLockEnds[token]) ? " (Locked)" : ""}
+                      </span>
+                    </div>
+                  ))}
+                  {availableTokens.length > 3 && (
+                    <p className="text-xs text-gray-500 text-center">
+                      + {availableTokens.length - 3} more
+                    </p>
+                  )}
+                </div>
+              )}
               <SelectContent>
                 {Object.entries(groupedTokens).map(([category, tokens]) => (
                   <div key={category}>
@@ -184,19 +220,24 @@ export function SaveMoneyModal({
                     })}
                   </div>
                 ))}
+                {Object.keys(groupedTokens).length === 0 && (
+                  <div className="px-2 py-3 text-sm text-gray-500 text-center">
+                    No available tokens to withdraw
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
 
           <div>
             <Label
-              htmlFor="save-amount"
+              htmlFor="withdraw-amount"
               className="text-sm font-medium text-gray-700"
             >
               Amount
             </Label>
             <Input
-              id="save-amount"
+              id="withdraw-amount"
               type="number"
               placeholder="0.00"
               value={form.amount}
@@ -205,40 +246,28 @@ export function SaveMoneyModal({
               min="0.01"
               step="0.01"
             />
-            {form.token && userBalances[form.token] && (
-              <p className="text-sm text-gray-600 mt-1">
-                Available:{" "}
-                {formatAmount(
-                  userBalances[form.token],
-                  tokenInfos[form.token]?.decimals || 18
-                )}{" "}
-                {tokenInfos[form.token]?.symbol}
-              </p>
+            {form.token && userDeposits[form.token] && (
+              <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">
+                    Available:
+                  </span>
+                  <span className="text-base font-bold text-primary">
+                    {formatAmount(
+                      userDeposits[form.token],
+                      tokenInfos[form.token]?.decimals || 18
+                    )}{" "}
+                    {tokenInfos[form.token]?.symbol}
+                  </span>
+                </div>
+                {depositLockEnds[form.token] &&
+                  isLocked(depositLockEnds[form.token]) && (
+                    <p className="text-sm text-red-500 mt-1">
+                      ⚠️ Locked until {formatDate(depositLockEnds[form.token])}
+                    </p>
+                  )}
+              </div>
             )}
-          </div>
-
-          <div>
-            <Label
-              htmlFor="save-lock"
-              className="text-sm font-medium text-gray-700"
-            >
-              Lock For
-            </Label>
-            <Select
-              value={form.lockPeriod}
-              onValueChange={(value) => setForm({ ...form, lockPeriod: value })}
-            >
-              <SelectTrigger className="mt-1 min-h-[48px]">
-                <SelectValue placeholder="Select lock period" />
-              </SelectTrigger>
-              <SelectContent>
-                {defaultLockPeriods.map((period) => (
-                  <SelectItem key={period} value={period}>
-                    {getLockPeriodText(period)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -250,11 +279,19 @@ export function SaveMoneyModal({
               Cancel
             </Button>
             <Button
-              onClick={handleSave}
-              disabled={loading || isSaving || !form.token || !form.amount}
+              onClick={handleWithdraw}
+              disabled={
+                loading ||
+                isWithdrawing ||
+                !form.token ||
+                !form.amount ||
+                isLocked(depositLockEnds[form.token]) ||
+                !userDeposits[form.token] ||
+                userDeposits[form.token] === "0"
+              }
               className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
             >
-              {loading || isSaving ? "Saving..." : "Save Now"}
+              {loading || isWithdrawing ? "Withdrawing..." : "Withdraw N"}
             </Button>
           </div>
         </div>

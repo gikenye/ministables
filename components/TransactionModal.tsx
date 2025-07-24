@@ -1,23 +1,34 @@
-"use client"
+"use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, ExternalLink } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, XCircle, ExternalLink } from "lucide-react";
 
 interface TransactionModalProps {
-  isOpen: boolean
-  onClose: () => void
-  type: "success" | "error"
-  message: string
-  txHash?: string
+  isOpen: boolean;
+  onClose: () => void;
+  type: "success" | "error";
+  message: string;
+  txHash?: string;
 }
 
-export function TransactionModal({ isOpen, onClose, type, message, txHash }: TransactionModalProps) {
+export function TransactionModal({
+  isOpen,
+  onClose,
+  type,
+  message,
+  txHash,
+}: TransactionModalProps) {
   const handleViewOnCeloScan = () => {
     if (txHash) {
-      window.open(`https://celoscan.io/tx/${txHash}`, "_blank")
+      window.open(`https://celoscan.io/tx/${txHash}`, "_blank");
     }
-  }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -50,7 +61,9 @@ export function TransactionModal({ isOpen, onClose, type, message, txHash }: Tra
           <Button
             onClick={onClose}
             className={`w-full ${
-              type === "success" ? "bg-primary hover:bg-secondary" : "bg-red-500 hover:bg-red-600"
+              type === "success"
+                ? "bg-primary hover:bg-secondary"
+                : "bg-red-500 hover:bg-red-600"
             } text-white`}
           >
             Close
@@ -58,5 +71,5 @@ export function TransactionModal({ isOpen, onClose, type, message, txHash }: Tra
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
