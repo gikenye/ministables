@@ -6,20 +6,27 @@
 export function registerServiceWorker() {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      const swUrl = '/sw.js';
+      // Use our fixed service worker
+      const swUrl = '/sw-fix.js';
       
-      navigator.serviceWorker.register(swUrl)
-        .then(function(registration) {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-          
-          // Check for updates every hour (optimized for low data usage)
-          setInterval(() => {
-            registration.update();
-          }, 60 * 60 * 1000);
-        })
-        .catch(function(error) {
-          console.error('ServiceWorker registration failed: ', error);
+      // Unregister any existing service workers first
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(registration => {
+          registration.unregister();
         });
+        // Then register our fixed service worker
+        navigator.serviceWorker.register(swUrl)
+          .then(function(registration) {
+            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            // Check for updates every hour (optimized for low data usage)
+            setInterval(() => {
+              registration.update();
+            }, 60 * 60 * 1000);
+          })
+          .catch(function(error) {
+            console.error('ServiceWorker registration failed: ', error);
+          });
+      });
     });
   }
 }

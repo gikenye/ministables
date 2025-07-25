@@ -29,8 +29,8 @@ export function ConnectWalletButton({
   const [showMobileButton, setShowMobileButton] = useState(false);
 
   useEffect(() => {
-    // Only show the mobile button on mobile devices without MetaMask
-    setShowMobileButton(isMobileDevice() && !isMetaMaskInstalled());
+    // Check if we're on a mobile device
+    setShowMobileButton(isMobileDevice());
   }, []);
 
   if (isConnected) {
@@ -49,7 +49,7 @@ export function ConnectWalletButton({
     );
   }
 
-  // Show MetaMask mobile button for mobile users without MetaMask
+  // Show MetaMask mobile button for mobile users for better UX
   if (showMobileButton) {
     return (
       <MetaMaskMobileButton
