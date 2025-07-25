@@ -50,31 +50,29 @@ export default function Home() {
   // Use useEffect to ensure code only executes on the client side
   useEffect(() => {
     if (!userId || userId === ethers.ZeroAddress) return;
-    
     try {
       const app = new SelfAppBuilder({
         version: 2,
         appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Minilend",
         scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-by-pesabits",
         endpoint: `${process.env.NEXT_PUBLIC_SELF_ENDPOINT}`,
-        logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png", // url of a png image, base64 is accepted but not recommended
+        logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
         userId: userId,
         endpointType: "staging_celo",
         userIdType: "hex", // use 'hex' for ethereum address or 'uuid' for uuidv4
         userDefinedData: "Hakuna Matata 😁 !!",
         disclosures: {
-          // What you want to verify from users' identity
+          // Only request minimal information
           minimumAge: 18,
-          ofac: false,
+          ofac: true, // Check if user is not on OFAC list
           nationality: true,
-          gender: true,
-
-          // What you want users to reveal
-          name: true,
-          issuing_state: true,
-          date_of_birth: true,
-          passport_number: true,
-          expiry_date: true,
+          // Don't request additional personal information
+          name: false,
+          gender: false,
+          issuing_state: false,
+          date_of_birth: false,
+          passport_number: false,
+          expiry_date: false,
         },
         devMode: true,
       }).build();

@@ -7,6 +7,7 @@ import {
   DefaultConfigStore,
   VerificationConfig
 } from "@selfxyz/core";
+import { UserService } from "@/lib/services/userService";
 
 export async function POST(req: NextRequest) {
   console.log("Received request");
@@ -57,6 +58,40 @@ export async function POST(req: NextRequest) {
     )) as unknown as SelfAppDisclosureConfig;
 
     if (result.isValidDetails.isValid) {
+      // Extract user address from userContextData
+      const userAddress = userContextData?.userId;
+      if (userAddress) {
+        try {
+          // Store verification data in the user record
+          await UserService.upsertUser(userAddress, {
+            verified: true,
+            verificationData: {
+              attestationId,
+              credentialSubject: result.discloseOutput,
+              verificationOptions: {
+                minimumAge: saveOptions.minimumAge,
+                ofac: saveOptions.ofac,
+                excludedCountries: saveOptions.excludedCountries?.map(
+                  (countryName) => {
+                    const entry = Object.entries(countryCodes).find(
+                      ([_, name]) => name === countryName
+                    );
+                    return entry ? entry[0] : countryName;
+                  }
+                ),
+              },
+              verifiedAt: new Date()
+            },
+            identityData: {
+              nationality: result.discloseOutput?.nationality,
+              minimumAge: saveOptions.minimumAge
+            }
+          });
+        } catch (error) {
+          console.error("Error storing verification data:", error);
+          // Continue even if storage fails - we don't want to block verification
+        }
+      }
 
       return NextResponse.json({
         status: "success",

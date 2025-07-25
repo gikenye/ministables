@@ -6,6 +6,7 @@ declare module "next-auth" {
       address: string;
       verified: boolean;
       identityData?: any;
+      username?: string;
     } & DefaultSession["user"];
   }
 
@@ -13,6 +14,7 @@ declare module "next-auth" {
     address: string;
     verified: boolean;
     identityData?: any;
+    username?: string;
   }
 }
 
@@ -21,5 +23,6 @@ declare module "next-auth/jwt" {
     address: string;
     verified: boolean;
     identityData?: any;
+    username?: string;
   }
 }
