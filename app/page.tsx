@@ -11,10 +11,13 @@ import {
   BarChart3,
   Sparkles,
   WifiOff,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useWallet } from "@/lib/wallet";
 import { useContract } from "@/lib/contract";
+import { useSession } from "next-auth/react";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { TransactionModal } from "@/components/TransactionModal";
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
@@ -30,6 +33,8 @@ import {
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 
 export default function HomePage() {
+  const router = useRouter();
+  const { data: session } = useSession();
   const { isConnected, address, connect, disconnect, isConnecting, error } =
     useWallet();
 
@@ -60,6 +65,7 @@ export default function HomePage() {
     type: "success",
     message: "",
   });
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   const [userBalances, setUserBalances] = useState<Record<string, string>>({});
   const [userCollaterals, setUserCollaterals] = useState<
@@ -80,6 +86,25 @@ export default function HomePage() {
       loadUserData();
     }
   }, [isConnected, address, supportedStablecoins]);
+
+  // Check if user needs verification
+  useEffect(() => {
+    if (isConnected && !session?.user?.verified) {
+      setNeedsVerification(true);
+    } else {
+      setNeedsVerification(false);
+    }
+  }, [isConnected, session]);
+
+  // Redirect to verification page if needed
+  useEffect(() => {
+    if (needsVerification && isConnected) {
+      const timer = setTimeout(() => {
+        router.push("/self");
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [needsVerification, isConnected, router]);
 
   // Monitor online/offline status
   useEffect(() => {
@@ -380,6 +405,13 @@ export default function HomePage() {
             <p>You are currently offline. Some features may be limited.</p>
           </div>
         )}
+
+        {needsVerification && isConnected && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm flex items-center">
+            <Shield className="w-4 h-4 mr-2" />
+            <p>Identity verification required. Redirecting to verification page...</p>
+          </div>
+        )}
         {loading ? (
           <LoadingIndicator size="lg" text="Loading your account..." />
         ) : !isConnected ? (
@@ -428,6 +460,13 @@ export default function HomePage() {
               <p className="text-gray-600 text-base sm:text-lg">
                 Choose an action to get started
               </p>
+              {/* Verification Badge */}
+              {session?.user?.verified && (
+                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                  <Shield className="w-3 h-3 mr-1" />
+                  Verified
+                </div>
+              )}
             </div>
 
             {/* Action Cards Grid */}

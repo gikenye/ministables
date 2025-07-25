@@ -7,6 +7,8 @@ import {
   isMetaMaskInstalled,
   openMetaMaskMobile,
 } from "@/lib/metamask";
+import { useWallet } from "@/lib/wallet";
+import { ensureCeloNetwork } from "@/lib/contract";
 
 interface MetaMaskMobileButtonProps {
   chainId?: string;
@@ -19,6 +21,7 @@ interface MetaMaskMobileButtonProps {
     | "ghost"
     | "link";
   size?: "default" | "sm" | "lg" | "icon";
+  onConnected?: () => void;
 }
 
 export function MetaMaskMobileButton({
@@ -26,12 +29,15 @@ export function MetaMaskMobileButton({
   className,
   variant = "default",
   size = "default",
+  onConnected,
 }: MetaMaskMobileButtonProps) {
+  const { connect } = useWallet();
   const [shouldShow, setShouldShow] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    // Only show the button on mobile devices without MetaMask
-    setShouldShow(isMobileDevice() && !isMetaMaskInstalled());
+    // Show on all mobile devices for better UX
+    setShouldShow(isMobileDevice());
   }, []);
 
   // Don't render anything if we shouldn't show the button
@@ -39,8 +45,28 @@ export function MetaMaskMobileButton({
     return null;
   }
 
-  const handleOpenMetaMask = () => {
-    openMetaMaskMobile({ chainId });
+  const handleOpenMetaMask = async () => {
+    setIsConnecting(true);
+    
+    try {
+      // Open MetaMask and wait for user to return
+      await openMetaMaskMobile({ chainId });
+      
+      // When user returns, try to connect the wallet
+      await connect();
+      
+      // Ensure we're on the Celo network
+      await ensureCeloNetwork();
+      
+      // Call the onConnected callback if provided
+      if (onConnected) {
+        onConnected();
+      }
+    } catch (error) {
+      console.error("Error connecting with MetaMask mobile:", error);
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   return (
@@ -49,8 +75,9 @@ export function MetaMaskMobileButton({
       className={className}
       variant={variant}
       size={size}
+      disabled={isConnecting}
     >
-      Open MetaMask App
+      {isConnecting ? "Connecting..." : "Connect with MetaMask"}
     </Button>
   );
 }

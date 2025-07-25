@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
   ExternalLink,
   ArrowUpRight,
 } from "lucide-react";
+import { UsernameSetupCard } from "@/components/UsernameSetupCard";
 import Link from "next/link";
 import { useWallet } from "@/lib/wallet";
 import { useContract } from "@/lib/contract";
@@ -26,6 +28,7 @@ interface UserData {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
   const { isConnected, address } = useWallet();
   const {
     supportedStablecoins,
@@ -160,9 +163,14 @@ export default function DashboardPage() {
             <img src="/minilend-logo.png" alt="Minilend Logo" className="w-8 h-8 object-contain mr-2" />
             <div>
               <h1 className="text-xl font-bold text-primary">Pool Dashboard</h1>
-              <p className="text-sm text-gray-600">
-                {formatAddress(address || "")}
-              </p>
+              <div className="flex items-center text-sm text-gray-600">
+                <span className="mr-2">{formatAddress(address || "")}</span>
+                {session?.user?.username && (
+                  <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs">
+                    @{session.user.username}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -239,6 +247,9 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Username Setup Card */}
+        <UsernameSetupCard />
 
         {/* Four Smaller Cards in 2x2 Grid */}
         <div className="grid grid-cols-2 gap-4">
