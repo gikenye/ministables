@@ -9,7 +9,6 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BarChart3,
-  Sparkles,
   WifiOff,
   Shield,
 } from "lucide-react";
@@ -18,7 +17,8 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@/lib/wallet";
 import { useContract } from "@/lib/contract";
 import { useSession } from "next-auth/react";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { useActiveWallet } from "thirdweb/react";
+import { celo } from "thirdweb/chains";
 import { TransactionModal } from "@/components/TransactionModal";
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
@@ -31,13 +31,37 @@ import {
   OptimizedImage,
 } from "@/components/ui/loading-indicator";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
+import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+
+// Client-only component for MetaMask prompt to avoid hydration issues
+function MetaMaskPrompt() {
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    setShowPrompt(typeof window !== "undefined" && !window.ethereum);
+  }, []);
+
+  if (!showPrompt) return null;
+
+  return (
+    <p className="text-gray-500 text-xs sm:text-sm mt-4">
+      Don&apos;t have a wallet?{" "}
+      <a
+        href="https://metamask.io"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline hover:text-secondary"
+      >
+        Install MetaMask
+      </a>
+    </p>
+  );
+}
 
 export default function HomePage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { isConnected, address, connect, disconnect, isConnecting, error } =
-    useWallet();
-
+  const { isConnected, address, disconnect, isConnecting, error } = useWallet();
   const {
     supportedStablecoins,
     supportedCollateral,
@@ -53,7 +77,7 @@ export default function HomePage() {
     getDepositLockEnd,
     loading,
   } = useContract();
-
+  const wallet = useActiveWallet();
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [transactionModal, setTransactionModal] = useState<{
     isOpen: boolean;
@@ -66,7 +90,6 @@ export default function HomePage() {
     message: "",
   });
   const [needsVerification, setNeedsVerification] = useState(false);
-
   const [userBalances, setUserBalances] = useState<Record<string, string>>({});
   const [userCollaterals, setUserCollaterals] = useState<
     Record<string, string>
@@ -81,13 +104,29 @@ export default function HomePage() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [dataSaverEnabled, setDataSaverEnabled] = useState<boolean>(false);
 
+  // Ensure Celo network on wallet connection
+  useEffect(() => {
+    const switchToCelo = async () => {
+      try {
+        if (wallet) {
+          await wallet.switchChain(celo);
+          console.log("Switched to Celo network");
+        }
+      } catch (error) {
+        console.error("Error switching to Celo network:", error);
+      }
+    };
+    if (wallet) {
+      switchToCelo();
+    }
+  }, [wallet]);
+
   useEffect(() => {
     if (isConnected && address && supportedStablecoins.length > 0) {
       loadUserData();
     }
   }, [isConnected, address, supportedStablecoins]);
 
-  // Check if user needs verification
   useEffect(() => {
     if (isConnected && !session?.user?.verified) {
       setNeedsVerification(true);
@@ -96,7 +135,6 @@ export default function HomePage() {
     }
   }, [isConnected, session]);
 
-  // Redirect to verification page if needed
   useEffect(() => {
     if (needsVerification && isConnected) {
       const timer = setTimeout(() => {
@@ -106,28 +144,23 @@ export default function HomePage() {
     }
   }, [needsVerification, isConnected, router]);
 
-  // Monitor online/offline status
   useEffect(() => {
     const handleOnlineStatus = () => {
       setIsOnline(navigator.onLine);
     };
-
     window.addEventListener("online", handleOnlineStatus);
     window.addEventListener("offline", handleOnlineStatus);
     setIsOnline(navigator.onLine);
-
     return () => {
       window.removeEventListener("online", handleOnlineStatus);
       window.removeEventListener("offline", handleOnlineStatus);
     };
   }, []);
 
-  // Check data saver status
   useEffect(() => {
     setDataSaverEnabled(isDataSaverEnabled());
   }, []);
 
-  // Toggle data saver mode
   const toggleDataSaver = () => {
     const newState = !dataSaverEnabled;
     setDataSaverEnabled(newState);
@@ -136,7 +169,6 @@ export default function HomePage() {
 
   const loadUserData = async () => {
     if (!address) return;
-
     try {
       const balances: Record<string, string> = {};
       const collaterals: Record<string, string> = {};
@@ -144,20 +176,17 @@ export default function HomePage() {
       const lockEnds: Record<string, number> = {};
       const infos: Record<string, { symbol: string; decimals: number }> = {};
 
-      // Load stablecoin data
       for (const tokenAddress of supportedStablecoins) {
         const info = await getTokenInfo(tokenAddress);
         const balance = await getTokenBalance(tokenAddress, address);
         const deposit = await getUserDeposits(address, tokenAddress);
         const lockEnd = await getDepositLockEnd(address, tokenAddress);
-
         infos[tokenAddress] = info;
         balances[tokenAddress] = balance;
         deposits[tokenAddress] = deposit;
         lockEnds[tokenAddress] = lockEnd;
       }
 
-      // Load collateral data
       for (const tokenAddress of supportedCollateral) {
         if (!infos[tokenAddress]) {
           const info = await getTokenInfo(tokenAddress);
@@ -165,7 +194,6 @@ export default function HomePage() {
         }
         const balance = await getTokenBalance(tokenAddress, address);
         const collateral = await getUserCollateral(address, tokenAddress);
-
         balances[tokenAddress] = balance;
         collaterals[tokenAddress] = collateral;
       }
@@ -208,7 +236,6 @@ export default function HomePage() {
     try {
       const txHash = await depositCollateral(token, amount);
       await new Promise((resolve) => setTimeout(resolve, 2000));
-
       if (address) {
         const updatedCollateral = await getUserCollateral(address, token);
         setUserCollaterals((prev) => ({
@@ -216,14 +243,12 @@ export default function HomePage() {
           [token]: updatedCollateral,
         }));
       }
-
       setTransactionModal({
         isOpen: true,
         type: "success",
         message: "Your collateral was deposited successfully!",
         txHash,
       });
-
       await loadUserData();
     } catch (error: any) {
       setTransactionModal({
@@ -340,7 +365,11 @@ export default function HomePage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between max-w-6xl mx-auto">
           <div className="flex items-center space-x-3 mb-3 sm:mb-0">
             <div className="w-10 h-10 flex items-center justify-center">
-              <img src="/minilend-logo.png" alt="Minilend Logo" className="w-10 h-10 object-contain" />
+              <img
+                src="/minilend-logo.png"
+                alt="Minilend Logo"
+                className="w-10 h-10 object-contain"
+              />
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-primary">
@@ -351,13 +380,7 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-
-          {!isConnected ? (
-            <div className="w-full sm:w-auto">
-              <ConnectWalletButton className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl min-h-[48px] shadow-lg hover:shadow-xl transition-all duration-200" />
-              {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
-            </div>
-          ) : (
+          {isConnected && (
             <div className="w-full sm:w-auto sm:text-right">
               <div className="bg-primary/10 rounded-xl px-3 py-2 mb-2">
                 <p className="text-sm font-medium text-primary">
@@ -398,6 +421,7 @@ export default function HomePage() {
             )}
           </button>
         </div>
+
         {/* Offline Warning */}
         {!isOnline && (
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-3 mb-4 text-sm flex items-center">
@@ -409,9 +433,13 @@ export default function HomePage() {
         {needsVerification && isConnected && (
           <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm flex items-center">
             <Shield className="w-4 h-4 mr-2" />
-            <p>Identity verification required. Redirecting to verification page...</p>
+            <p>
+              Identity verification required. Redirecting to verification
+              page...
+            </p>
           </div>
         )}
+
         {loading ? (
           <LoadingIndicator size="lg" text="Loading your account..." />
         ) : !isConnected ? (
@@ -433,20 +461,8 @@ export default function HomePage() {
                     <p className="text-red-600 text-sm">{error}</p>
                   </div>
                 )}
-                <ConnectWalletButton className="bg-primary hover:bg-secondary text-white w-full min-h-[48px] rounded-xl shadow-lg hover:shadow-xl transition-all duration-200" />
-                {typeof window !== "undefined" && !window.ethereum && (
-                  <p className="text-gray-500 text-xs sm:text-sm mt-4">
-                    Don't have a wallet?{" "}
-                    <a
-                      href="https://metamask.io"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary underline hover:text-secondary"
-                    >
-                      Install MetaMask
-                    </a>
-                  </p>
-                )}
+                <ConnectWalletButton />
+                <MetaMaskPrompt />
               </CardContent>
             </Card>
           </div>
@@ -460,7 +476,6 @@ export default function HomePage() {
               <p className="text-gray-600 text-base sm:text-lg">
                 Choose an action to get started
               </p>
-              {/* Verification Badge */}
               {session?.user?.verified && (
                 <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                   <Shield className="w-3 h-3 mr-1" />
@@ -519,7 +534,6 @@ export default function HomePage() {
                       className="group cursor-pointer border-0 shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-white/80 backdrop-blur-sm overflow-hidden"
                       onClick={() => {
                         if (card.id === "history") {
-                          // Navigate to dashboard for history
                           window.location.href = "/dashboard";
                         } else {
                           setActiveModal(card.id);
@@ -540,8 +554,6 @@ export default function HomePage() {
                         <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">
                           {card.description}
                         </p>
-
-                        {/* Active state for touch devices */}
                         <div className="absolute inset-0 bg-gradient-to-t from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
                       </CardContent>
                     </Card>
@@ -587,7 +599,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <BorrowMoneyModal
         isOpen={activeModal === "borrow"}
         onClose={() => setActiveModal(null)}
@@ -598,7 +609,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <PayBackModal
         isOpen={activeModal === "payback"}
         onClose={() => setActiveModal(null)}
@@ -606,7 +616,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <WithdrawModal
         isOpen={activeModal === "withdraw"}
         onClose={() => setActiveModal(null)}
@@ -616,7 +625,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <TransactionModal
         isOpen={transactionModal.isOpen}
         onClose={() =>

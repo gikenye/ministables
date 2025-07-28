@@ -1,33 +1,17 @@
 "use client";
 
-import {
-  useState,
-  useEffect,
-  createContext,
-  useContext,
-  type ReactNode,
-} from "react";
-import { createWalletClient, custom, type WalletClient } from "viem";
-import { celo } from "viem/chains";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useConnect, useDisconnect, useActiveWallet, useActiveWalletChain, useActiveWalletConnectionStatus, useSwitchActiveWalletChain } from "thirdweb/react";
+import { celo } from "thirdweb/chains";
 
-// Define the Ethereum window type
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
-// Celo Mainnet Chain ID
-export const CELO_CHAIN_ID_HEX = "0xa4c0";
-export const CELO_CHAIN_ID_DECIMAL = 42220;
-
+// Define the WalletContextType interface
 interface WalletContextType {
   isConnected: boolean;
   address: string | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   isConnecting: boolean;
-  walletClient: WalletClient | null;
+  walletClient: any | null; // Use 'any' for compatibility, as Thirdweb Wallet doesn't match viem's WalletClient
   error: string | null;
   chainId: string | null;
 }
@@ -38,56 +22,47 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
+  const [walletClient, setWalletClient] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
 
-  // Check if any wallet provider is available
-  const isProviderAvailable = typeof window !== "undefined" && !!window.ethereum;
+  const wallet = useActiveWallet();
+  const connectionStatus = useActiveWalletConnectionStatus();
+  const currentChain = useActiveWalletChain();
+  const { connect } = useConnect();
+  const { disconnect } = useDisconnect();
+  const switchChain = useSwitchActiveWalletChain();
 
-  // Check for existing connection on component mount
+  // Map Thirdweb connection status to isConnected and isConnecting
   useEffect(() => {
-    if (isProviderAvailable) {
-      checkConnection();
-    }
-  }, [isProviderAvailable]);
+    setIsConnected(connectionStatus === "connected");
+    setIsConnecting(connectionStatus === "connecting");
+    setAddress(wallet?.getAccount()?.address || null);
+    setWalletClient(wallet || null);
+    setChainId(currentChain?.id ? `0x${currentChain.id.toString(16)}` : null);
+  }, [connectionStatus, wallet, currentChain]);
 
-  // Check if user is already connected
-  const checkConnection = async () => {
-    try {
-      // Get accounts without prompting user
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
-      });
-
-      if (accounts && accounts.length > 0) {
-        // Get current chain ID
-        const currentChainId = await window.ethereum.request({
-          method: "eth_chainId",
-        });
-
-        // Create wallet client
-        const client = createWalletClient({
-          chain: celo,
-          transport: custom(window.ethereum),
-          account: accounts[0] as `0x${string}`,
-        });
-
-        setWalletClient(client);
-        setAddress(accounts[0]);
-        setChainId(currentChainId);
-        setIsConnected(true);
-        setError(null);
+  // Ensure Celo network on wallet connection
+  useEffect(() => {
+    const switchToCelo = async () => {
+      try {
+        if (wallet && currentChain?.id !== celo.id) {
+          await switchChain(celo);
+          console.log("Switched to Celo network");
+        }
+      } catch (error) {
+        console.error("Error switching to Celo network:", error);
+        setError("Failed to switch to Celo network");
       }
-    } catch (error) {
-      console.error("Error checking connection:", error);
-      // Don't set error state here as this is a silent check
+    };
+    if (wallet) {
+      switchToCelo();
     }
-  };
+  }, [wallet, currentChain, switchChain]);
 
-  // Connect to wallet using the generic approach
-  const connect = async () => {
-    if (!isProviderAvailable) {
+  // Handle wallet connection
+  const connectWallet = async () => {
+    if (!window.ethereum) {
       setError("No wallet detected. Please install a wallet extension or use a wallet-enabled browser.");
       return;
     }
@@ -96,51 +71,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      // Request accounts - this will prompt the user to connect
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
+      // Connect using Thirdweb's connect hook
+      await connect(async () => {
+        // Assuming wallets are defined in ThirdwebProvider
+        const walletInstance = await import("thirdweb/wallets").then((module) =>
+          module.createWallet("io.metamask")
+        );
+        return walletInstance;
       });
-
-      if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts found");
-      }
-
-      // Get current chain ID
-      const currentChainId = await window.ethereum.request({
-        method: "eth_chainId",
-      });
-      setChainId(currentChainId);
-
-      // Create wallet client
-      const client = createWalletClient({
-        chain: celo,
-        transport: custom(window.ethereum),
-        account: accounts[0] as `0x${string}`,
-      });
-
-      setWalletClient(client);
-      setAddress(accounts[0]);
-      setIsConnected(true);
-      setError(null);
     } catch (error: any) {
       console.error("Error connecting wallet:", error);
-
       let errorMessage = "Failed to connect wallet";
-
       if (error.code === 4001) {
         errorMessage = "Connection was rejected by user";
       } else if (error.message) {
         errorMessage = error.message;
       }
-
       setError(errorMessage);
     } finally {
       setIsConnecting(false);
     }
   };
 
-  // Disconnect wallet
-  const disconnect = () => {
+  // Handle wallet disconnection
+  const disconnectWallet = () => {
+    disconnect();
     setIsConnected(false);
     setAddress(null);
     setWalletClient(null);
@@ -148,54 +103,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setError(null);
   };
 
-  // Listen for account and chain changes
-  useEffect(() => {
-    if (isProviderAvailable) {
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length === 0) {
-          // User disconnected their wallet
-          disconnect();
-        } else if (accounts[0] !== address) {
-          // User switched accounts
-          setAddress(accounts[0]);
-          // Recreate wallet client with new account
-          const client = createWalletClient({
-            chain: celo,
-            transport: custom(window.ethereum),
-            account: accounts[0] as `0x${string}`,
-          });
-          setWalletClient(client);
-        }
-      };
-
-      const handleChainChanged = (newChainId: string) => {
-        setChainId(newChainId);
-        // Reload the page on chain change
-        window.location.reload();
-      };
-
-      // Subscribe to events
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-      window.ethereum.on("chainChanged", handleChainChanged);
-
-      // Cleanup function
-      return () => {
-        window.ethereum.removeListener(
-          "accountsChanged",
-          handleAccountsChanged,
-        );
-        window.ethereum.removeListener("chainChanged", handleChainChanged);
-      };
-    }
-  }, [isProviderAvailable, address]);
-
   return (
     <WalletContext.Provider
       value={{
         isConnected,
         address,
-        connect,
-        disconnect,
+        connect: connectWallet,
+        disconnect: disconnectWallet,
         isConnecting,
         walletClient,
         error,
