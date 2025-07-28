@@ -30,14 +30,13 @@ import {
   DataAwareRender,
   OptimizedImage,
 } from "@/components/ui/loading-indicator";
+import { signIn } from "next-auth/react"; // Import signIn
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 
 export default function HomePage() {
   const router = useRouter();
-  const { data: session } = useSession();
-  const { isConnected, address, connect, disconnect, isConnecting, error } =
-    useWallet();
-
+  const { data: session, status: sessionStatus } = useSession();
+  const { isConnected, address, connect, disconnect, isConnecting, error } = useWallet();
   const {
     supportedStablecoins,
     supportedCollateral,
@@ -66,15 +65,11 @@ export default function HomePage() {
     message: "",
   });
   const [needsVerification, setNeedsVerification] = useState(false);
-
   const [userBalances, setUserBalances] = useState<Record<string, string>>({});
-  const [userCollaterals, setUserCollaterals] = useState<
-    Record<string, string>
-  >({});
+  const [userCollaterals, setUserCollaterals] = useState<Record<string, string>>({});
   const [userDeposits, setUserDeposits] = useState<Record<string, string>>({});
-  const [depositLockEnds, setDepositLockEnds] = useState<
-    Record<string, number>
-  >({});
+  const [depositLockEnds, setDepositLockEnds] = useState<Record<string, number>>({});
+  const [isSigningIn, setIsSigningIn] = useState(false); // New state to track sign-in
   const [tokenInfos, setTokenInfos] = useState<
     Record<string, { symbol: string; decimals: number }>
   >({});
@@ -83,39 +78,100 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isConnected && address && supportedStablecoins.length > 0) {
+      console.log("[loadUserData] Loading user data for address:", address);
       loadUserData();
     }
   }, [isConnected, address, supportedStablecoins]);
 
-  // Check if user needs verification
   useEffect(() => {
-    if (isConnected && !session?.user?.verified) {
-      setNeedsVerification(true);
-    } else {
-      setNeedsVerification(false);
-    }
-  }, [isConnected, session]);
+    const handleSignIn = async () => {
+      if (isConnected && address && !session?.user?.address) {
+        console.log("[Verification Check] Triggering sign-in due to wallet connection");
+        setIsSigningIn(true);
+        try {
+          const response = await signIn("self-protocol", {
+            address,
+            verificationData: "",
+            redirect: false,
+          });
+          console.log("[Verification Check] Sign-in response:", response);
+        } catch (error) {
+          console.error("[Verification Check] Sign-in error:", error);
+        } finally {
+          setIsSigningIn(false);
+        }
+      }
+    };
+    handleSignIn();
+  }, [isConnected, address, session]);
+  // // Check if user needs verification
+  // useEffect(() => {
+  //   console.log("[Verification Check] Session status:", sessionStatus);
+  //   console.log("[Verification Check] Session data:", session);
+  //   console.log("[Verification Check] Is connected:", isConnected);
+  //   console.log("[Verification Check] session?.user?.verified:", session?.user?.verified);
 
+  //   if (isConnected && !session?.user?.verified) {
+  //     console.log("[Verification Check] Setting needsVerification to true");
+  //     setNeedsVerification(true);
+  //   } else {
+  //     console.log("[Verification Check] Setting needsVerification to false");
+  //     setNeedsVerification(false);
+  //   }
+  // }, [isConnected, session, sessionStatus]);
+// In app/page.tsx
+useEffect(() => {
+  console.log("[Verification Check] Session status:", sessionStatus);
+  console.log("[Verification Check] Full session object:", JSON.stringify(session, null, 2));
+  console.log("[Verification Check] Is connected:", isConnected);
+  console.log("[Verification Check] Wallet address:", address);
+  console.log("[Verification Check] Session user address:", session?.user?.address);
+  console.log("[Verification Check] session?.user?.verified:", session?.user?.verified);
+
+  if (address && session?.user?.address && address.toLowerCase() !== session?.user?.address.toLowerCase()) {
+    console.log("[Verification Check] Address mismatch detected! Wallet:", address, "Session:", session?.user?.address);
+  }
+
+  if (sessionStatus === "loading") {
+    console.log("[Verification Check] Session still loading, skipping verification");
+    return;
+  }
+
+  if (isConnected && !session?.user?.verified) {
+    console.log("[Verification Check] Setting needsVerification to true");
+    setNeedsVerification(true);
+  } else {
+    console.log("[Verification Check] Setting needsVerification to false");
+    setNeedsVerification(false);
+  }
+}, [isConnected, session, sessionStatus, address]);
   // Redirect to verification page if needed
   useEffect(() => {
+    console.log("[Redirect Check] needsVerification:", needsVerification);
+    console.log("[Redirect Check] isConnected:", isConnected);
     if (needsVerification && isConnected) {
+      console.log("[Redirect Check] Redirecting to /self in 1500ms");
       const timer = setTimeout(() => {
+        console.log("[Redirect Check] Executing redirect to /self");
         router.push("/self");
       }, 1500);
-      return () => clearTimeout(timer);
+      return () => {
+        console.log("[Redirect Check] Clearing redirect timer");
+        clearTimeout(timer);
+      };
     }
   }, [needsVerification, isConnected, router]);
 
   // Monitor online/offline status
   useEffect(() => {
     const handleOnlineStatus = () => {
+      console.log("[Online Status] Navigator online:", navigator.onLine);
       setIsOnline(navigator.onLine);
     };
 
     window.addEventListener("online", handleOnlineStatus);
     window.addEventListener("offline", handleOnlineStatus);
     setIsOnline(navigator.onLine);
-
     return () => {
       window.removeEventListener("online", handleOnlineStatus);
       window.removeEventListener("offline", handleOnlineStatus);
@@ -124,20 +180,26 @@ export default function HomePage() {
 
   // Check data saver status
   useEffect(() => {
+    console.log("[Data Saver] Checking data saver status");
     setDataSaverEnabled(isDataSaverEnabled());
   }, []);
 
   // Toggle data saver mode
   const toggleDataSaver = () => {
     const newState = !dataSaverEnabled;
+    console.log("[Data Saver] Toggling data saver to:", newState);
     setDataSaverEnabled(newState);
     enableDataSaver(newState);
   };
 
   const loadUserData = async () => {
-    if (!address) return;
+    if (!address) {
+      console.log("[loadUserData] No address provided, skipping");
+      return;
+    }
 
     try {
+      console.log("[loadUserData] Fetching user data for address:", address);
       const balances: Record<string, string> = {};
       const collaterals: Record<string, string> = {};
       const deposits: Record<string, string> = {};
@@ -146,28 +208,36 @@ export default function HomePage() {
 
       // Load stablecoin data
       for (const tokenAddress of supportedStablecoins) {
+        console.log("[loadUserData] Fetching stablecoin data for token:", tokenAddress);
         const info = await getTokenInfo(tokenAddress);
         const balance = await getTokenBalance(tokenAddress, address);
         const deposit = await getUserDeposits(address, tokenAddress);
         const lockEnd = await getDepositLockEnd(address, tokenAddress);
-
         infos[tokenAddress] = info;
         balances[tokenAddress] = balance;
         deposits[tokenAddress] = deposit;
         lockEnds[tokenAddress] = lockEnd;
+        console.log(
+          `[loadUserData] Stablecoin ${tokenAddress}:`,
+          JSON.stringify({ info, balance, deposit, lockEnd })
+        );
       }
 
       // Load collateral data
       for (const tokenAddress of supportedCollateral) {
+        console.log("[loadUserData] Fetching collateral data for token:", tokenAddress);
         if (!infos[tokenAddress]) {
           const info = await getTokenInfo(tokenAddress);
           infos[tokenAddress] = info;
         }
         const balance = await getTokenBalance(tokenAddress, address);
         const collateral = await getUserCollateral(address, tokenAddress);
-
         balances[tokenAddress] = balance;
         collaterals[tokenAddress] = collateral;
+        console.log(
+          `[loadUserData] Collateral ${tokenAddress}:`,
+          JSON.stringify({ balance, collateral })
+        );
       }
 
       setTokenInfos(infos);
@@ -175,17 +245,15 @@ export default function HomePage() {
       setUserCollaterals(collaterals);
       setUserDeposits(deposits);
       setDepositLockEnds(lockEnds);
+      console.log("[loadUserData] Data loaded successfully");
     } catch (error) {
-      console.error("Error loading user data:", error);
+      console.error("[loadUserData] Error loading user data:", error);
     }
   };
 
-  const handleSaveMoney = async (
-    token: string,
-    amount: string,
-    lockPeriod: number
-  ) => {
+  const handleSaveMoney = async (token: string, amount: string, lockPeriod: number) => {
     try {
+      console.log("[handleSaveMoney] Saving money:", { token, amount, lockPeriod });
       const txHash = await deposit(token, amount, lockPeriod);
       setTransactionModal({
         isOpen: true,
@@ -193,54 +261,51 @@ export default function HomePage() {
         message: "Your money was saved successfully!",
         txHash,
       });
+      console.log("[handleSaveMoney] Transaction successful, txHash:", txHash);
       await loadUserData();
     } catch (error: any) {
+      console.error("[handleSaveMoney] Error:", error);
       setTransactionModal({
         isOpen: true,
         type: "error",
-        message:
-          error.message || "Something went wrong while saving your money.",
+        message: error.message || "Something went wrong while saving your money.",
       });
     }
   };
 
   const handleDepositCollateral = async (token: string, amount: string) => {
     try {
+      console.log("[handleDepositCollateral] Depositing collateral:", { token, amount });
       const txHash = await depositCollateral(token, amount);
       await new Promise((resolve) => setTimeout(resolve, 2000));
-
       if (address) {
         const updatedCollateral = await getUserCollateral(address, token);
         setUserCollaterals((prev) => ({
           ...prev,
           [token]: updatedCollateral,
         }));
+        console.log("[handleDepositCollateral] Updated collateral:", updatedCollateral);
       }
-
       setTransactionModal({
         isOpen: true,
         type: "success",
         message: "Your collateral was deposited successfully!",
         txHash,
       });
-
       await loadUserData();
     } catch (error: any) {
+      console.error("[handleDepositCollateral] Error:", error);
       setTransactionModal({
         isOpen: true,
         type: "error",
-        message:
-          error.message || "Something went wrong while depositing collateral.",
+        message: error.message || "Something went wrong while depositing collateral.",
       });
     }
   };
 
-  const handleBorrowMoney = async (
-    token: string,
-    amount: string,
-    collateralToken: string
-  ) => {
+  const handleBorrowMoney = async (token: string, amount: string, collateralToken: string) => {
     try {
+      console.log("[handleBorrowMoney] Borrowing money:", { token, amount, collateralToken });
       const txHash = await borrow(token, amount, collateralToken);
       setTransactionModal({
         isOpen: true,
@@ -248,8 +313,10 @@ export default function HomePage() {
         message: "You have successfully borrowed money!",
         txHash,
       });
+      console.log("[handleBorrowMoney] Transaction successful, txHash:", txHash);
       await loadUserData();
     } catch (error: any) {
+      console.error("[handleBorrowMoney] Error:", error);
       setTransactionModal({
         isOpen: true,
         type: "error",
@@ -260,6 +327,7 @@ export default function HomePage() {
 
   const handlePayBack = async (token: string, amount: string) => {
     try {
+      console.log("[handlePayBack] Paying back loan:", { token, amount });
       const txHash = await repay(token, amount);
       setTransactionModal({
         isOpen: true,
@@ -267,19 +335,21 @@ export default function HomePage() {
         message: "Your loan payment was successful!",
         txHash,
       });
+      console.log("[handlePayBack] Transaction successful, txHash:", txHash);
       await loadUserData();
     } catch (error: any) {
+      console.error("[handlePayBack] Error:", error);
       setTransactionModal({
         isOpen: true,
         type: "error",
-        message:
-          error.message || "Something went wrong while paying back your loan.",
+        message: error.message || "Something went wrong while paying back your loan.",
       });
     }
   };
 
   const handleWithdraw = async (token: string, amount: string) => {
     try {
+      console.log("[handleWithdraw] Withdrawing money:", { token, amount });
       const txHash = await withdraw(token, amount);
       setTransactionModal({
         isOpen: true,
@@ -287,13 +357,14 @@ export default function HomePage() {
         message: "Your money was withdrawn successfully!",
         txHash,
       });
+      console.log("[handleWithdraw] Transaction successful, txHash:", txHash);
       await loadUserData();
     } catch (error: any) {
+      console.error("[handleWithdraw] Error:", error);
       setTransactionModal({
         isOpen: true,
         type: "error",
-        message:
-          error.message || "Something went wrong while withdrawing your money.",
+        message: error.message || "Something went wrong while withdrawing your money.",
       });
     }
   };
@@ -343,15 +414,10 @@ export default function HomePage() {
               <img src="/minilend-logo.png" alt="Minilend Logo" className="w-10 h-10 object-contain" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-primary">
-                MiniLend
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600">
-                Grow Your Money
-              </p>
+              <h1 className="text-xl sm:text-2xl font-bold text-primary">MiniLend</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Grow Your Money</p>
             </div>
           </div>
-
           {!isConnected ? (
             <div className="w-full sm:w-auto">
               <ConnectWalletButton className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl min-h-[48px] shadow-lg hover:shadow-xl transition-all duration-200" />
@@ -360,9 +426,7 @@ export default function HomePage() {
           ) : (
             <div className="w-full sm:w-auto sm:text-right">
               <div className="bg-primary/10 rounded-xl px-3 py-2 mb-2">
-                <p className="text-sm font-medium text-primary">
-                  {formatAddress(address || "")}
-                </p>
+                <p className="text-sm font-medium text-primary">{formatAddress(address || "")}</p>
               </div>
               <Button
                 onClick={disconnect}
@@ -398,6 +462,7 @@ export default function HomePage() {
             )}
           </button>
         </div>
+
         {/* Offline Warning */}
         {!isOnline && (
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-3 mb-4 text-sm flex items-center">
@@ -412,6 +477,7 @@ export default function HomePage() {
             <p>Identity verification required. Redirecting to verification page...</p>
           </div>
         )}
+
         {loading ? (
           <LoadingIndicator size="lg" text="Loading your account..." />
         ) : !isConnected ? (
@@ -425,8 +491,7 @@ export default function HomePage() {
                   Connect Your Wallet
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  Connect your wallet to start saving and borrowing money on the
-                  Celo blockchain
+                  Connect your wallet to start saving and borrowing money on the Celo blockchain
                 </p>
                 {error && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
@@ -457,9 +522,7 @@ export default function HomePage() {
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
                 Welcome to MiniLend
               </h2>
-              <p className="text-gray-600 text-base sm:text-lg">
-                Choose an action to get started
-              </p>
+              <p className="text-gray-600 text-base sm:text-lg">Choose an action to get started</p>
               {/* Verification Badge */}
               {session?.user?.verified && (
                 <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -488,20 +551,12 @@ export default function HomePage() {
                         }}
                       >
                         <CardContent className="p-3 text-center">
-                          <div
-                            className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center mx-auto mb-2`}
-                          >
-                            <IconComponent
-                              className={`w-5 h-5 ${card.iconColor}`}
-                            />
+                          <div className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center mx-auto mb-2`}>
+                            <IconComponent className={`w-5 h-5 ${card.iconColor}`} />
                           </div>
                           <div>
-                            <h3 className="text-sm font-semibold text-gray-900 mb-0.5">
-                              {card.title}
-                            </h3>
-                            <p className="text-xs text-gray-600 line-clamp-2">
-                              {card.description}
-                            </p>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{card.title}</h3>
+                            <p className="text-xs text-gray-600 line-clamp-2">{card.description}</p>
                           </div>
                         </CardContent>
                       </Card>
@@ -519,7 +574,6 @@ export default function HomePage() {
                       className="group cursor-pointer border-0 shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-white/80 backdrop-blur-sm overflow-hidden"
                       onClick={() => {
                         if (card.id === "history") {
-                          // Navigate to dashboard for history
                           window.location.href = "/dashboard";
                         } else {
                           setActiveModal(card.id);
@@ -530,18 +584,10 @@ export default function HomePage() {
                         <div
                           className={`w-10 h-10 sm:w-16 sm:h-16 ${card.color} rounded-lg sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}
                         >
-                          <IconComponent
-                            className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`}
-                          />
+                          <IconComponent className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`} />
                         </div>
-                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-0.5 sm:mb-2">
-                          {card.title}
-                        </h3>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">
-                          {card.description}
-                        </p>
-
-                        {/* Active state for touch devices */}
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-0.5 sm:mb-2">{card.title}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{card.description}</p>
                         <div className="absolute inset-0 bg-gradient-to-t from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
                       </CardContent>
                     </Card>
@@ -552,9 +598,7 @@ export default function HomePage() {
 
             {/* Quick Stats */}
             <div className="bg-white/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl mx-auto border-0 shadow-md sm:shadow-lg mx-3 sm:mx-auto">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 text-center">
-                Quick Actions
-              </h3>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 text-center">Quick Actions</h3>
               <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                 <Link href="/dashboard" className="w-full sm:w-auto">
                   <Button
@@ -587,7 +631,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <BorrowMoneyModal
         isOpen={activeModal === "borrow"}
         onClose={() => setActiveModal(null)}
@@ -598,7 +641,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <PayBackModal
         isOpen={activeModal === "payback"}
         onClose={() => setActiveModal(null)}
@@ -606,7 +648,6 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <WithdrawModal
         isOpen={activeModal === "withdraw"}
         onClose={() => setActiveModal(null)}
@@ -616,12 +657,9 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-
       <TransactionModal
         isOpen={transactionModal.isOpen}
-        onClose={() =>
-          setTransactionModal({ ...transactionModal, isOpen: false })
-        }
+        onClose={() => setTransactionModal({ ...transactionModal, isOpen: false })}
         type={transactionModal.type}
         message={transactionModal.message}
         txHash={transactionModal.txHash}
