@@ -18,11 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowDownLeft, Shield, AlertCircle } from "lucide-react";
+import { ArrowDownLeft, Shield, AlertCircle, CreditCard } from "lucide-react";
 import { useContract } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { parseUnits } from "viem";
+import { OnrampDepositModal } from "./OnrampDepositModal";
+import { onrampService } from "@/lib/services/onrampService";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -63,6 +65,7 @@ export function BorrowMoneyModal({
   const [needsMoreCollateral, setNeedsMoreCollateral] = useState(false);
   const [maxBorrowAmount, setMaxBorrowAmount] = useState<string | null>(null);
   const [showAddCollateral, setShowAddCollateral] = useState(false);
+  const [showOnrampModal, setShowOnrampModal] = useState(false);
 
   const hasCollateral = (token: string) => {
     const collateral = userCollaterals[token];
@@ -424,14 +427,32 @@ export function BorrowMoneyModal({
                     {tokenInfos[form.collateralToken]?.symbol}
                   </p>
                 )}
-                <Button
-                  onClick={handleDepositCollateral}
-                  disabled={loading || !form.collateralAmount}
-                  variant="outline"
-                  className="w-full border-yellow-400 text-yellow-700 hover:bg-yellow-100 min-h-[40px] bg-transparent"
-                >
-                  {loading ? "Depositing..." : "Deposit Collateral"}
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleDepositCollateral}
+                    disabled={loading || !form.collateralAmount}
+                    variant="outline"
+                    className="w-full border-yellow-400 text-yellow-700 hover:bg-yellow-100 min-h-[40px] bg-transparent"
+                  >
+                    {loading ? "Depositing..." : "Deposit from Wallet"}
+                  </Button>
+                  
+                  {/* Show onramp option only for supported assets */}
+                  {form.collateralToken && 
+                   onrampService.isAssetSupportedForOnramp(
+                     tokenInfos[form.collateralToken]?.symbol || ""
+                   ) && (
+                    <Button
+                      onClick={() => setShowOnrampModal(true)}
+                      disabled={loading}
+                      variant="outline"
+                      className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
+                    >
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Deposit via Mobile Money
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -497,6 +518,21 @@ export function BorrowMoneyModal({
           </div>
         </div>
       </DialogContent>
+
+      {/* Onramp Deposit Modal */}
+      <OnrampDepositModal
+        isOpen={showOnrampModal}
+        onClose={() => setShowOnrampModal(false)}
+        selectedAsset={tokenInfos[form.collateralToken]?.symbol || ""}
+        assetSymbol={tokenInfos[form.collateralToken]?.symbol || ""}
+        onSuccess={(transactionCode, amount) => {
+          toast({
+            title: "Mobile Money Deposit Initiated",
+            description: `Your ${tokenInfos[form.collateralToken]?.symbol} deposit will be processed once payment is confirmed.`,
+          });
+          setShowOnrampModal(false);
+        }}
+      />
     </Dialog>
   );
 }
