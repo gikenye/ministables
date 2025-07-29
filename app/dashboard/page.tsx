@@ -1,23 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  ArrowLeft,
-  TrendingUp,
-  ArrowDownLeft,
-  Shield,
-  ExternalLink,
-  ArrowUpRight,
-} from "lucide-react";
-import { UsernameSetupCard } from "@/components/UsernameSetupCard";
+import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { useWallet } from "@/lib/wallet";
 import { useContract } from "@/lib/contract";
 import { formatAmount, formatAddress } from "@/lib/utils";
-import { OracleRatesCard } from "@/components/OracleRatesCard";
 import { WithdrawModal } from "@/components/WithdrawModal";
 
 interface UserData {
@@ -28,7 +18,6 @@ interface UserData {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
   const { isConnected, address } = useWallet();
   const {
     supportedStablecoins,
@@ -39,6 +28,7 @@ export default function DashboardPage() {
     getUserCollateral,
     getDepositLockEnd,
     getTokenInfo,
+    getOracleRate,
     withdraw,
     loading,
   } = useContract();
@@ -50,11 +40,11 @@ export default function DashboardPage() {
     collateral: {},
     lockEnds: {},
   });
-
   const [poolData, setPoolData] = useState<Record<string, string>>({});
   const [tokenInfos, setTokenInfos] = useState<
     Record<string, { symbol: string; decimals: number }>
   >({});
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (isConnected && address && supportedStablecoins.length > 0) {
@@ -64,7 +54,6 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     if (!address) return;
-
     try {
       const deposits: Record<string, string> = {};
       const borrows: Record<string, string> = {};
@@ -72,6 +61,7 @@ export default function DashboardPage() {
       const lockEnds: Record<string, number> = {};
       const pools: Record<string, string> = {};
       const infos: Record<string, { symbol: string; decimals: number }> = {};
+      const rates: Record<string, number> = {};
 
       // Load data for all supported stablecoins
       for (const tokenAddress of supportedStablecoins) {
@@ -80,19 +70,23 @@ export default function DashboardPage() {
         const userBorrow = await getUserBorrows(address, tokenAddress);
         const lockEnd = await getDepositLockEnd(address, tokenAddress);
         const totalSupply = await getTotalSupply(tokenAddress);
-
+        const oracleData = await getOracleRate(tokenAddress);
+        
         infos[tokenAddress] = info;
         deposits[tokenAddress] = userDeposit;
         borrows[tokenAddress] = userBorrow;
         lockEnds[tokenAddress] = lockEnd;
         pools[tokenAddress] = totalSupply;
+        rates[tokenAddress] = Number(oracleData.rate) / 1e18; // Convert from wei
       }
 
       // Load collateral data
       for (const tokenAddress of supportedCollateral) {
         if (!infos[tokenAddress]) {
           const info = await getTokenInfo(tokenAddress);
+          const oracleData = await getOracleRate(tokenAddress);
           infos[tokenAddress] = info;
+          rates[tokenAddress] = Number(oracleData.rate) / 1e18;
         }
         const userCollat = await getUserCollateral(address, tokenAddress);
         collateral[tokenAddress] = userCollat;
@@ -101,6 +95,7 @@ export default function DashboardPage() {
       setUserData({ deposits, borrows, collateral, lockEnds });
       setPoolData(pools);
       setTokenInfos(infos);
+      setExchangeRates(rates);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
     }
@@ -115,16 +110,40 @@ export default function DashboardPage() {
     return timestamp > 0 && timestamp > Date.now() / 1000;
   };
 
-  const handleWithdraw = async (
-    token: string,
-    amount: string
-  ): Promise<void> => {
+  const handleWithdraw = async (token: string, amount: string): Promise<void> => {
     try {
       await withdraw(token, amount);
       await loadDashboardData();
     } catch (error) {
       console.error("Error withdrawing:", error);
     }
+  };
+
+  const getExchangeRate = (tokenAddress: string): number => {
+    return exchangeRates[tokenAddress] || 1.0;
+  };
+
+  const convertToUSD = (amount: string, decimals: number, tokenAddress: string): number => {
+    if (!amount || amount === "0") return 0;
+    const numericAmount = Number(formatAmount(amount, decimals));
+    const exchangeRate = getExchangeRate(tokenAddress);
+    return numericAmount * exchangeRate;
+  };
+
+  const getTotalSavingsUSD = (): number => {
+    return Object.entries(userData.deposits).reduce((acc, [token, amount]) => {
+      if (!amount || amount === "0" || !tokenInfos[token]) return acc;
+      const info = tokenInfos[token];
+      return acc + convertToUSD(amount, info.decimals, token);
+    }, 0);
+  };
+
+  const getTotalBorrowsUSD = (): number => {
+    return Object.entries(userData.borrows).reduce((acc, [token, amount]) => {
+      if (!amount || amount === "0" || !tokenInfos[token]) return acc;
+      const info = tokenInfos[token];
+      return acc + convertToUSD(amount, info.decimals, token);
+    }, 0);
   };
 
   if (!isConnected) {
@@ -151,294 +170,228 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
+      <header className="bg-white border-b border-gray-200 px-3 py-2">
         <div className="flex items-center max-w-lg mx-auto">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="mr-2 p-2">
+            <Button variant="ghost" size="sm" className="mr-2 p-1.5">
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
           <div className="flex items-center flex-1">
-            <img src="/minilend-logo.png" alt="Minilend Logo" className="w-8 h-8 object-contain mr-2" />
+            <img src="/minilend-logo.png" alt="Minilend Logo" className="w-7 h-7 object-contain mr-2" />
             <div>
-              <h1 className="text-xl font-bold text-primary">Pool Dashboard</h1>
-              <div className="flex items-center text-sm text-gray-600">
-                <span className="mr-2">{formatAddress(address || "")}</span>
-                {session?.user?.username && (
-                  <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs">
-                    @{session.user.username}
-                  </span>
-                )}
+              <h1 className="text-lg font-bold text-primary">Dashboard</h1>
+              <div className="text-xs text-gray-600">
+                {formatAddress(address || "")}
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="px-4 py-4 max-w-lg mx-auto pb-20">
-        {/* Main Summary Card - Larger */}
-        <Card className="bg-white border-secondary mb-4 shadow-sm">
-          <CardHeader className="pb-2 pt-4">
-            <CardTitle className="text-xl text-center text-primary">
-              Your Financial Summary
-            </CardTitle>
-          </CardHeader>
+      <main className="px-3 py-3 max-w-lg mx-auto pb-20 space-y-3">
+        <Card className="bg-white border-secondary shadow-sm">
           <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              {/* Savings Summary */}
-              <div className="text-center p-3 bg-blue-50 rounded-xl">
-                <TrendingUp className="w-6 h-6 mx-auto mb-1 text-primary" />
-                <p className="text-sm font-medium mb-1">Savings</p>
-                <p className="text-xl font-bold text-primary">
-                  {Object.entries(userData.deposits)
-                    .reduce((acc, [token, amount]) => {
-                      if (!amount || amount === "0" || !tokenInfos[token])
-                        return acc;
-                      return (
-                        acc +
-                        Number(formatAmount(amount, tokenInfos[token].decimals))
-                      );
-                    }, 0)
-                    .toFixed(1)}
+            <h2 className="text-lg font-semibold text-center text-primary mb-3">
+              Financial Summary
+            </h2>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <TrendingUp className="w-5 h-5 mx-auto mb-1 text-primary" />
+                <p className="text-xs font-medium mb-1 text-gray-600">Savings</p>
+                <p className="text-lg font-bold text-primary">
+                  ${getTotalSavingsUSD().toFixed(2)}
                 </p>
               </div>
-
-              {/* Loans Summary */}
-              <div className="text-center p-3 bg-red-50 rounded-xl">
-                <ArrowDownLeft className="w-6 h-6 mx-auto mb-1 text-red-600" />
-                <p className="text-sm font-medium mb-1">Loans</p>
-                <p className="text-xl font-bold text-red-600">
-                  {Object.entries(userData.borrows)
-                    .reduce((acc, [token, amount]) => {
-                      if (!amount || amount === "0" || !tokenInfos[token])
-                        return acc;
-                      return (
-                        acc +
-                        Number(formatAmount(amount, tokenInfos[token].decimals))
-                      );
-                    }, 0)
-                    .toFixed(1)}
+              <div className="text-center p-3 bg-red-50 rounded-lg">
+                <ArrowDownLeft className="w-5 h-5 mx-auto mb-1 text-red-600" />
+                <p className="text-xs font-medium mb-1 text-gray-600">Loans</p>
+                <p className="text-lg font-bold text-red-600">
+                  ${getTotalBorrowsUSD().toFixed(2)}
                 </p>
               </div>
             </div>
-
-            {/* Quick Actions */}
             <div className="flex space-x-2">
               <Button
-                className="flex-1 h-12 text-white bg-primary hover:bg-primary/90"
+                className="flex-1 h-10 text-sm text-white bg-primary hover:bg-primary/90"
                 onClick={() => setWithdrawOpen(true)}
               >
-                Withdraw Money
+                Withdraw
               </Button>
               <Button
                 variant="outline"
-                className="flex-1 h-12 border-primary text-primary hover:bg-primary/10"
-                onClick={() =>
-                  window.open(
-                    `https://celoscan.io/address/${address}`,
-                    "_blank"
-                  )
-                }
+                className="flex-1 h-10 text-sm border-primary text-primary hover:bg-primary/10"
+                onClick={() => window.open(`https://celoscan.io/address/${address}`, "_blank")}
               >
-                View History
+                <ExternalLink className="w-4 h-4 mr-1" />
+                History
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Username Setup Card */}
-        <UsernameSetupCard />
-
-        {/* Four Smaller Cards in 2x2 Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Card 1: Active Savings */}
+        <div className="grid grid-cols-2 gap-3">
           <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3">
-              <CardTitle className="flex items-center text-base text-primary">
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Active Savings
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center text-sm text-primary">
+                <TrendingUp className="w-4 h-4 mr-1.5" />
+                Savings
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              {supportedStablecoins
-                .filter((token) => {
-                  const deposit = userData.deposits[token];
-                  return deposit && deposit !== "0" && tokenInfos[token];
-                })
-                .slice(0, 3)
-                .map((token) => {
-                  const info = tokenInfos[token];
-                  const deposit = userData.deposits[token];
-                  return (
-                    <div
-                      key={token}
-                      className="flex justify-between items-center mb-2"
-                    >
-                      <span className="font-medium text-sm">{info.symbol}</span>
-                      <span className="text-primary font-semibold text-sm">
-                        {formatAmount(deposit, info.decimals)}
-                      </span>
-                    </div>
-                  );
-                })}
-
-              {Object.values(userData.deposits).every(
-                (d) => !d || d === "0"
-              ) && (
-                <p className="text-gray-500 text-center py-2 text-sm">
-                  No active savings
-                </p>
-              )}
+              <div className="space-y-1.5">
+                {supportedStablecoins
+                  .filter((token) => {
+                    const deposit = userData.deposits[token];
+                    return deposit && deposit !== "0" && tokenInfos[token];
+                  })
+                  .slice(0, 3)
+                  .map((token) => {
+                    const info = tokenInfos[token];
+                    const deposit = userData.deposits[token];
+                    return (
+                      <div key={token} className="flex justify-between items-center">
+                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+                        <span className="text-primary font-semibold text-xs">
+                          {formatAmount(deposit, info.decimals)}
+                          <span className="text-gray-500 ml-1">
+                            (${convertToUSD(deposit, info.decimals, token).toFixed(2)})
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                {Object.values(userData.deposits).every((d) => !d || d === "0") && (
+                  <p className="text-gray-500 text-center py-3 text-xs">
+                    No savings yet
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Card 2: Active Loans */}
           <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3">
-              <CardTitle className="flex items-center text-base text-primary">
-                <ArrowDownLeft className="w-4 h-4 mr-2" />
-                Active Loans
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center text-sm text-primary">
+                <ArrowDownLeft className="w-4 h-4 mr-1.5" />
+                Loans
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              {supportedStablecoins
-                .filter((token) => {
-                  const borrow = userData.borrows[token];
-                  return borrow && borrow !== "0" && tokenInfos[token];
-                })
-                .slice(0, 3)
-                .map((token) => {
-                  const info = tokenInfos[token];
-                  const borrow = userData.borrows[token];
-
-                  return (
-                    <div
-                      key={token}
-                      className="flex justify-between items-center mb-2"
-                    >
-                      <span className="font-medium text-sm">{info.symbol}</span>
-                      <span className="text-red-600 font-semibold text-sm">
-                        {formatAmount(borrow, info.decimals)}
-                      </span>
-                    </div>
-                  );
-                })}
-
-              {Object.values(userData.borrows).every(
-                (b) => !b || b === "0"
-              ) && (
-                <p className="text-gray-500 text-center py-2 text-sm">
-                  No active loans
-                </p>
-              )}
+              <div className="space-y-1.5">
+                {supportedStablecoins
+                  .filter((token) => {
+                    const borrow = userData.borrows[token];
+                    return borrow && borrow !== "0" && tokenInfos[token];
+                  })
+                  .slice(0, 3)
+                  .map((token) => {
+                    const info = tokenInfos[token];
+                    const borrow = userData.borrows[token];
+                    return (
+                      <div key={token} className="flex justify-between items-center">
+                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+                        <span className="text-red-600 font-semibold text-xs">
+                          {formatAmount(borrow, info.decimals)}
+                          <span className="text-gray-500 ml-1">
+                            (${convertToUSD(borrow, info.decimals, token).toFixed(2)})
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                {Object.values(userData.borrows).every((b) => !b || b === "0") && (
+                  <p className="text-gray-500 text-center py-3 text-xs">
+                    No active loans
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Card 3: Your Guarantee */}
           <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3">
-              <CardTitle className="flex items-center text-base text-primary">
-                <Shield className="w-4 h-4 mr-2" />
-                Your Guarantee
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center text-sm text-primary">
+                <Shield className="w-4 h-4 mr-1.5" />
+                Collateral
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              {supportedCollateral
-                .filter((token) => {
-                  const collat = userData.collateral[token];
-                  return collat && collat !== "0" && tokenInfos[token];
-                })
-                .slice(0, 3)
-                .map((token) => {
-                  const info = tokenInfos[token];
-                  const collat = userData.collateral[token];
-
-                  return (
-                    <div
-                      key={token}
-                      className="flex justify-between items-center mb-2"
-                    >
-                      <span className="font-medium text-sm">{info.symbol}</span>
-                      <span className="text-primary font-semibold text-sm">
-                        {formatAmount(collat, info.decimals)}
-                      </span>
-                    </div>
-                  );
-                })}
-
-              {Object.values(userData.collateral).every(
-                (c) => !c || c === "0"
-              ) && (
-                <p className="text-gray-500 text-center py-2 text-sm">
-                  No active guarantee
-                </p>
-              )}
+              <div className="space-y-1.5">
+                {supportedCollateral
+                  .filter((token) => {
+                    const collat = userData.collateral[token];
+                    return collat && collat !== "0" && tokenInfos[token];
+                  })
+                  .slice(0, 3)
+                  .map((token) => {
+                    const info = tokenInfos[token];
+                    const collat = userData.collateral[token];
+                    return (
+                      <div key={token} className="flex justify-between items-center">
+                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+                        <span className="text-primary font-semibold text-xs">
+                          {formatAmount(collat, info.decimals)}
+                          <span className="text-gray-500 ml-1">
+                            (${convertToUSD(collat, info.decimals, token).toFixed(2)})
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                {Object.values(userData.collateral).every((c) => !c || c === "0") && (
+                  <p className="text-gray-500 text-center py-3 text-xs">
+                    No collateral
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Card 4: Exchange Rates */}
           <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3">
-              <CardTitle className="flex items-center text-base text-primary">
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Exchange Rates
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center text-sm text-primary">
+                <ArrowUpRight className="w-4 h-4 mr-1.5" />
+                Rates
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              {/* Show the most important currencies first */}
-              {["cUSD", "cEUR", "cREAL"].map((symbol) => {
-                // Find the token address for this symbol
-                const token = Object.entries(tokenInfos).find(
-                  ([_, info]) => info.symbol === symbol
-                )?.[0];
-
-                if (!token) return null;
-                const info = tokenInfos[token];
-
-                return (
-                  <div
-                    key={token}
-                    className="flex justify-between items-center mb-2"
-                  >
-                    <span className="font-medium text-sm">{info.symbol}</span>
-                    <span className="text-primary font-semibold text-sm">
-                      ≈ $
-                      {info.symbol === "cUSD"
-                        ? "1.00"
-                        : info.symbol === "cEUR"
-                          ? "1.10"
-                          : "0.28"}
-                    </span>
-                  </div>
-                );
-              })}
+              <div className="space-y-1.5">
+                {supportedStablecoins
+                  .filter((token) => tokenInfos[token])
+                  .slice(4, 8)
+                  .map((token) => {
+                    const info = tokenInfos[token];
+                    const rate = exchangeRates[token];
+                    if (!rate) return null;
+                    return (
+                      <div key={token} className="flex justify-between items-center">
+                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+                        <span className="text-primary font-semibold text-xs">
+                          ${rate.toFixed(5)}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
             </CardContent>
           </Card>
         </div>
       </main>
 
-      {/* Footer Navigation - Fixed at bottom on mobile */}
-      <footer className="bg-white border-t border-gray-200 py-3 fixed bottom-0 left-0 right-0 shadow-md">
+      <footer className="bg-white border-t border-gray-200 py-2 fixed bottom-0 left-0 right-0 shadow-md">
         <div className="flex justify-center max-w-lg mx-auto">
-          <Link
-            href="/"
-            className="flex flex-col items-center text-gray-400 px-8"
-          >
-            <TrendingUp className="w-6 h-6" />
+          <Link href="/" className="flex flex-col items-center text-gray-400 px-8">
+            <TrendingUp className="w-5 h-5" />
             <span className="text-xs mt-1">Home</span>
           </Link>
-          <Link
-            href="/dashboard"
-            className="flex flex-col items-center text-primary px-8"
-          >
-            <ArrowDownLeft className="w-6 h-6" />
+          <Link href="/dashboard" className="flex flex-col items-center text-primary px-8">
+            <ArrowDownLeft className="w-5 h-5" />
             <span className="text-xs mt-1">Dashboard</span>
           </Link>
         </div>
       </footer>
-      {/* Modals */}
+
       <WithdrawModal
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
