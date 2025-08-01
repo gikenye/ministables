@@ -22,13 +22,9 @@ export default function DashboardPage() {
   const {
     supportedStablecoins,
     supportedCollateral,
-    getTotalSupply,
-    getUserDeposits,
-    getUserBorrows,
-    getUserCollateral,
-    getDepositLockEnd,
     getTokenInfo,
     getOracleRate,
+    batchGetUserData,
     withdraw,
     loading,
   } = useContract();
@@ -63,34 +59,37 @@ export default function DashboardPage() {
       const infos: Record<string, { symbol: string; decimals: number }> = {};
       const rates: Record<string, number> = {};
 
-      // Load data for all supported stablecoins
-      for (const tokenAddress of supportedStablecoins) {
-        const info = await getTokenInfo(tokenAddress);
-        const userDeposit = await getUserDeposits(address, tokenAddress);
-        const userBorrow = await getUserBorrows(address, tokenAddress);
-        const lockEnd = await getDepositLockEnd(address, tokenAddress);
-        const totalSupply = await getTotalSupply(tokenAddress);
-        const oracleData = await getOracleRate(tokenAddress);
-        
+      // Get all unique tokens
+      const allTokens = [...new Set([...supportedStablecoins, ...supportedCollateral])];
+      
+      // Batch fetch token info and oracle rates for all tokens in parallel
+      const tokenDataPromises = allTokens.map(async (tokenAddress) => {
+        const [info, oracleData] = await Promise.all([
+          getTokenInfo(tokenAddress),
+          getOracleRate(tokenAddress)
+        ]);
+        return { tokenAddress, info, oracleData };
+      });
+      
+      const tokenDataResults = await Promise.all(tokenDataPromises);
+      
+      // Process token data
+      tokenDataResults.forEach(({ tokenAddress, info, oracleData }) => {
         infos[tokenAddress] = info;
-        deposits[tokenAddress] = userDeposit;
-        borrows[tokenAddress] = userBorrow;
-        lockEnds[tokenAddress] = lockEnd;
-        pools[tokenAddress] = totalSupply;
-        rates[tokenAddress] = Number(oracleData.rate) / 1e18; // Convert from wei
-      }
+        rates[tokenAddress] = Number(oracleData.rate) / 1e18;
+      });
 
-      // Load collateral data
-      for (const tokenAddress of supportedCollateral) {
-        if (!infos[tokenAddress]) {
-          const info = await getTokenInfo(tokenAddress);
-          const oracleData = await getOracleRate(tokenAddress);
-          infos[tokenAddress] = info;
-          rates[tokenAddress] = Number(oracleData.rate) / 1e18;
-        }
-        const userCollat = await getUserCollateral(address, tokenAddress);
-        collateral[tokenAddress] = userCollat;
-      }
+      // Batch fetch all user data in one call
+      const userDataResults = await batchGetUserData(address, allTokens);
+      
+      // Process user data
+      userDataResults.forEach(({ token, deposits: userDeposit, borrows: userBorrow, collateral: userCollat, lockEnd, totalSupply }) => {
+        deposits[token] = userDeposit;
+        borrows[token] = userBorrow;
+        collateral[token] = userCollat;
+        lockEnds[token] = lockEnd;
+        pools[token] = totalSupply;
+      });
 
       setUserData({ deposits, borrows, collateral, lockEnds });
       setPoolData(pools);
@@ -116,6 +115,7 @@ export default function DashboardPage() {
       await loadDashboardData();
     } catch (error) {
       console.error("Error withdrawing:", error);
+      throw error; // Re-throw to let WithdrawModal handle the error display
     }
   };
 

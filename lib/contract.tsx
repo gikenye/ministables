@@ -7,7 +7,7 @@ import {
   useContext,
   type ReactNode,
 } from "react";
-import { createPublicClient, http, parseUnits, getContract } from "viem";
+import { createPublicClient, http, parseUnits, getContract, fallback } from "viem";
 import { celo } from "viem/chains";
 import { useWallet } from "./wallet";
 
@@ -65,11 +65,11 @@ export async function ensureCeloNetwork(): Promise<void> {
 }
 
 // Contract addresses
-const MINILEND_ADDRESS = "0x89E356E80De29B466E774A5Eb543118B439EE41E";
-const ORACLE_ADDRESS = "0x96D7E17a4Af7af46413A7EAD48f01852C364417A";
+export const MINILEND_ADDRESS = "0x89E356E80De29B466E774A5Eb543118B439EE41E";
+export const ORACLE_ADDRESS = "0x96D7E17a4Af7af46413A7EAD48f01852C364417A";
 
 // ABIs
-const MINILEND_ABI = [
+export const MINILEND_ABI = [
   {
     inputs: [
       { internalType: "address", name: "token", type: "address" },
@@ -267,7 +267,7 @@ const ORACLE_ABI = [
 ] as const;
 
 // All supported tokens from the oracle contract
-const ALL_SUPPORTED_TOKENS = {
+export const ALL_SUPPORTED_TOKENS = {
   // Native and major stablecoins
   CELO: {
     address: "0x471EcE3750Da237f93B8E339c536989b8978a438",
@@ -400,6 +400,7 @@ interface ContractContextType {
   getOracleRate: (
     token: string
   ) => Promise<{ rate: string; timestamp: number }>;
+  batchGetUserData: (user: string, tokens: string[]) => Promise<any[]>;
 }
 
 const ContractContext = createContext<ContractContextType | null>(null);
@@ -412,10 +413,30 @@ export function ContractProvider({ children }: { children: ReactNode }) {
   );
   const [supportedCollateral, setSupportedCollateral] = useState<string[]>([]);
   const [defaultLockPeriods, setDefaultLockPeriods] = useState<string[]>([]);
+  
+  // Cache for token info and oracle rates
+  const [tokenInfoCache, setTokenInfoCache] = useState<Record<string, { symbol: string; decimals: number; timestamp: number }>>({});
+  const [oracleRateCache, setOracleRateCache] = useState<Record<string, { rate: string; timestamp: number; cacheTime: number }>>({});
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  const getRpcEndpoints = () => {
+    const customRpc = process.env.NEXT_PUBLIC_CELO_RPC_URL;
+    const endpoints = [
+      "https://forno.celo.org",
+      "https://rpc.ankr.com/celo", 
+      "https://1rpc.io/celo"
+    ];
+    
+    if (customRpc) {
+      endpoints.unshift(customRpc);
+    }
+    
+    return endpoints.map(url => http(url, { retryCount: 2, retryDelay: 1000 }));
+  };
 
   const publicClient = createPublicClient({
     chain: celo,
-    transport: http("https://forno.celo.org"),
+    transport: fallback(getRpcEndpoints()),
   });
 
   const miniLendContract = getContract({
@@ -454,7 +475,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
 
       setSupportedStablecoins(stablecoins);
       setSupportedCollateral(collateral);
-      setDefaultLockPeriods(["2592000", "5184000", "10368000"]); // 30, 60, 120 days
+      setDefaultLockPeriods(["61","604800","2592000", "5184000", "10368000"]); // 1 min, 30, 60, 120 days
     } catch (error) {
       console.error("Error loading contract data:", error);
     }
@@ -464,16 +485,28 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     tokenAddress: string
   ): Promise<{ symbol: string; decimals: number }> => {
     try {
+      // Check cache first
+      const cached = tokenInfoCache[tokenAddress];
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        return { symbol: cached.symbol, decimals: cached.decimals };
+      }
+
       // First check if it's in our predefined tokens
       const predefinedToken = Object.values(ALL_SUPPORTED_TOKENS).find(
         (token) => token.address.toLowerCase() === tokenAddress.toLowerCase()
       );
 
       if (predefinedToken) {
-        return {
+        const result = {
           symbol: predefinedToken.symbol,
           decimals: predefinedToken.decimals,
         };
+        // Cache predefined token info
+        setTokenInfoCache(prev => ({
+          ...prev,
+          [tokenAddress]: { ...result, timestamp: Date.now() }
+        }));
+        return result;
       }
 
       // Fallback to contract call
@@ -488,7 +521,13 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         tokenContract.read.decimals(),
       ]);
 
-      return { symbol: symbol as string, decimals: decimals as number };
+      const result = { symbol: symbol as string, decimals: decimals as number };
+      // Cache the result
+      setTokenInfoCache(prev => ({
+        ...prev,
+        [tokenAddress]: { ...result, timestamp: Date.now() }
+      }));
+      return result;
     } catch (error) {
       console.error("Error getting token info:", error);
       return { symbol: "Unknown", decimals: 18 };
@@ -520,6 +559,12 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     tokenAddress: string
   ): Promise<{ rate: string; timestamp: number }> => {
     try {
+      // Check cache first
+      const cached = oracleRateCache[tokenAddress];
+      if (cached && Date.now() - cached.cacheTime < CACHE_DURATION) {
+        return { rate: cached.rate, timestamp: cached.timestamp };
+      }
+
       const oracleContract = getContract({
         address: ORACLE_ADDRESS as `0x${string}`,
         abi: ORACLE_ABI,
@@ -529,10 +574,19 @@ export function ContractProvider({ children }: { children: ReactNode }) {
       const [rate, timestamp] = await oracleContract.read.getMedianRate([
         tokenAddress as `0x${string}`,
       ]);
-      return {
+      
+      const result = {
         rate: rate.toString(),
         timestamp: Number(timestamp),
       };
+      
+      // Cache the result
+      setOracleRateCache(prev => ({
+        ...prev,
+        [tokenAddress]: { ...result, cacheTime: Date.now() }
+      }));
+      
+      return result;
     } catch (error) {
       console.error("Error getting oracle rate:", error);
       // Fallback to mock rates if oracle fails
@@ -551,16 +605,24 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         [ALL_SUPPORTED_TOKENS.USDGLO.address]: "1428571428571428571",
       };
 
-      return {
+      const result = {
         rate: mockRates[tokenAddress] || "1000000000000000000",
         timestamp: Math.floor(Date.now() / 1000),
       };
+      
+      // Cache fallback result too
+      setOracleRateCache(prev => ({
+        ...prev,
+        [tokenAddress]: { ...result, cacheTime: Date.now() }
+      }));
+      
+      return result;
     }
   };
 
   // Safe approve function that handles tokens requiring allowance reset
   const safeApprove = async (token: string, spender: string, amount: bigint): Promise<void> => {
-    if (!walletClient) throw new Error("Wallet not connected");
+    if (!walletClient || !walletClient.account) throw new Error("Wallet not connected");
     try {
       // For USDC and potentially other tokens that require setting allowance to 0 first
       // This mimics the behavior of OpenZeppelin's forceApprove
@@ -574,7 +636,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
             functionName: "approve",
             args: [spender as `0x${string}`, BigInt(0)],
             chain: celo,
-            account: walletClient.account,
+            account: walletClient.account!,
           });
           
           // Wait for the reset transaction to complete
@@ -600,7 +662,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         functionName: "approve",
         args: [spender as `0x${string}`, amount],
         chain: celo,
-        account: walletClient.account,
+        account: walletClient.account!,
       });
       
       // Wait for approval
@@ -612,6 +674,10 @@ export function ContractProvider({ children }: { children: ReactNode }) {
           error.message?.includes("QuotaExceededError") ||
           error.message?.includes("no space")) {
         throw new Error("Your device is running out of disk space. Please free up some space and try again.");
+      } else if (error.message?.includes("Internal JSON-RPC error") || 
+                error.message?.includes("RPC Error") ||
+                error.message?.includes("network error")) {
+        throw new Error("Network connection issue. Please check your internet and try again.");
       } else if (error.message?.includes("User rejected") ||
                 error.message?.includes("rejected the request")) {
         console.log("User cancelled the transaction in their wallet");
@@ -629,7 +695,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     amount: string,
     lockPeriod: number
   ): Promise<string> => {
-    if (!walletClient) throw new Error("Wallet not connected");
+    if (!walletClient || !walletClient.account) throw new Error("Wallet not connected");
 
     setLoading(true);
     try {
@@ -646,13 +712,25 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         functionName: "deposit",
         args: [token as `0x${string}`, amountWei, BigInt(lockPeriod)],
         chain: celo,
-        account: walletClient.account,
+        account: walletClient.account!,
       });
+
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+      
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        throw new Error("Transaction failed. Please check the transaction on CeloScan for details.");
+      }
 
       return tx;
     } catch (error: any) {
       console.error("Deposit error:", error);
-      if (error.message.includes("insufficient funds")) {
+      if (error.message?.includes("Internal JSON-RPC error") || 
+          error.message?.includes("RPC Error") ||
+          error.message?.includes("network error")) {
+        throw new Error("Network connection issue. Please check your internet and try again.");
+      } else if (error.message.includes("insufficient funds")) {
         throw new Error("You don't have enough money in your wallet.");
       } else if (error.message.includes("User rejected")) {
         throw new Error("Transaction was cancelled.");
@@ -670,7 +748,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     token: string,
     amount: string
   ): Promise<string> => {
-    if (!walletClient) throw new Error("Wallet not connected");
+    if (!walletClient || !walletClient.account) throw new Error("Wallet not connected");
 
     setLoading(true);
     try {
@@ -687,8 +765,16 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         functionName: "depositCollateral",
         args: [token as `0x${string}`, amountWei],
         chain: celo,
-        account: walletClient.account,
+        account: walletClient.account!,
       });
+
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+      
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        throw new Error("Transaction failed. Please check the transaction on CeloScan for details.");
+      }
 
       return tx;
     } catch (error: any) {
@@ -712,7 +798,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     amount: string,
     collateralToken: string
   ): Promise<string> => {
-    if (!walletClient) throw new Error("Wallet not connected");
+    if (!walletClient || !walletClient.account) throw new Error("Wallet not connected");
 
     setLoading(true);
     try {
@@ -729,13 +815,28 @@ export function ContractProvider({ children }: { children: ReactNode }) {
           collateralToken as `0x${string}`,
         ],
         chain: celo,
-        account: walletClient.account,
+        account: walletClient.account!,
       });
+
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+      
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        throw new Error("Transaction failed. Please check the transaction on CeloScan for details.");
+      }
 
       return tx;
     } catch (error: any) {
       console.error("Borrow error:", error);
 
+      // Check for RPC errors first
+      if (error.message?.includes("Internal JSON-RPC error") || 
+          error.message?.includes("RPC Error") ||
+          error.message?.includes("network error")) {
+        throw new Error("Network connection issue. Please check your internet and try again.");
+      }
+      
       // Check for specific contract errors
       if (error.message.includes("No collateral deposited")) {
         throw new Error(
@@ -762,7 +863,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
   };
 
   const repay = async (token: string, amount: string): Promise<string> => {
-    if (!walletClient) throw new Error("Wallet not connected");
+    if (!walletClient || !walletClient.account) throw new Error("Wallet not connected");
 
     setLoading(true);
     try {
@@ -779,8 +880,16 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         functionName: "repay",
         args: [token as `0x${string}`, amountWei],
         chain: celo,
-        account: walletClient.account,
+        account: walletClient.account!,
       });
+
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+      
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        throw new Error("Transaction failed. Please check the transaction on CeloScan for details.");
+      }
 
       return tx;
     } catch (error: any) {
@@ -800,7 +909,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
   };
 
   const withdraw = async (token: string, amount: string): Promise<string> => {
-    if (!walletClient) throw new Error("Wallet not connected");
+    if (!walletClient || !walletClient.account) throw new Error("Wallet not connected");
 
     setLoading(true);
     try {
@@ -813,8 +922,16 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         functionName: "withdraw",
         args: [token as `0x${string}`, amountWei],
         chain: celo,
-        account: walletClient.account,
+        account: walletClient.account!,
       });
+
+      // Wait for transaction confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+      
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        throw new Error("Transaction failed. Please check the transaction on CeloScan for details.");
+      }
 
       return tx;
     } catch (error: any) {
@@ -949,6 +1066,25 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const batchGetUserData = async (user: string, tokens: string[]) => {
+    try {
+      const promises = tokens.map(async (token) => {
+        const [deposits, borrows, collateral, lockEnd, totalSupply] = await Promise.all([
+          getUserDeposits(user, token),
+          getUserBorrows(user, token), 
+          getUserCollateral(user, token),
+          getDepositLockEnd(user, token),
+          getTotalSupply(token)
+        ]);
+        return { token, deposits, borrows, collateral, lockEnd, totalSupply };
+      });
+      return await Promise.all(promises);
+    } catch (error) {
+      console.error("Error batch getting user data:", error);
+      return [];
+    }
+  };
+
   return (
     <ContractContext.Provider
       value={{
@@ -972,6 +1108,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
         getTokenBalance,
         getTokenInfo,
         getOracleRate,
+        batchGetUserData,
       }}
     >
       {children}

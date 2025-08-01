@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowDownLeft, Shield, AlertCircle, CreditCard } from "lucide-react";
-import { useContract } from "@/lib/contract";
+import { useContract, ALL_SUPPORTED_TOKENS } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { parseUnits } from "viem";
@@ -52,7 +52,15 @@ export function BorrowMoneyModal({
   loading,
 }: BorrowMoneyModalProps) {
   const { toast } = useToast();
-  const { supportedStablecoins, supportedCollateral } = useContract();
+  const { supportedStablecoins, supportedCollateral, getOracleRate, getTokenInfo } = useContract();
+  
+  // Get token info from predefined tokens for instant display
+  const getTokenInfoFromAddress = (address: string) => {
+    const token = Object.values(ALL_SUPPORTED_TOKENS).find(
+      t => t.address.toLowerCase() === address.toLowerCase()
+    );
+    return token ? { symbol: token.symbol, decimals: token.decimals } : null;
+  };
 
   const [form, setForm] = useState({
     token: "",
@@ -181,12 +189,12 @@ export function BorrowMoneyModal({
     try {
       // Get token prices from oracle
       const [tokenRateData, collateralRateData] = await Promise.all([
-        useContract().getOracleRate(form.token),
-        useContract().getOracleRate(form.collateralToken),
+        getOracleRate(form.token),
+        getOracleRate(form.collateralToken),
       ]);
 
-      const tokenInfo = await useContract().getTokenInfo(form.token);
-      const collateralInfo = await useContract().getTokenInfo(form.collateralToken);
+      const tokenInfo = await getTokenInfo(form.token);
+      const collateralInfo = await getTokenInfo(form.collateralToken);
       
       // Get user's current collateral amount
       const userCollateralAmount = BigInt(userCollaterals[form.collateralToken]);
@@ -236,12 +244,12 @@ export function BorrowMoneyModal({
     try {
       // Get token prices from oracle
       const [tokenRateData, collateralRateData] = await Promise.all([
-        useContract().getOracleRate(form.token),
-        useContract().getOracleRate(form.collateralToken),
+        getOracleRate(form.token),
+        getOracleRate(form.collateralToken),
       ]);
 
-      const tokenInfo = await useContract().getTokenInfo(form.token);
-      const collateralInfo = await useContract().getTokenInfo(form.collateralToken);
+      const tokenInfo = await getTokenInfo(form.token);
+      const collateralInfo = await getTokenInfo(form.collateralToken);
       
       // Convert amount to BigInt with proper decimals
       const amountWei = parseUnits(form.amount, tokenInfo.decimals);
@@ -317,11 +325,14 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Select money type" />
               </SelectTrigger>
               <SelectContent>
-                {supportedStablecoins.map((token) => (
-                  <SelectItem key={token} value={token}>
-                    {tokenInfos[token]?.symbol || token.slice(0, 6) + "..."}
-                  </SelectItem>
-                ))}
+                {supportedStablecoins.map((token) => {
+                  const tokenInfo = getTokenInfoFromAddress(token) || tokenInfos[token];
+                  return (
+                    <SelectItem key={token} value={token}>
+                      {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -343,11 +354,14 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Select guarantee type" />
               </SelectTrigger>
               <SelectContent>
-                {supportedCollateral.map((token) => (
-                  <SelectItem key={token} value={token}>
-                    {tokenInfos[token]?.symbol || token.slice(0, 6) + "..."}
-                  </SelectItem>
-                ))}
+                {supportedCollateral.map((token) => {
+                  const tokenInfo = getTokenInfoFromAddress(token) || tokenInfos[token];
+                  return (
+                    <SelectItem key={token} value={token}>
+                      {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             {form.collateralToken && hasCollateral(form.collateralToken) && (
@@ -357,9 +371,9 @@ export function BorrowMoneyModal({
                     ✓ Deposited:{" "}
                     {formatAmount(
                       userCollaterals[form.collateralToken],
-                      tokenInfos[form.collateralToken]?.decimals || 6
+                      (getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.decimals || 6
                     )}{" "}
-                    {tokenInfos[form.collateralToken]?.symbol}
+                    {(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol}
                   </p>
                   <Button
                     type="button"
@@ -372,12 +386,12 @@ export function BorrowMoneyModal({
                 </div>
                 {requiredCollateral && (
                   <p className="text-sm text-gray-600">
-                    Required: {requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
+                    Required: {requiredCollateral} {(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol}
                   </p>
                 )}
                 {maxBorrowAmount && (
                   <p className="text-sm text-blue-600 mt-1">
-                    Max borrowable: {maxBorrowAmount} {tokenInfos[form.token]?.symbol}
+                    Max borrowable: {maxBorrowAmount} {(getTokenInfoFromAddress(form.token) || tokenInfos[form.token])?.symbol}
                   </p>
                 )}
               </div>
@@ -401,7 +415,7 @@ export function BorrowMoneyModal({
                 <div className="flex items-start mb-2 text-xs text-yellow-700">
                   <AlertCircle className="w-3 h-3 text-yellow-600 mr-1 mt-0.5" />
                   <span>
-                    You need at least {requiredCollateral} {tokenInfos[form.collateralToken]?.symbol} as collateral for this loan amount
+                    You need at least {requiredCollateral} {(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol} as collateral for this loan amount
                   </span>
                 </div>
               )}
@@ -422,9 +436,9 @@ export function BorrowMoneyModal({
                     Available:{" "}
                     {formatAmount(
                       userBalances[form.collateralToken],
-                      tokenInfos[form.collateralToken]?.decimals || 6
+                      (getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.decimals || 6
                     )}{" "}
-                    {tokenInfos[form.collateralToken]?.symbol}
+                    {(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol}
                   </p>
                 )}
                 <div className="space-y-2">
@@ -440,7 +454,7 @@ export function BorrowMoneyModal({
                   {/* Show onramp option only for supported assets */}
                   {form.collateralToken && 
                    onrampService.isAssetSupportedForOnramp(
-                     tokenInfos[form.collateralToken]?.symbol || ""
+                     (getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol || ""
                    ) && (
                     <Button
                       onClick={() => setShowOnrampModal(true)}
@@ -523,12 +537,12 @@ export function BorrowMoneyModal({
       <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
-        selectedAsset={tokenInfos[form.collateralToken]?.symbol || ""}
-        assetSymbol={tokenInfos[form.collateralToken]?.symbol || ""}
+        selectedAsset={(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol || ""}
+        assetSymbol={(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol || ""}
         onSuccess={(transactionCode, amount) => {
           toast({
             title: "Mobile Money Deposit Initiated",
-            description: `Your ${tokenInfos[form.collateralToken]?.symbol} deposit will be processed once payment is confirmed.`,
+            description: `Your ${(getTokenInfoFromAddress(form.collateralToken) || tokenInfos[form.collateralToken])?.symbol} deposit will be processed once payment is confirmed.`,
           });
           setShowOnrampModal(false);
         }}

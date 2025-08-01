@@ -17,12 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowUpRight, AlertCircle, Clock, DollarSign, CreditCard } from "lucide-react";
+import { ArrowUpRight, AlertCircle, Clock, DollarSign, CreditCard, Smartphone } from "lucide-react";
 import { useContract } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 import { useWallet } from "@/lib/wallet";
 import { OnrampDepositModal } from "./OnrampDepositModal";
+import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { onrampService } from "@/lib/services/onrampService";
+import { offrampService } from "@/lib/services/offrampService";
 import { useToast } from "@/hooks/use-toast";
 
 interface ActiveLoan {
@@ -56,6 +58,7 @@ export function PayBackModal({
   const [loadingLoans, setLoadingLoans] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
+  const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false);
   const { toast } = useToast();
 
   const [form, setForm] = useState({
@@ -391,6 +394,26 @@ export function PayBackModal({
                         </Button>
                       </div>
                     )}
+
+                    {/* Mobile Money Withdrawal Option */}
+                    {selectedLoan && offrampService.isCryptoSupportedForOfframp(selectedLoan.symbol) && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="text-sm font-medium text-blue-800 mb-2">
+                          💰 Convert Excess to Mobile Money
+                        </div>
+                        <div className="text-xs text-blue-700 mb-3">
+                          Pay back loan and withdraw any remaining {selectedLoan.symbol} to mobile money
+                        </div>
+                        <Button
+                          onClick={() => setShowMobileMoneyModal(true)}
+                          variant="outline"
+                          className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
+                        >
+                          <Smartphone className="w-4 h-4 mr-2" />
+                          Pay & Withdraw to Mobile Money
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -435,6 +458,30 @@ export function PayBackModal({
           setShowOnrampModal(false);
         }}
       />
+
+      {/* Mobile Money Withdrawal Modal */}
+      {selectedLoan && (
+        <MobileMoneyWithdrawModal
+          isOpen={showMobileMoneyModal}
+          onClose={() => setShowMobileMoneyModal(false)}
+          tokenSymbol={selectedLoan.symbol}
+          tokenAddress={selectedLoan.token}
+          network={offrampService.detectNetworkFromTokenAddress(selectedLoan.token) || "celo"}
+          availableAmount="0" // This would need to be calculated based on user's balance after loan payment
+          decimals={selectedLoan.decimals}
+          onWithdrawSuccess={(orderID, amount) => {
+            setShowMobileMoneyModal(false);
+            setForm({ token: "", amount: "" });
+            setSelectedLoan(null);
+            onClose();
+          }}
+          onBlockchainWithdraw={async (tokenAddress: string, amount: string) => {
+            // This would handle the withdrawal after loan payment
+            // In a real implementation, this would be integrated with the loan payment flow
+            return "0x" + Math.random().toString(16).substr(2, 64);
+          }}
+        />
+      )}
     </>
   );
 }

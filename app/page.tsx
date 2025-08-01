@@ -1,372 +1,131 @@
 "use client";
-
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useSession, signIn } from "next-auth/react";
 import {
   Wallet,
   TrendingUp,
   ArrowDownLeft,
   ArrowUpRight,
   BarChart3,
-  Sparkles,
   WifiOff,
   Shield,
 } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useWallet } from "@/lib/wallet";
-import { useContract } from "@/lib/contract";
-import { useSession } from "next-auth/react";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+// Keep v5 imports and replace the v4 ones
+import { ConnectButton, useActiveWallet, useDisconnect } from "thirdweb/react";
+import { getContract } from "thirdweb";
+import { useReadContract, useSendTransaction } from "thirdweb/react";
+
+import { client } from "@/lib/thirdweb/client";
+import { MINILEND_ABI, MINILEND_ADDRESS, ORACLE_ADDRESS } from "@/lib/contract";
+import { formatAddress } from "@/lib/utils";
+import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  LoadingIndicator,
+  DataAwareRender,
+} from "@/components/ui/loading-indicator";
+
 import { TransactionModal } from "@/components/TransactionModal";
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
-import { formatAddress } from "@/lib/utils";
-import {
-  LoadingIndicator,
-  DataAwareRender,
-  OptimizedImage,
-} from "@/components/ui/loading-indicator";
-import { signIn } from "next-auth/react"; // Import signIn
-import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 
 export default function HomePage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
-  const { isConnected, address, connect, disconnect, isConnecting, error } = useWallet();
-  const {
-    supportedStablecoins,
-    supportedCollateral,
-    deposit,
-    depositCollateral,
-    borrow,
-    repay,
-    withdraw,
-    getTokenBalance,
-    getTokenInfo,
-    getUserCollateral,
-    getUserDeposits,
-    getDepositLockEnd,
-    loading,
-  } = useContract();
+  const wallet = useActiveWallet();
+  const disconnect = useDisconnect();
+  const address = wallet?.address;
+  const isConnected = !!wallet;
+
+  const { contract } = useContract({
+    client,
+    chain: "celo",
+    address: MINILEND_ADDRES,
+    abi: MINILEND_ABI,
+  });
+
+  const { mutateAsync: deposit } = useContractWrite(contract, "deposit");
+  const { mutateAsync: depositCollateral } = useContractWrite(
+    contract,
+    "depositCollateral"
+  );
+  const { mutateAsync: borrow } = useContractWrite(contract, "borrow");
+  const { mutateAsync: repay } = useContractWrite(contract, "repay");
+  const { mutateAsync: withdraw } = useContractWrite(contract, "withdraw");
+
+  const { data: supportedStablecoins } = useContractRead(
+    contract,
+    "getSupportedStablecoins"
+  );
+  const { data: supportedCollateral } = useContractRead(
+    contract,
+    "getSupportedCollateral"
+  );
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [transactionModal, setTransactionModal] = useState<{
-    isOpen: boolean;
-    type: "success" | "error";
-    message: string;
-    txHash?: string;
-  }>({
+  const [transactionModal, setTransactionModal] = useState({
     isOpen: false,
-    type: "success",
+    type: "success" as "success" | "error" | "pending",
     message: "",
+    txHash: undefined as string | undefined,
   });
   const [needsVerification, setNeedsVerification] = useState(false);
-  const [userBalances, setUserBalances] = useState<Record<string, string>>({});
-  const [userCollaterals, setUserCollaterals] = useState<Record<string, string>>({});
-  const [userDeposits, setUserDeposits] = useState<Record<string, string>>({});
-  const [depositLockEnds, setDepositLockEnds] = useState<Record<string, number>>({});
-  const [isSigningIn, setIsSigningIn] = useState(false); // New state to track sign-in
-  const [tokenInfos, setTokenInfos] = useState<
-    Record<string, { symbol: string; decimals: number }>
-  >({});
-  const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [dataSaverEnabled, setDataSaverEnabled] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [dataSaverEnabled, setDataSaverEnabled] = useState(false);
 
   useEffect(() => {
-    if (isConnected && address && supportedStablecoins.length > 0) {
-      console.log("[loadUserData] Loading user data for address:", address);
-      loadUserData();
+    if (isConnected && address && !session?.user?.address) {
+      signIn("self-protocol", {
+        address,
+        verificationData: "",
+        redirect: false,
+      });
     }
-  }, [isConnected, address, supportedStablecoins]);
-
-  useEffect(() => {
-    const handleSignIn = async () => {
-      if (isConnected && address && !session?.user?.address) {
-        console.log("[Verification Check] Triggering sign-in due to wallet connection");
-        setIsSigningIn(true);
-        try {
-          const response = await signIn("self-protocol", {
-            address,
-            verificationData: "",
-            redirect: false,
-          });
-          console.log("[Verification Check] Sign-in response:", response);
-        } catch (error) {
-          console.error("[Verification Check] Sign-in error:", error);
-        } finally {
-          setIsSigningIn(false);
-        }
-      }
-    };
-    handleSignIn();
   }, [isConnected, address, session]);
-  // // Check if user needs verification
-  // useEffect(() => {
-  //   console.log("[Verification Check] Session status:", sessionStatus);
-  //   console.log("[Verification Check] Session data:", session);
-  //   console.log("[Verification Check] Is connected:", isConnected);
-  //   console.log("[Verification Check] session?.user?.verified:", session?.user?.verified);
 
-  //   if (isConnected && !session?.user?.verified) {
-  //     console.log("[Verification Check] Setting needsVerification to true");
-  //     setNeedsVerification(true);
-  //   } else {
-  //     console.log("[Verification Check] Setting needsVerification to false");
-  //     setNeedsVerification(false);
-  //   }
-  // }, [isConnected, session, sessionStatus]);
-// In app/page.tsx
-useEffect(() => {
-  console.log("[Verification Check] Session status:", sessionStatus);
-  console.log("[Verification Check] Full session object:", JSON.stringify(session, null, 2));
-  console.log("[Verification Check] Is connected:", isConnected);
-  console.log("[Verification Check] Wallet address:", address);
-  console.log("[Verification Check] Session user address:", session?.user?.address);
-  console.log("[Verification Check] session?.user?.verified:", session?.user?.verified);
-
-  if (address && session?.user?.address && address.toLowerCase() !== session?.user?.address.toLowerCase()) {
-    console.log("[Verification Check] Address mismatch detected! Wallet:", address, "Session:", session?.user?.address);
-  }
-
-  if (sessionStatus === "loading") {
-    console.log("[Verification Check] Session still loading, skipping verification");
-    return;
-  }
-
-  if (isConnected && !session?.user?.verified) {
-    console.log("[Verification Check] Setting needsVerification to true");
-    setNeedsVerification(true);
-  } else {
-    console.log("[Verification Check] Setting needsVerification to false");
-    setNeedsVerification(false);
-  }
-}, [isConnected, session, sessionStatus, address]);
-  // Redirect to verification page if needed
   useEffect(() => {
-    console.log("[Redirect Check] needsVerification:", needsVerification);
-    console.log("[Redirect Check] isConnected:", isConnected);
+    if (sessionStatus === "loading") return;
+    if (isConnected && !session?.user?.verified) {
+      setNeedsVerification(true);
+    } else {
+      setNeedsVerification(false);
+    }
+  }, [isConnected, session, sessionStatus]);
+
+  useEffect(() => {
     if (needsVerification && isConnected) {
-      console.log("[Redirect Check] Redirecting to /self in 1500ms");
       const timer = setTimeout(() => {
-        console.log("[Redirect Check] Executing redirect to /self");
         router.push("/self");
       }, 1500);
-      return () => {
-        console.log("[Redirect Check] Clearing redirect timer");
-        clearTimeout(timer);
-      };
+      return () => clearTimeout(timer);
     }
   }, [needsVerification, isConnected, router]);
 
-  // Monitor online/offline status
   useEffect(() => {
-    const handleOnlineStatus = () => {
-      console.log("[Online Status] Navigator online:", navigator.onLine);
-      setIsOnline(navigator.onLine);
-    };
-
-    window.addEventListener("online", handleOnlineStatus);
-    window.addEventListener("offline", handleOnlineStatus);
-    setIsOnline(navigator.onLine);
+    const updateStatus = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", updateStatus);
+    window.addEventListener("offline", updateStatus);
+    updateStatus();
     return () => {
-      window.removeEventListener("online", handleOnlineStatus);
-      window.removeEventListener("offline", handleOnlineStatus);
+      window.removeEventListener("online", updateStatus);
+      window.removeEventListener("offline", updateStatus);
     };
   }, []);
 
-  // Check data saver status
   useEffect(() => {
-    console.log("[Data Saver] Checking data saver status");
     setDataSaverEnabled(isDataSaverEnabled());
   }, []);
 
-  // Toggle data saver mode
   const toggleDataSaver = () => {
     const newState = !dataSaverEnabled;
-    console.log("[Data Saver] Toggling data saver to:", newState);
     setDataSaverEnabled(newState);
     enableDataSaver(newState);
-  };
-
-  const loadUserData = async () => {
-    if (!address) {
-      console.log("[loadUserData] No address provided, skipping");
-      return;
-    }
-
-    try {
-      console.log("[loadUserData] Fetching user data for address:", address);
-      const balances: Record<string, string> = {};
-      const collaterals: Record<string, string> = {};
-      const deposits: Record<string, string> = {};
-      const lockEnds: Record<string, number> = {};
-      const infos: Record<string, { symbol: string; decimals: number }> = {};
-
-      // Load stablecoin data
-      for (const tokenAddress of supportedStablecoins) {
-        console.log("[loadUserData] Fetching stablecoin data for token:", tokenAddress);
-        const info = await getTokenInfo(tokenAddress);
-        const balance = await getTokenBalance(tokenAddress, address);
-        const deposit = await getUserDeposits(address, tokenAddress);
-        const lockEnd = await getDepositLockEnd(address, tokenAddress);
-        infos[tokenAddress] = info;
-        balances[tokenAddress] = balance;
-        deposits[tokenAddress] = deposit;
-        lockEnds[tokenAddress] = lockEnd;
-        console.log(
-          `[loadUserData] Stablecoin ${tokenAddress}:`,
-          JSON.stringify({ info, balance, deposit, lockEnd })
-        );
-      }
-
-      // Load collateral data
-      for (const tokenAddress of supportedCollateral) {
-        console.log("[loadUserData] Fetching collateral data for token:", tokenAddress);
-        if (!infos[tokenAddress]) {
-          const info = await getTokenInfo(tokenAddress);
-          infos[tokenAddress] = info;
-        }
-        const balance = await getTokenBalance(tokenAddress, address);
-        const collateral = await getUserCollateral(address, tokenAddress);
-        balances[tokenAddress] = balance;
-        collaterals[tokenAddress] = collateral;
-        console.log(
-          `[loadUserData] Collateral ${tokenAddress}:`,
-          JSON.stringify({ balance, collateral })
-        );
-      }
-
-      setTokenInfos(infos);
-      setUserBalances(balances);
-      setUserCollaterals(collaterals);
-      setUserDeposits(deposits);
-      setDepositLockEnds(lockEnds);
-      console.log("[loadUserData] Data loaded successfully");
-    } catch (error) {
-      console.error("[loadUserData] Error loading user data:", error);
-    }
-  };
-
-  const handleSaveMoney = async (token: string, amount: string, lockPeriod: number) => {
-    try {
-      console.log("[handleSaveMoney] Saving money:", { token, amount, lockPeriod });
-      const txHash = await deposit(token, amount, lockPeriod);
-      setTransactionModal({
-        isOpen: true,
-        type: "success",
-        message: "Your money was saved successfully!",
-        txHash,
-      });
-      console.log("[handleSaveMoney] Transaction successful, txHash:", txHash);
-      await loadUserData();
-    } catch (error: any) {
-      console.error("[handleSaveMoney] Error:", error);
-      setTransactionModal({
-        isOpen: true,
-        type: "error",
-        message: error.message || "Something went wrong while saving your money.",
-      });
-    }
-  };
-
-  const handleDepositCollateral = async (token: string, amount: string) => {
-    try {
-      console.log("[handleDepositCollateral] Depositing collateral:", { token, amount });
-      const txHash = await depositCollateral(token, amount);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      if (address) {
-        const updatedCollateral = await getUserCollateral(address, token);
-        setUserCollaterals((prev) => ({
-          ...prev,
-          [token]: updatedCollateral,
-        }));
-        console.log("[handleDepositCollateral] Updated collateral:", updatedCollateral);
-      }
-      setTransactionModal({
-        isOpen: true,
-        type: "success",
-        message: "Your collateral was deposited successfully!",
-        txHash,
-      });
-      await loadUserData();
-    } catch (error: any) {
-      console.error("[handleDepositCollateral] Error:", error);
-      setTransactionModal({
-        isOpen: true,
-        type: "error",
-        message: error.message || "Something went wrong while depositing collateral.",
-      });
-    }
-  };
-
-  const handleBorrowMoney = async (token: string, amount: string, collateralToken: string) => {
-    try {
-      console.log("[handleBorrowMoney] Borrowing money:", { token, amount, collateralToken });
-      const txHash = await borrow(token, amount, collateralToken);
-      setTransactionModal({
-        isOpen: true,
-        type: "success",
-        message: "You have successfully borrowed money!",
-        txHash,
-      });
-      console.log("[handleBorrowMoney] Transaction successful, txHash:", txHash);
-      await loadUserData();
-    } catch (error: any) {
-      console.error("[handleBorrowMoney] Error:", error);
-      setTransactionModal({
-        isOpen: true,
-        type: "error",
-        message: error.message || "Something went wrong while borrowing money.",
-      });
-    }
-  };
-
-  const handlePayBack = async (token: string, amount: string) => {
-    try {
-      console.log("[handlePayBack] Paying back loan:", { token, amount });
-      const txHash = await repay(token, amount);
-      setTransactionModal({
-        isOpen: true,
-        type: "success",
-        message: "Your loan payment was successful!",
-        txHash,
-      });
-      console.log("[handlePayBack] Transaction successful, txHash:", txHash);
-      await loadUserData();
-    } catch (error: any) {
-      console.error("[handlePayBack] Error:", error);
-      setTransactionModal({
-        isOpen: true,
-        type: "error",
-        message: error.message || "Something went wrong while paying back your loan.",
-      });
-    }
-  };
-
-  const handleWithdraw = async (token: string, amount: string) => {
-    try {
-      console.log("[handleWithdraw] Withdrawing money:", { token, amount });
-      const txHash = await withdraw(token, amount);
-      setTransactionModal({
-        isOpen: true,
-        type: "success",
-        message: "Your money was withdrawn successfully!",
-        txHash,
-      });
-      console.log("[handleWithdraw] Transaction successful, txHash:", txHash);
-      await loadUserData();
-    } catch (error: any) {
-      console.error("[handleWithdraw] Error:", error);
-      setTransactionModal({
-        isOpen: true,
-        type: "error",
-        message: error.message || "Something went wrong while withdrawing your money.",
-      });
-    }
   };
 
   const actionCards = [
@@ -411,59 +170,62 @@ useEffect(() => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between max-w-6xl mx-auto">
           <div className="flex items-center space-x-3 mb-3 sm:mb-0">
             <div className="w-10 h-10 flex items-center justify-center">
-              <img src="/minilend-logo.png" alt="Minilend Logo" className="w-10 h-10 object-contain" />
+              <img
+                src="/minilend-logo.png"
+                alt="Minilend Logo"
+                className="w-10 h-10 object-contain"
+              />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-primary">MiniLend</h1>
-              <p className="text-xs sm:text-sm text-gray-600">Grow Your Money</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-primary">
+                MiniLend
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-600">
+                Grow Your Money
+              </p>
             </div>
           </div>
-          {!isConnected ? (
-            <div className="w-full sm:w-auto">
-              <ConnectWalletButton className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl min-h-[48px] shadow-lg hover:shadow-xl transition-all duration-200" />
-              {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
-            </div>
-          ) : (
-            <div className="w-full sm:w-auto sm:text-right">
-              <div className="bg-primary/10 rounded-xl px-3 py-2 mb-2">
-                <p className="text-sm font-medium text-primary">{formatAddress(address || "")}</p>
-              </div>
-              <Button
-                onClick={disconnect}
-                variant="outline"
-                size="sm"
-                className="w-full sm:w-auto text-xs bg-transparent hover:bg-gray-100"
-              >
-                Disconnect
-              </Button>
-            </div>
-          )}
+
+          <div className="w-full sm:w-auto sm:text-right">
+            {!isConnected ? (
+              <ConnectButton
+                client={client}
+                chain="celo"
+                className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl min-h-[48px] shadow-lg hover:shadow-xl transition-all duration-200"
+              />
+            ) : (
+              <>
+                <div className="bg-primary/10 rounded-xl px-3 py-2 mb-2">
+                  <p className="text-sm font-medium text-primary">
+                    {formatAddress(address || "")}
+                  </p>
+                </div>
+                <Button
+                  onClick={disconnect}
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto text-xs bg-transparent hover:bg-gray-100"
+                >
+                  Disconnect
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto">
-        {/* Data Saver Toggle */}
         <div className="flex justify-end mb-4">
           <button
             onClick={toggleDataSaver}
             className="flex items-center text-xs sm:text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-md"
           >
-            {dataSaverEnabled ? (
-              <>
-                <WifiOff className="w-3 h-3 mr-1" />
-                Data Saver: ON
-              </>
-            ) : (
-              <>
-                <WifiOff className="w-3 h-3 mr-1" />
-                Data Saver: OFF
-              </>
-            )}
+            <WifiOff className="w-3 h-3 mr-1" />
+            Data Saver: {dataSaverEnabled ? "ON" : "OFF"}
           </button>
         </div>
 
-        {/* Offline Warning */}
         {!isOnline && (
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-3 mb-4 text-sm flex items-center">
             <WifiOff className="w-4 h-4 mr-2" />
@@ -474,7 +236,10 @@ useEffect(() => {
         {needsVerification && isConnected && (
           <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm flex items-center">
             <Shield className="w-4 h-4 mr-2" />
-            <p>Identity verification required. Redirecting to verification page...</p>
+            <p>
+              Identity verification required. Redirecting to verification
+              page...
+            </p>
           </div>
         )}
 
@@ -491,17 +256,22 @@ useEffect(() => {
                   Connect Your Wallet
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  Connect your wallet to start saving and borrowing money on the Celo blockchain
+                  Connect your wallet to start saving and borrowing money on the
+                  Celo blockchain
                 </p>
                 {error && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
                     <p className="text-red-600 text-sm">{error}</p>
                   </div>
                 )}
-                <ConnectWalletButton className="bg-primary hover:bg-secondary text-white w-full min-h-[48px] rounded-xl shadow-lg hover:shadow-xl transition-all duration-200" />
+                <ConnectButton
+                  client={client}
+                  chain="celo"
+                  className="bg-primary hover:bg-secondary text-white w-full min-h-[48px] rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+                />
                 {typeof window !== "undefined" && !window.ethereum && (
                   <p className="text-gray-500 text-xs sm:text-sm mt-4">
-                    Don't have a wallet?{" "}
+                    Don&apos;t have a wallet?{" "}
                     <a
                       href="https://metamask.io"
                       target="_blank"
@@ -517,13 +287,13 @@ useEffect(() => {
           </div>
         ) : (
           <div className="space-y-6 sm:space-y-8">
-            {/* Welcome Section */}
             <div className="text-center">
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
                 Welcome to MiniLend
               </h2>
-              <p className="text-gray-600 text-base sm:text-lg">Choose an action to get started</p>
-              {/* Verification Badge */}
+              <p className="text-gray-600 text-base sm:text-lg">
+                Choose an action to get started
+              </p>
               {session?.user?.verified && (
                 <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                   <Shield className="w-3 h-3 mr-1" />
@@ -531,7 +301,6 @@ useEffect(() => {
                 </div>
               )}
             </div>
-
             {/* Action Cards Grid */}
             <DataAwareRender
               lowBandwidthFallback={
@@ -551,12 +320,20 @@ useEffect(() => {
                         }}
                       >
                         <CardContent className="p-3 text-center">
-                          <div className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center mx-auto mb-2`}>
-                            <IconComponent className={`w-5 h-5 ${card.iconColor}`} />
+                          <div
+                            className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center mx-auto mb-2`}
+                          >
+                            <IconComponent
+                              className={`w-5 h-5 ${card.iconColor}`}
+                            />
                           </div>
                           <div>
-                            <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{card.title}</h3>
-                            <p className="text-xs text-gray-600 line-clamp-2">{card.description}</p>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-0.5">
+                              {card.title}
+                            </h3>
+                            <p className="text-xs text-gray-600 line-clamp-2">
+                              {card.description}
+                            </p>
                           </div>
                         </CardContent>
                       </Card>
@@ -584,10 +361,16 @@ useEffect(() => {
                         <div
                           className={`w-10 h-10 sm:w-16 sm:h-16 ${card.color} rounded-lg sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}
                         >
-                          <IconComponent className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`} />
+                          <IconComponent
+                            className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`}
+                          />
                         </div>
-                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-0.5 sm:mb-2">{card.title}</h3>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{card.description}</p>
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-0.5 sm:mb-2">
+                          {card.title}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">
+                          {card.description}
+                        </p>
                         <div className="absolute inset-0 bg-gradient-to-t from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
                       </CardContent>
                     </Card>
@@ -595,29 +378,6 @@ useEffect(() => {
                 })}
               </div>
             </DataAwareRender>
-
-            {/* Quick Stats */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl mx-auto border-0 shadow-md sm:shadow-lg mx-3 sm:mx-auto">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 text-center">Quick Actions</h3>
-              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-                <Link href="/dashboard" className="w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/80 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all duration-200 rounded-xl"
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    Dashboard
-                  </Button>
-                </Link>
-                <Button
-                  variant="outline"
-                  className="w-full bg-white/80 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all duration-200 rounded-xl"
-                  onClick={() => window.open("https://celoscan.io", "_blank")}
-                >
-                  View on CeloScan
-                </Button>
-              </div>
-            </div>
           </div>
         )}
       </main>
@@ -659,7 +419,9 @@ useEffect(() => {
       />
       <TransactionModal
         isOpen={transactionModal.isOpen}
-        onClose={() => setTransactionModal({ ...transactionModal, isOpen: false })}
+        onClose={() =>
+          setTransactionModal({ ...transactionModal, isOpen: false })
+        }
         type={transactionModal.type}
         message={transactionModal.message}
         txHash={transactionModal.txHash}

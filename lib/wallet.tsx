@@ -9,7 +9,8 @@ import {
 } from "react";
 import { createWalletClient, custom, type WalletClient } from "viem";
 import { celo } from "viem/chains";
-import { signIn } from "next-auth/react"; // Import signIn
+import { signIn } from "next-auth/react";
+import { WalletConnectionManager, type WalletConnectionResult } from "./wallet-connect";
 
 declare global {
   interface Window {
@@ -23,7 +24,7 @@ export const CELO_CHAIN_ID_DECIMAL = 42220;
 interface WalletContextType {
   isConnected: boolean;
   address: string | null;
-  connect: () => Promise<string | null>; // Modified to return address
+  connect: (walletId?: string) => Promise<string | null>;
   disconnect: () => void;
   isConnecting: boolean;
   walletClient: WalletClient | null;
@@ -40,14 +41,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
+  const [connectionManager] = useState(() => WalletConnectionManager.getInstance());
 
   const isProviderAvailable = typeof window !== "undefined" && !!window.ethereum;
 
   useEffect(() => {
+    checkStoredConnection();
     if (isProviderAvailable) {
       checkConnection();
     }
   }, [isProviderAvailable]);
+
+  const checkStoredConnection = async () => {
+    const storedConnection = connectionManager.getStoredConnection();
+    if (storedConnection) {
+      await handleConnectionResult(storedConnection);
+    }
+  };
 
   const checkConnection = async () => {
     try {
@@ -86,7 +96,71 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const connect = async () => {
+  const handleConnectionResult = async (connection: WalletConnectionResult) => {
+    try {
+      setAddress(connection.address);
+      setIsConnected(true);
+      setError(null);
+
+      // Try to create wallet client if provider is available
+      const client = connectionManager.createWalletClient(connection);
+      if (client) {
+        setWalletClient(client);
+      }
+
+      // Sign in with NextAuth
+      console.log("[handleConnectionResult] Signing in with address:", connection.address);
+      const response = await signIn("self-protocol", {
+        address: connection.address,
+        verificationData: connection.signature,
+        redirect: false,
+      });
+      console.log("[handleConnectionResult] Sign-in response:", response);
+      if (response?.error) {
+        console.error("[handleConnectionResult] Sign-in error:", response.error);
+        setError(response.error);
+      }
+    } catch (error: any) {
+      console.error("[handleConnectionResult] Error:", error);
+      setError(error.message || "Failed to process connection");
+    }
+  };
+
+  const connect = async (walletId?: string) => {
+    // If no walletId provided and provider is available, use direct connection
+    if (!walletId && isProviderAvailable) {
+      return connectDirect();
+    }
+
+    // Use connection manager for cross-browser support
+    if (!walletId) {
+      setError("Please select a wallet to connect");
+      return null;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      const result = await connectionManager.connectWallet(walletId);
+      await handleConnectionResult(result);
+      return result.address;
+    } catch (error: any) {
+      console.error("[connect] Error connecting wallet:", error);
+      let errorMessage = "Failed to connect wallet";
+      if (error.code === 4001) {
+        errorMessage = "Connection was rejected by user";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const connectDirect = async () => {
     if (!isProviderAvailable) {
       setError("No wallet detected. Please install a wallet extension or use a wallet-enabled browser.");
       return null;
@@ -119,22 +193,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       // Sign in with NextAuth
-      console.log("[connect] Signing in with address:", accounts[0]);
+      console.log("[connectDirect] Signing in with address:", accounts[0]);
       const response = await signIn("self-protocol", {
         address: accounts[0],
         verificationData: "",
         redirect: false,
       });
-      console.log("[connect] Sign-in response:", response);
+      console.log("[connectDirect] Sign-in response:", response);
       if (response?.error) {
-        console.error("[connect] Sign-in error:", response.error);
+        console.error("[connectDirect] Sign-in error:", response.error);
         setError(response.error);
         return null;
       }
 
-      return accounts[0]; // Return the connected address
+      return accounts[0];
     } catch (error: any) {
-      console.error("[connect] Error connecting wallet:", error);
+      console.error("[connectDirect] Error connecting wallet:", error);
       let errorMessage = "Failed to connect wallet";
       if (error.code === 4001) {
         errorMessage = "Connection was rejected by user";
@@ -149,6 +223,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const disconnect = () => {
+    connectionManager.clearStoredConnection();
     setIsConnected(false);
     setAddress(null);
     setWalletClient(null);
