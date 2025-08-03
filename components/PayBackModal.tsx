@@ -18,9 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowUpRight, AlertCircle, Clock, DollarSign, CreditCard, Smartphone } from "lucide-react";
-import { useContract } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
-import { useWallet } from "@/lib/wallet";
+import { useActiveAccount } from "thirdweb/react";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { onrampService } from "@/lib/services/onrampService";
@@ -52,8 +51,8 @@ export function PayBackModal({
   tokenInfos,
   loading,
 }: PayBackModalProps) {
-  const { address } = useWallet();
-  const { supportedStablecoins, getUserBorrows, getTokenInfo } = useContract();
+  const account = useActiveAccount();
+  const address = account?.address;
   const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
   const [loadingLoans, setLoadingLoans] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
@@ -66,12 +65,19 @@ export function PayBackModal({
     amount: "",
   });
 
+  // Mock supported tokens
+  const supportedStablecoins = [
+    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+  ];
+
   // Load active loans when modal opens
   useEffect(() => {
     if (isOpen && address) {
       loadActiveLoans();
     }
-  }, [isOpen, address, supportedStablecoins]);
+  }, [isOpen, address]);
 
   const loadActiveLoans = async () => {
     if (!address) return;
@@ -80,31 +86,23 @@ export function PayBackModal({
     try {
       const loans: ActiveLoan[] = [];
 
+      // Mock loan data - replace with actual contract calls
       for (const tokenAddress of supportedStablecoins) {
-        const borrowAmount = await getUserBorrows(address, tokenAddress);
-
-        if (borrowAmount && borrowAmount !== "0") {
-          const tokenInfo =
-            tokenInfos[tokenAddress] || (await getTokenInfo(tokenAddress));
-
-          // Estimate interest (simplified calculation - in real app you'd get this from contract)
-          const principal = Number(
-            formatAmount(borrowAmount, tokenInfo.decimals)
-          );
-          const estimatedInterest = principal * 0.05; // 5% estimated interest
+        const tokenInfo = tokenInfos[tokenAddress];
+        if (tokenInfo) {
+          // Mock some loan data for demonstration
+          const mockBorrowAmount = "1000000000000000000"; // 1 token
+          const principal = parseFloat(formatAmount(mockBorrowAmount, tokenInfo.decimals));
+          const estimatedInterest = principal * 0.05;
           const totalOwed = principal + estimatedInterest;
 
           loans.push({
             token: tokenAddress,
             symbol: tokenInfo.symbol,
-            principal: borrowAmount,
-            estimatedInterest: (
-              estimatedInterest * Math.pow(10, tokenInfo.decimals)
-            ).toString(),
-            totalOwed: (
-              totalOwed * Math.pow(10, tokenInfo.decimals)
-            ).toString(),
-            borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000, // Mock: 30 days ago
+            principal: mockBorrowAmount,
+            estimatedInterest: (estimatedInterest * Math.pow(10, tokenInfo.decimals)).toString(),
+            totalOwed: (totalOwed * Math.pow(10, tokenInfo.decimals)).toString(),
+            borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000,
             decimals: tokenInfo.decimals,
           });
         }
@@ -129,14 +127,23 @@ export function PayBackModal({
   const handlePayBack = async () => {
     if (!form.token || !form.amount) return;
 
-    await onPayBack(form.token, form.amount);
-    setForm({ token: "", amount: "" });
-    setSelectedLoan(null);
-    onClose();
-    // Reload loans after payment
-    setTimeout(() => {
-      if (address) loadActiveLoans();
-    }, 2000);
+    try {
+      await onPayBack(form.token, form.amount);
+      setForm({ token: "", amount: "" });
+      setSelectedLoan(null);
+      onClose();
+      toast({
+        title: "Payment Successful",
+        description: "Your loan payment has been processed successfully.",
+      });
+    } catch (error: any) {
+      console.error("Payment error:", error);
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Failed to process payment. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatTimeAgo = (timestamp: number) => {
@@ -193,11 +200,10 @@ export function PayBackModal({
                   {activeLoans.map((loan) => (
                     <div
                       key={loan.token}
-                      className={`border rounded-lg p-3 cursor-pointer transition-all ${
-                        selectedLoan?.token === loan.token
+                      className={`border rounded-lg p-3 cursor-pointer transition-all ${selectedLoan?.token === loan.token
                           ? "border-primary bg-primary/5"
                           : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
-                      }`}
+                        }`}
                       onClick={() => handleLoanSelect(loan)}
                     >
                       <div className="flex items-center justify-between mb-2">

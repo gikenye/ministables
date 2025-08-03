@@ -7,7 +7,7 @@ export default function ConnectWallet() {
   return (
     <ConnectButton
       client={client}
-      auth={{ loginOptional: true }}
+      auth={{ loginOptional: true } as any}
       appMetadata={{
         name: "MiniStables",
         description: "Stablecoin tools on Celo",

@@ -13,22 +13,22 @@ import {
 const SelfQRcodeWrapper = (props: any) => {
   return <OriginalSelfQRcodeWrapper {...props} />;
 };
-import { v4 } from "uuid";
 import { ethers } from "ethers";
 import { signIn, useSession } from "next-auth/react";
-import Image from "next/image";
-import { useWallet } from "@/lib/wallet";
+import { useActiveAccount } from "thirdweb/react";
 
 export default function Home() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { address, isConnected } = useWallet();
+  const account = useActiveAccount();
+  const address = account?.address;
+  const isConnected = !!account;
   const [linkCopied, setLinkCopied] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [selfApp, setSelfApp] = useState<SelfApp | null>(null);
   const [universalLink, setUniversalLink] = useState("");
-  const [userId, setUserId] = useState(ethers.ZeroAddress);
+  const [userId, setUserId] = useState('0x0000000000000000000000000000000000000000');
   const [verifying, setVerifying] = useState(false);
   // Use useMemo to cache the array to avoid creating a new array on each render
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
@@ -49,7 +49,7 @@ export default function Home() {
 
   // Use useEffect to ensure code only executes on the client side
   useEffect(() => {
-    if (!userId || userId === ethers.ZeroAddress) return;
+    if (!userId || userId === '0x0000000000000000000000000000000000000000') return;
     try {
       const app = new SelfAppBuilder({
         version: 2,

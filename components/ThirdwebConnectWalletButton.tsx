@@ -1,18 +1,15 @@
 "use client";
 
-import { createThirdwebClient } from "thirdweb";
 import { ConnectButton } from "thirdweb/react";
 import { darkTheme } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { celo } from "thirdweb/chains";
+import {client} from "@/lib/thirdweb/client";
 
 interface ThirdwebConnectWalletButtonProps {
   className?: string;
 }
 
-const client = createThirdwebClient({
-  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "",
-});
 
 const wallets = [
   createWallet("io.metamask"),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowUpRight, Smartphone } from "lucide-react";
-import { useContract, ensureCeloNetwork } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { offrampService } from "@/lib/services/offrampService";
@@ -43,7 +42,6 @@ export function WithdrawModal({
   tokenInfos,
   loading,
 }: WithdrawModalProps) {
-  const { supportedStablecoins, allTokens } = useContract();
 
   const [form, setForm] = useState({
     token: "",
@@ -75,21 +73,21 @@ export function WithdrawModal({
     setIsWithdrawing(true);
 
     try {
-      await ensureCeloNetwork();
+      // Network switching is handled automatically by thirdweb
       await onWithdraw(form.token, form.amount);
       setForm({ token: "", amount: "" });
       onClose();
     } catch (err: any) {
       console.error("Error withdrawing money:", err);
       let errorMessage = err.message || "Failed to withdraw money. Please try again.";
-      
+
       // Handle specific contract errors related to locked deposits
       if (err.message?.includes("Deposit still locked")) {
         errorMessage = `Withdrawal failed: Some of your ${tokenInfos[form.token]?.symbol} deposits are still locked. Try withdrawing a smaller amount or wait for all deposits to unlock.`;
       } else if (err.message?.includes("Insufficient deposit balance")) {
         errorMessage = `Insufficient balance. You may have mixed deposits with different lock periods. Try a smaller amount.`;
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsWithdrawing(false);
@@ -105,11 +103,18 @@ export function WithdrawModal({
     return new Date(timestamp * 1000).toLocaleDateString();
   };
 
+  // Mock supported tokens
+  const supportedStablecoins = [
+    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+  ];
+
   const getTokenCategory = (tokenAddress: string) => {
-    const token = Object.values(allTokens).find(
-      (t) => t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    return token?.category || "unknown";
+    // Simplified categorization
+    if (tokenAddress.includes("USDC") || tokenAddress.includes("USDT")) return "international";
+    if (tokenAddress.includes("cUSD") || tokenAddress.includes("cEUR")) return "regional";
+    return "stablecoin";
   };
 
   const getCategoryIcon = (category: string) => {
@@ -146,13 +151,13 @@ export function WithdrawModal({
   const getWithdrawableAmount = (tokenAddress: string) => {
     const deposit = userDeposits[tokenAddress] || "0";
     const lockEnd = depositLockEnds[tokenAddress] || 0;
-    
+
     if (deposit === "0") return "0";
-    
+
     // If the latest deposit is still locked, assume all funds are locked
     // This is a conservative approach due to the contract's limitation
     if (isLocked(lockEnd)) return "0";
-    
+
     return deposit;
   };
 
@@ -160,7 +165,7 @@ export function WithdrawModal({
   const hasPotentialMixedLocks = (tokenAddress: string) => {
     const deposit = userDeposits[tokenAddress] || "0";
     const lockEnd = depositLockEnds[tokenAddress] || 0;
-    
+
     // If there's a deposit and a lock end time, there might be mixed locks
     // This is a heuristic since we can't know the actual deposit history
     return deposit !== "0" && lockEnd > 0;
@@ -171,15 +176,17 @@ export function WithdrawModal({
     (token) => userDeposits[token] && userDeposits[token] !== "0"
   );
 
-  // Group tokens by category
-  const groupedTokens = availableTokens.reduce(
-    (acc, tokenAddress) => {
-      const category = getTokenCategory(tokenAddress);
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(tokenAddress);
-      return acc;
-    },
-    {} as Record<string, string[]>
+  // Group tokens by category - memoized for performance
+  const groupedTokens = useMemo(() => 
+    availableTokens.reduce(
+      (acc, tokenAddress) => {
+        const category = getTokenCategory(tokenAddress);
+        if (!acc[category]) acc[category] = [];
+        acc[category].push(tokenAddress);
+        return acc;
+      },
+      {} as Record<string, string[]>
+    ), [availableTokens]
   );
 
   return (
@@ -249,7 +256,7 @@ export function WithdrawModal({
                 ⚠️ Important: Mixed Lock Periods
               </p>
               <p className="text-xs text-orange-700">
-                If you made multiple deposits with different lock periods, the displayed amounts may not be accurate. 
+                If you made multiple deposits with different lock periods, the displayed amounts may not be accurate.
                 If withdrawal fails, try a smaller amount as some deposits might still be locked.
               </p>
             </div>
@@ -282,20 +289,14 @@ export function WithdrawModal({
                       {getCategoryIcon(category)} {category}
                     </div>
                     {tokens.map((token) => {
-                      const tokenInfo =
-                        tokenInfos[token] ||
-                        allTokens[
-                          Object.keys(allTokens).find(
-                            (key) => allTokens[key].address === token
-                          ) || ""
-                        ];
+                      const tokenInfo = tokenInfos[token];
+                      const categoryColor = getCategoryColor(category);
+                      const categoryIcon = getCategoryIcon(category);
                       return (
                         <SelectItem key={token} value={token}>
                           <div className="flex items-center">
-                            <span
-                              className={`text-xs mr-2 ${getCategoryColor(category)}`}
-                            >
-                              {getCategoryIcon(category)}
+                            <span className={`text-xs mr-2 ${categoryColor}`}>
+                              {categoryIcon}
                             </span>
                             {tokenInfo?.symbol || token.slice(0, 6) + "..."}
                           </div>
@@ -328,7 +329,7 @@ export function WithdrawModal({
               onChange={(e) => {
                 const value = e.target.value;
                 setForm({ ...form, amount: value });
-                
+
                 // Clear error when user starts typing
                 if (error && value !== form.amount) {
                   setError(null);

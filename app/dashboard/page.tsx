@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
-import { useWallet } from "@/lib/wallet";
-import { useContract } from "@/lib/contract";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { WithdrawModal } from "@/components/WithdrawModal";
-
+import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 interface UserData {
   deposits: Record<string, string>;
   borrows: Record<string, string>;
@@ -17,19 +15,39 @@ interface UserData {
   lockEnds: Record<string, number>;
 }
 
-export default function DashboardPage() {
-  const { isConnected, address } = useWallet();
-  const {
-    supportedStablecoins,
-    supportedCollateral,
-    getTokenInfo,
-    getOracleRate,
-    batchGetUserData,
-    withdraw,
-    loading,
-  } = useContract();
+import { useActiveAccount } from "thirdweb/react";
+import {
+  useWithdraw as useWithdrawContract
+} from '@/lib/thirdweb/minilend-contract';
+import { getContract, readContract } from "thirdweb";
+import { celo } from "thirdweb/chains";
+import { client } from "@/lib/thirdweb/client";
+import { Imprima } from "next/font/google";
 
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
+// Supported tokens - from README
+const SUPPORTED_STABLECOINS = [
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+];
+
+const SUPPORTED_COLLATERAL = SUPPORTED_STABLECOINS;
+
+const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
+  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
+  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", decimals: 18 },
+  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
+};
+
+const useDashboardData = (address: string | undefined, contract: any) => {
   const [userData, setUserData] = useState<UserData>({
     deposits: {},
     borrows: {},
@@ -37,86 +55,114 @@ export default function DashboardPage() {
     lockEnds: {},
   });
   const [poolData, setPoolData] = useState<Record<string, string>>({});
-  const [tokenInfos, setTokenInfos] = useState<
-    Record<string, { symbol: string; decimals: number }>
-  >({});
+  const [loading, setLoading] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    if (isConnected && address && supportedStablecoins.length > 0) {
-      loadDashboardData();
-    }
-  }, [isConnected, address, supportedStablecoins]);
 
   const loadDashboardData = async () => {
     if (!address) return;
+    setLoading(true);
     try {
       const deposits: Record<string, string> = {};
       const borrows: Record<string, string> = {};
       const collateral: Record<string, string> = {};
       const lockEnds: Record<string, number> = {};
       const pools: Record<string, string> = {};
-      const infos: Record<string, { symbol: string; decimals: number }> = {};
       const rates: Record<string, number> = {};
 
-      // Get all unique tokens
-      const allTokens = [...new Set([...supportedStablecoins, ...supportedCollateral])];
-      
-      // Batch fetch token info and oracle rates for all tokens in parallel
-      const tokenDataPromises = allTokens.map(async (tokenAddress) => {
-        const [info, oracleData] = await Promise.all([
-          getTokenInfo(tokenAddress),
-          getOracleRate(tokenAddress)
-        ]);
-        return { tokenAddress, info, oracleData };
-      });
-      
-      const tokenDataResults = await Promise.all(tokenDataPromises);
-      
-      // Process token data
-      tokenDataResults.forEach(({ tokenAddress, info, oracleData }) => {
-        infos[tokenAddress] = info;
-        rates[tokenAddress] = Number(oracleData.rate) / 1e18;
-      });
-
-      // Batch fetch all user data in one call
-      const userDataResults = await batchGetUserData(address, allTokens);
-      
-      // Process user data
-      userDataResults.forEach(({ token, deposits: userDeposit, borrows: userBorrow, collateral: userCollat, lockEnd, totalSupply }) => {
-        deposits[token] = userDeposit;
-        borrows[token] = userBorrow;
-        collateral[token] = userCollat;
-        lockEnds[token] = lockEnd;
-        pools[token] = totalSupply;
-      });
+      for (const token of SUPPORTED_STABLECOINS) {
+        try {
+          const userDeposit = await readContract({
+            contract,
+            method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
+            params: [address, token, BigInt(0)],
+          });
+          
+          const userBorrow = await readContract({
+            contract,
+            method: "function userBorrows(address, address) view returns (uint256)",
+            params: [address, token],
+          });
+          
+          const userCollat = await readContract({
+            contract,
+            method: "function userCollateral(address, address) view returns (uint256)",
+            params: [address, token],
+          });
+          
+          const totalSupply = await readContract({
+            contract,
+            method: "function totalSupply(address) view returns (uint256)",
+            params: [token],
+          });
+          
+          deposits[token] = userDeposit[0].toString();
+          borrows[token] = userBorrow.toString();
+          collateral[token] = userCollat.toString();
+          lockEnds[token] = Number(userDeposit[1]);
+          pools[token] = totalSupply.toString();
+          rates[token] = 1.0;
+        } catch (error) {
+          console.error(`Error loading data for token ${token}:`, error);
+          deposits[token] = "0";
+          borrows[token] = "0";
+          collateral[token] = "0";
+          lockEnds[token] = 0;
+          pools[token] = "0";
+          rates[token] = 1.0;
+        }
+      }
 
       setUserData({ deposits, borrows, collateral, lockEnds });
       setPoolData(pools);
-      setTokenInfos(infos);
       setExchangeRates(rates);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const formatDate = (timestamp: number) => {
-    if (timestamp === 0) return "No lock";
-    return new Date(timestamp * 1000).toLocaleDateString();
-  };
+  return { userData, poolData, loading, exchangeRates, loadDashboardData };
+};
 
-  const isLocked = (timestamp: number) => {
-    return timestamp > 0 && timestamp > Date.now() / 1000;
-  };
+export default function DashboardPage() {
+  const account = useActiveAccount();
+  const isConnected = !!account;
+  const address = account?.address;
+  
+  const contract = getContract({
+    client,
+    chain: celo,
+    address: MINILEND_ADDRESS,
+    });
+
+  const withdrawFn = useWithdrawContract();
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const { userData, poolData, loading, exchangeRates, loadDashboardData } = useDashboardData(address, contract);
+
+  useEffect(() => {
+    if (isConnected && address) {
+      loadDashboardData();
+    }
+  }, [isConnected, address, loadDashboardData]);
+
+
 
   const handleWithdraw = async (token: string, amount: string): Promise<void> => {
     try {
-      await withdraw(token, amount);
+      const tokenInfo = TOKEN_INFO[token];
+      if (!tokenInfo) throw new Error("Token not supported");
+      const amountWei = BigInt(parseFloat(amount) * Math.pow(10, tokenInfo.decimals));
+      await withdrawFn(contract, token, amountWei);
       await loadDashboardData();
     } catch (error) {
       console.error("Error withdrawing:", error);
-      throw error; // Re-throw to let WithdrawModal handle the error display
+      throw error;
     }
+  };
+
+  const handleHistoryClick = () => {
+    window.open(`https://celoscan.io/address/${address}`, "_blank");
   };
 
   const getExchangeRate = (tokenAddress: string): number => {
@@ -132,18 +178,55 @@ export default function DashboardPage() {
 
   const getTotalSavingsUSD = (): number => {
     return Object.entries(userData.deposits).reduce((acc, [token, amount]) => {
-      if (!amount || amount === "0" || !tokenInfos[token]) return acc;
-      const info = tokenInfos[token];
+      if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
+      const info = TOKEN_INFO[token];
       return acc + convertToUSD(amount, info.decimals, token);
     }, 0);
   };
 
   const getTotalBorrowsUSD = (): number => {
     return Object.entries(userData.borrows).reduce((acc, [token, amount]) => {
-      if (!amount || amount === "0" || !tokenInfos[token]) return acc;
-      const info = tokenInfos[token];
+      if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
+      const info = TOKEN_INFO[token];
       return acc + convertToUSD(amount, info.decimals, token);
     }, 0);
+  };
+
+  const TokenList = ({ tokens, data, type, emptyMessage, convertToUSD }: {
+    tokens: string[];
+    data: Record<string, string>;
+    type: string;
+    emptyMessage: string;
+    convertToUSD: (amount: string, decimals: number, token: string) => number;
+  }) => {
+    const colorClass = type === "borrows" ? "text-red-600" : "text-primary";
+    return (
+      <div className="space-y-1.5">
+        {tokens
+          .filter((token) => data[token] && data[token] !== "0" && TOKEN_INFO[token])
+          .slice(0, 3)
+          .map((token) => {
+            const info = TOKEN_INFO[token];
+            const amount = data[token];
+            return (
+              <div key={token} className="flex justify-between items-center">
+                <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+                <span className={`${colorClass} font-semibold text-xs`}>
+                  {formatAmount(amount, info.decimals)}
+                  <span className="text-gray-500 ml-1">
+                    (${convertToUSD(amount, info.decimals, token).toFixed(2)})
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        {Object.values(data).every((d) => !d || d === "0") && (
+          <p className="text-gray-500 text-center py-3 text-xs">
+            {emptyMessage}
+          </p>
+        )}
+      </div>
+    );
   };
 
   if (!isConnected) {
@@ -221,7 +304,7 @@ export default function DashboardPage() {
               <Button
                 variant="outline"
                 className="flex-1 h-10 text-sm border-primary text-primary hover:bg-primary/10"
-                onClick={() => window.open(`https://celoscan.io/address/${address}`, "_blank")}
+                onClick={handleHistoryClick}
               >
                 <ExternalLink className="w-4 h-4 mr-1" />
                 History
@@ -240,14 +323,14 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="p-3 pt-0">
               <div className="space-y-1.5">
-                {supportedStablecoins
+                {SUPPORTED_STABLECOINS
                   .filter((token) => {
                     const deposit = userData.deposits[token];
-                    return deposit && deposit !== "0" && tokenInfos[token];
+                    return deposit && deposit !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
-                    const info = tokenInfos[token];
+                    const info = TOKEN_INFO[token];
                     const deposit = userData.deposits[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
@@ -279,14 +362,14 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="p-3 pt-0">
               <div className="space-y-1.5">
-                {supportedStablecoins
+                {SUPPORTED_STABLECOINS
                   .filter((token) => {
                     const borrow = userData.borrows[token];
-                    return borrow && borrow !== "0" && tokenInfos[token];
+                    return borrow && borrow !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
-                    const info = tokenInfos[token];
+                    const info = TOKEN_INFO[token];
                     const borrow = userData.borrows[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
@@ -318,14 +401,14 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="p-3 pt-0">
               <div className="space-y-1.5">
-                {supportedCollateral
+                {SUPPORTED_COLLATERAL
                   .filter((token) => {
                     const collat = userData.collateral[token];
-                    return collat && collat !== "0" && tokenInfos[token];
+                    return collat && collat !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
-                    const info = tokenInfos[token];
+                    const info = TOKEN_INFO[token];
                     const collat = userData.collateral[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
@@ -357,22 +440,24 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="p-3 pt-0">
               <div className="space-y-1.5">
-                {supportedStablecoins
-                  .filter((token) => tokenInfos[token])
-                  .slice(4, 8)
-                  .map((token) => {
-                    const info = tokenInfos[token];
-                    const rate = exchangeRates[token];
-                    if (!rate) return null;
-                    return (
-                      <div key={token} className="flex justify-between items-center">
-                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                        <span className="text-primary font-semibold text-xs">
-                          ${rate.toFixed(5)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                {useMemo(() => 
+                  SUPPORTED_STABLECOINS
+                    .filter((token) => TOKEN_INFO[token])
+                    .slice(4, 8)
+                    .map((token) => {
+                      const info = TOKEN_INFO[token];
+                      const rate = exchangeRates[token];
+                      if (!rate) return null;
+                      return (
+                        <div key={token} className="flex justify-between items-center">
+                          <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+                          <span className="text-primary font-semibold text-xs">
+                            ${rate.toFixed(5)}
+                          </span>
+                        </div>
+                      );
+                    }), [exchangeRates]
+                )}
               </div>
             </CardContent>
           </Card>
@@ -398,7 +483,7 @@ export default function DashboardPage() {
         onWithdraw={handleWithdraw}
         userDeposits={userData.deposits}
         depositLockEnds={userData.lockEnds}
-        tokenInfos={tokenInfos}
+        tokenInfos={TOKEN_INFO}
         loading={loading}
       />
     </div>

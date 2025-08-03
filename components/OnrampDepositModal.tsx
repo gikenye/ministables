@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActiveAccount } from "thirdweb/react";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,6 @@ import {
   Info,
   X
 } from "lucide-react";
-import { useWallet } from "@/lib/wallet";
 import { useToast } from "@/hooks/use-toast";
 import {
   onrampService,
@@ -53,7 +53,8 @@ export function OnrampDepositModal({
   assetSymbol,
   onSuccess,
 }: OnrampDepositModalProps) {
-  const { address } = useWallet();
+  const account = useActiveAccount()
+  const address = account?.address
   const { toast } = useToast();
 
   const [form, setForm] = useState({
