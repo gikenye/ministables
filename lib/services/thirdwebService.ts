@@ -13,6 +13,7 @@ import {
   useBorrowStartTime,
   useTotalSupply,
 } from "../thirdweb/minilend-contract";
+import { oracleService } from "./oracleService";
 
 // Contract configuration
 export const MINILEND_ADDRESS = "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c";
@@ -70,6 +71,18 @@ export const ALL_SUPPORTED_TOKENS = {
     category: "international",
   },
 } as const;
+
+// Oracle fallback rates from MockSortedOracles.sol
+const ORACLE_FALLBACK_RATES: Record<string, string> = {
+  "0x471EcE3750Da237f93B8E339c536989b8978a438": "1000000000000000000", // CELO
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a": "1428571428571428571", // cUSD
+  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": "1571428571428571428", // cEUR
+  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": "285714285714285714", // cREAL
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": "10989010989010989", // cKES
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": "1428571428571428571", // USDT
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": "1428571428571428571", // USDC
+  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": "1428571428571428571", // USDGLO
+};
 
 class ThirdwebService {
   private contract;
@@ -253,13 +266,20 @@ class ThirdwebService {
 
   async getTotalSupply(token: string): Promise<string> {
     try {
+      // Validate Oracle price before reading supply data
+      const isOracleValid = await oracleService.validatePriceData(token);
+      if (!isOracleValid) {
+        console.warn(`Oracle price validation failed for token ${token}`);
+      }
+      
       const supply = await readContract({
         contract: this.contract,
         method: "function totalSupply(address) view returns (uint256)",
         params: [token],
       });
       return supply.toString();
-    } catch {
+    } catch (error) {
+      console.error(`Failed to get total supply for ${token}:`, error);
       return "0";
     }
   }
@@ -323,17 +343,15 @@ class ThirdwebService {
     token: string
   ): Promise<{ rate: string; timestamp: number }> {
     try {
-      const result = await readContract({
-        contract: this.oracleContract,
-        method: "function medianRate(address) view returns (uint256, uint256)",
-        params: [token],
-      });
+      const result = await oracleService.getMedianRate(token);
       return {
-        rate: result[0].toString(),
-        timestamp: Number(result[1]),
+        rate: result.rate.toString(),
+        timestamp: Number(result.timestamp),
       };
-    } catch {
-      return { rate: "1000000000000000000", timestamp: Date.now() / 1000 };
+    } catch (error) {
+      console.error(`Failed to get oracle rate for ${token}:`, error);
+      const fallbackRate = ORACLE_FALLBACK_RATES[token] || "1428571428571428571";
+      return { rate: fallbackRate, timestamp: Math.floor(Date.now() / 1000) };
     }
   }
 

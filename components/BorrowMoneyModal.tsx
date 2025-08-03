@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { parseUnits } from "viem";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
+import { oracleService } from "@/lib/services/oracleService";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -149,6 +150,17 @@ export function BorrowMoneyModal({
     }
 
     try {
+      // Validate Oracle prices before borrowing
+      const isOracleValid = await oracleService.validateMultipleTokens([form.token, form.collateralToken]);
+      if (!isOracleValid) {
+        toast({
+          title: "Oracle Price Error",
+          description: "Unable to get current market prices. Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await onBorrow(form.token, form.amount, form.collateralToken);
       setForm({ token: "", collateralToken: "", amount: "", collateralAmount: "" });
       onClose();

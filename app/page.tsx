@@ -34,6 +34,8 @@ import { parseUnits, formatUnits } from "viem";
 import { formatAddress } from "@/lib/utils";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { oracleService } from "@/lib/services/oracleService";
+import { executeWithOracleValidation } from "@/lib/utils/contractUtils";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,11 +107,17 @@ export default function HomePage() {
   const withdrawFn = useWithdraw();
 
   // Hardcoded supported tokens (fallback if contract calls fail)
-  const FALLBACK_STABLECOINS = [
-    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+  const ALL_SUPPORTED_TOKENS = [
+      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+      "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+      "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
+      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+      "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
   ];
+
+  const FALLBACK_STABLECOINS = ALL_SUPPORTED_TOKENS.slice(0, 4); // Use the first four tokens as fallback stablecoins
 
   const FALLBACK_COLLATERAL = [
     "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
@@ -301,9 +309,21 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Saving money...', txHash: undefined });
-      const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await depositFn(contract, token, amountWei, BigInt(lockPeriod));
+      
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          const tokenInfo = getTokenInfo(token);
+          const amountWei = parseUnits(amount, tokenInfo.decimals);
+          return await depositFn(contract, token, amountWei, BigInt(lockPeriod));
+        },
+        { 
+          tokens: [token],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
+      
       setTransactionModal({ isOpen: true, type: 'success', message: 'Money saved successfully!', txHash });
     } catch (error: any) {
       const errorMessage = error?.message || error?.reason || 'Transaction failed';
@@ -320,9 +340,21 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Borrowing money...', txHash: undefined });
-      const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await borrowFn(contract, token, amountWei, collateralToken);
+      
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          const tokenInfo = getTokenInfo(token);
+          const amountWei = parseUnits(amount, tokenInfo.decimals);
+          return await borrowFn(contract, token, amountWei, collateralToken);
+        },
+        { 
+          tokens: [token, collateralToken],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
+      
       setTransactionModal({ isOpen: true, type: 'success', message: 'Money borrowed successfully!', txHash });
     } catch (error: any) {
       const errorMessage = error?.message || error?.reason || 'Transaction failed';
@@ -339,9 +371,21 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Depositing collateral...', txHash: undefined });
-      const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await depositCollateralFn(contract, token, amountWei);
+      
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          const tokenInfo = getTokenInfo(token);
+          const amountWei = parseUnits(amount, tokenInfo.decimals);
+          return await depositCollateralFn(contract, token, amountWei);
+        },
+        { 
+          tokens: [token],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
+      
       setTransactionModal({ isOpen: true, type: 'success', message: 'Collateral deposited successfully!', txHash });
     } catch (error: any) {
       const errorMessage = error?.message || error?.reason || 'Transaction failed';
@@ -358,9 +402,21 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Paying back loan...', txHash: undefined });
-      const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await repayFn(contract, token, amountWei);
+      
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          const tokenInfo = getTokenInfo(token);
+          const amountWei = parseUnits(amount, tokenInfo.decimals);
+          return await repayFn(contract, token, amountWei);
+        },
+        { 
+          tokens: [token],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
+      
       setTransactionModal({ isOpen: true, type: 'success', message: 'Loan paid back successfully!', txHash });
     } catch (error: any) {
       const errorMessage = error?.message || error?.reason || 'Transaction failed';
@@ -377,9 +433,21 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Withdrawing money...', txHash: undefined });
-      const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await withdrawFn(contract, token, amountWei);
+      
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          const tokenInfo = getTokenInfo(token);
+          const amountWei = parseUnits(amount, tokenInfo.decimals);
+          return await withdrawFn(contract, token, amountWei);
+        },
+        { 
+          tokens: [token],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
+      
       setTransactionModal({ isOpen: true, type: 'success', message: 'Money withdrawn successfully!', txHash });
     } catch (error: any) {
       const errorMessage = error?.message || error?.reason || 'Transaction failed';

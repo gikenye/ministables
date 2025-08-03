@@ -25,6 +25,7 @@ import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { offrampService } from "@/lib/services/offrampService";
 import { useToast } from "@/hooks/use-toast";
+import { oracleService } from "@/lib/services/oracleService";
 
 interface ActiveLoan {
   token: string;
@@ -128,6 +129,17 @@ export function PayBackModal({
     if (!form.token || !form.amount) return;
 
     try {
+      // Validate Oracle price before repayment
+      const isOracleValid = await oracleService.validatePriceData(form.token);
+      if (!isOracleValid) {
+        toast({
+          title: "Oracle Price Error",
+          description: "Unable to get current market prices. Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await onPayBack(form.token, form.amount);
       setForm({ token: "", amount: "" });
       setSelectedLoan(null);

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { oracleService } from "@/lib/services/oracleService";
 interface UserData {
   deposits: Record<string, string>;
   borrows: Record<string, string>;
@@ -150,6 +151,12 @@ export default function DashboardPage() {
 
   const handleWithdraw = async (token: string, amount: string): Promise<void> => {
     try {
+      // Validate Oracle price before withdrawal
+      const isOracleValid = await oracleService.validatePriceData(token);
+      if (!isOracleValid) {
+        throw new Error("Unable to get current market prices. Please try again in a moment.");
+      }
+      
       const tokenInfo = TOKEN_INFO[token];
       if (!tokenInfo) throw new Error("Token not supported");
       const amountWei = BigInt(parseFloat(amount) * Math.pow(10, tokenInfo.decimals));
