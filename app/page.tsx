@@ -27,11 +27,12 @@ import {
   useUserDeposits,
   useGetUserBalance,
 } from "../lib/thirdweb/minilend-contract";
-import { getContract } from "thirdweb";
+import { getContract, prepareContractCall, sendTransaction, waitForReceipt, readContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { parseUnits, formatUnits } from "viem";
 import { formatAddress } from "@/lib/utils";
+import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
@@ -148,10 +149,42 @@ export default function HomePage() {
     return [...new Set([...supportedStablecoins, ...supportedCollateral])];
   }, [supportedStablecoins, supportedCollateral]);
 
-  // User data hooks for all tokens (only call when connected)
-  const userBalance0 = useGetUserBalance(contract, address || "", allTokens[0] || "");
-  const userBalance1 = useGetUserBalance(contract, address || "", allTokens[1] || "");
-  const userBalance2 = useGetUserBalance(contract, address || "", allTokens[2] || "");
+  // Get actual wallet balances from ERC20 contracts
+  const [walletBalances, setWalletBalances] = useState<Record<string, string>>({});
+  
+  useEffect(() => {
+    const fetchWalletBalances = async () => {
+      if (!address || !isConnected) return;
+      
+      const balances: Record<string, string> = {};
+      
+      for (const token of allTokens) {
+        if (!token) continue;
+        try {
+          const tokenContract = getContract({
+            client,
+            chain: celo,
+            address: token,
+          });
+          
+          const balance = await readContract({
+            contract: tokenContract,
+            method: "function balanceOf(address) view returns (uint256)",
+            params: [address],
+          });
+          
+          balances[token] = balance.toString();
+        } catch (error) {
+          console.error(`Error fetching balance for ${token}:`, error);
+          balances[token] = "0";
+        }
+      }
+      
+      setWalletBalances(balances);
+    };
+    
+    fetchWalletBalances();
+  }, [address, isConnected, allTokens]);
   
   const userBorrow0 = useUserBorrows(contract, address || "", allTokens[0] || "");
   const userBorrow1 = useUserBorrows(contract, address || "", allTokens[1] || "");
@@ -165,14 +198,8 @@ export default function HomePage() {
   const userDeposit1 = useUserDeposits(contract, address || "", allTokens[1] || "", BigInt(0));
   const userDeposit2 = useUserDeposits(contract, address || "", allTokens[2] || "", BigInt(0));
 
-  // Combine hook results into state objects
-  const userBalances = useMemo(() => {
-    const balances: Record<string, string> = {};
-    if (allTokens[0]) balances[allTokens[0]] = userBalance0.data?.toString() || "0";
-    if (allTokens[1]) balances[allTokens[1]] = userBalance1.data?.toString() || "0";
-    if (allTokens[2]) balances[allTokens[2]] = userBalance2.data?.toString() || "0";
-    return balances;
-  }, [userBalance0.data, userBalance1.data, userBalance2.data, allTokens]);
+  // Use wallet balances for SaveMoneyModal
+  const userBalances = walletBalances;
 
   const userBorrows = useMemo(() => {
     const borrows: Record<string, string> = {};
@@ -228,23 +255,18 @@ export default function HomePage() {
     txHash: undefined as string | undefined,
   });
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationSkipped, setVerificationSkipped] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [dataSaverEnabled, setDataSaverEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if any hooks are loading
+  // Check if any critical hooks are loading (only check first few to reduce loading time)
   const loading = useMemo(() => {
     return (
-      userBalance0.isLoading || userBalance1.isLoading || userBalance2.isLoading ||
-      userBorrow0.isLoading || userBorrow1.isLoading || userBorrow2.isLoading ||
-      userCollateral0.isLoading || userCollateral1.isLoading || userCollateral2.isLoading ||
-      userDeposit0.isLoading || userDeposit1.isLoading || userDeposit2.isLoading
+      userBorrow0.isLoading || userDeposit0.isLoading
     );
   }, [
-    userBalance0.isLoading, userBalance1.isLoading, userBalance2.isLoading,
-    userBorrow0.isLoading, userBorrow1.isLoading, userBorrow2.isLoading,
-    userCollateral0.isLoading, userCollateral1.isLoading, userCollateral2.isLoading,
-    userDeposit0.isLoading, userDeposit1.isLoading, userDeposit2.isLoading
+    userBorrow0.isLoading, userDeposit0.isLoading
   ]);
 
   useEffect(() => {
@@ -257,12 +279,18 @@ export default function HomePage() {
     }
   }, [isConnected, address, session]);
 
+  // Check localStorage for verification skip state
+  useEffect(() => {
+    const skipped = localStorage.getItem('verification-skipped') === 'true';
+    setVerificationSkipped(skipped);
+  }, []);
+
   // Remove forced verification - make it optional
   useEffect(() => {
     if (sessionStatus === "loading") return;
-    // Don't force verification, just track the state
-    setNeedsVerification(isConnected && !session?.user?.verified);
-  }, [isConnected, session, sessionStatus]);
+    // Don't show verification if user has skipped it or is already verified
+    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped);
+  }, [isConnected, session, sessionStatus, verificationSkipped]);
 
   useEffect(() => {
     const updateStatus = () => setIsOnline(navigator.onLine);
@@ -305,9 +333,14 @@ export default function HomePage() {
       
       return await transactionFn();
     } catch (error: any) {
-      if (error.message.includes("Oracle") || error.message.includes("price")) {
-        options.onOracleError(error.message);
-        throw error;
+      const errorMessage = extractTransactionError(error);
+      console.error('Transaction execution error:', error);
+      
+      if (errorMessage.includes("Oracle") || errorMessage.includes("price")) {
+        options.onOracleError(errorMessage);
+      } else {
+        // Handle other types of errors with appropriate user feedback
+        options.onOracleError(errorMessage);
       }
       throw error;
     }
@@ -319,13 +352,32 @@ export default function HomePage() {
       return;
     }
 
+    const tokenInfo = getTokenInfo(token);
+    const amountWei = parseUnits(amount, tokenInfo.decimals);
+
     try {
+      setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
+      
+      // First approve the token
+      const tokenContract = getContract({
+        client,
+        chain: celo,
+        address: token,
+      });
+      
+      const approveTransaction = prepareContractCall({
+        contract: tokenContract,
+        method: "function approve(address spender, uint256 amount) returns (bool)",
+        params: [MINILEND_ADDRESS, amountWei],
+      });
+      
+      const approveResult = await sendTransaction({ transaction: approveTransaction, account });
+      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
+      
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Saving money...', txHash: undefined });
       
       const txHash = await executeWithOracleValidation(
         async () => {
-          const tokenInfo = getTokenInfo(token);
-          const amountWei = parseUnits(amount, tokenInfo.decimals);
           return await depositFn(contract, token, amountWei, BigInt(lockPeriod));
         },
         { 
@@ -336,9 +388,17 @@ export default function HomePage() {
         }
       );
       
-      setTransactionModal({ isOpen: true, type: 'success', message: 'Money saved successfully!', txHash });
+      // Wait for transaction confirmation
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      
+      setTransactionModal({ 
+        isOpen: true, 
+        type: 'success', 
+        message: `Successfully saved ${amount} ${tokenInfo.symbol}!`, 
+        txHash 
+      });
     } catch (error: any) {
-      const errorMessage = error?.message || error?.reason || 'Transaction failed';
+      const errorMessage = extractTransactionError(error);
       console.error('Save money error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -367,9 +427,18 @@ export default function HomePage() {
         }
       );
       
-      setTransactionModal({ isOpen: true, type: 'success', message: 'Money borrowed successfully!', txHash });
+      // Wait for transaction confirmation
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      
+      const borrowTokenInfo = getTokenInfo(token);
+      setTransactionModal({ 
+        isOpen: true, 
+        type: 'success', 
+        message: `Successfully borrowed ${amount} ${borrowTokenInfo.symbol}!`, 
+        txHash 
+      });
     } catch (error: any) {
-      const errorMessage = error?.message || error?.reason || 'Transaction failed';
+      const errorMessage = extractTransactionError(error);
       console.error('Borrow money error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -398,9 +467,18 @@ export default function HomePage() {
         }
       );
       
-      setTransactionModal({ isOpen: true, type: 'success', message: 'Collateral deposited successfully!', txHash });
+      // Wait for transaction confirmation
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      
+      const collateralTokenInfo = getTokenInfo(token);
+      setTransactionModal({ 
+        isOpen: true, 
+        type: 'success', 
+        message: `Successfully deposited ${amount} ${collateralTokenInfo.symbol} as collateral!`, 
+        txHash 
+      });
     } catch (error: any) {
-      const errorMessage = error?.message || error?.reason || 'Transaction failed';
+      const errorMessage = extractTransactionError(error);
       console.error('Deposit collateral error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -429,9 +507,18 @@ export default function HomePage() {
         }
       );
       
-      setTransactionModal({ isOpen: true, type: 'success', message: 'Loan paid back successfully!', txHash });
+      // Wait for transaction confirmation
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      
+      const repayTokenInfo = getTokenInfo(token);
+      setTransactionModal({ 
+        isOpen: true, 
+        type: 'success', 
+        message: `Successfully repaid ${amount} ${repayTokenInfo.symbol}!`, 
+        txHash 
+      });
     } catch (error: any) {
-      const errorMessage = error?.message || error?.reason || 'Transaction failed';
+      const errorMessage = extractTransactionError(error);
       console.error('Pay back error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -460,17 +547,30 @@ export default function HomePage() {
         }
       );
       
-      setTransactionModal({ isOpen: true, type: 'success', message: 'Money withdrawn successfully!', txHash });
+      // Wait for transaction confirmation
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      
+      const withdrawTokenInfo = getTokenInfo(token);
+      setTransactionModal({ 
+        isOpen: true, 
+        type: 'success', 
+        message: `Successfully withdrew ${amount} ${withdrawTokenInfo.symbol}!`, 
+        txHash 
+      });
     } catch (error: any) {
-      const errorMessage = error?.message || error?.reason || 'Transaction failed';
+      const errorMessage = extractTransactionError(error);
       console.error('Withdraw error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
   };
 
   const handleCardClick = useCallback((cardId: string) => {
-    cardId === "history" ? window.location.href = "/dashboard" : setActiveModal(cardId);
-  }, []);
+    if (cardId === "history") {
+      router.push("/dashboard");
+    } else {
+      setActiveModal(cardId);
+    }
+  }, [router]);
 
   const actionCards = useMemo(() => [
     {
@@ -573,7 +673,11 @@ export default function HomePage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setNeedsVerification(false)}
+                  onClick={() => {
+                    localStorage.setItem('verification-skipped', 'true');
+                    setVerificationSkipped(true);
+                    setNeedsVerification(false);
+                  }}
                   className="text-gray-600 hover:text-gray-800 text-xs px-3 py-1 h-7"
                 >
                   Skip
@@ -584,7 +688,7 @@ export default function HomePage() {
         )}
 
         {loading && isConnected ? (
-          <LoadingIndicator size="lg" text="Loading your account..." />
+          <LoadingIndicator size="md" text="Loading account..." delay={100} />
         ) : !isConnected ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-xl sm:shadow-2xl max-w-md w-full mx-3">

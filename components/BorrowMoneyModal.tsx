@@ -25,6 +25,7 @@ import { parseUnits } from "viem";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { oracleService } from "@/lib/services/oracleService";
+import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -88,6 +89,58 @@ export function BorrowMoneyModal({
   // Memoize supported tokens to prevent re-renders
   const SUPPORTED_STABLECOINS = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
   const SUPPORTED_COLLATERAL = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+  
+  const getTokenIcon = (symbol: string) => {
+    const icons: Record<string, string> = {
+      CELO: "🟡",
+      cUSD: "🇺🇸",
+      cEUR: "🇪🇺", 
+      cREAL: "🇧🇷",
+      eXOF: "🌍",
+      cKES: "🇰🇪",
+      PUSO: "🇵🇭",
+      cCOP: "🇨🇴",
+      cGHS: "🇬🇭",
+      USDT: "🇺🇸",
+      USDC: "🇺🇸",
+      USDGLO: "🌍",
+    };
+    return icons[symbol] || "💱";
+  };
+  
+  const getTokenCategory = (tokenAddress: string) => {
+    const tokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
+      t => t.address.toLowerCase() === tokenAddress.toLowerCase()
+    );
+    
+    if (!tokenInfo) return "other";
+    
+    if (['USDC', 'USDT', 'USDGLO'].includes(tokenInfo.symbol)) return "international";
+    if (['cKES', 'eXOF', 'PUSO', 'cCOP', 'cGHS'].includes(tokenInfo.symbol)) return "regional";
+    if (['cUSD', 'cEUR', 'cREAL'].includes(tokenInfo.symbol)) return "major";
+    if (tokenInfo.symbol === 'CELO') return "native";
+    
+    return "other";
+  };
+  
+  const groupTokensByCategory = (tokens: string[]) => {
+    return tokens.reduce((acc, token) => {
+      const category = getTokenCategory(token);
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(token);
+      return acc;
+    }, {} as Record<string, string[]>);
+  };
+  
+  const getCategoryName = (category: string) => {
+    switch (category) {
+      case "international": return "International";
+      case "regional": return "Regional";
+      case "major": return "Major Stablecoins";
+      case "native": return "Native Token";
+      default: return "Other";
+    }
+  };
 
   const [form, setForm] = useState({
     token: "",
@@ -241,14 +294,35 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Select money type" />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_STABLECOINS.map((token) => {
-                  const tokenInfo = tokenInfos[token];
-                  return (
-                    <SelectItem key={token} value={token}>
-                      {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                    </SelectItem>
-                  );
-                })}
+                {Object.entries(groupTokensByCategory(SUPPORTED_STABLECOINS)).map(([category, tokens]) => (
+                  <div key={category}>
+                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {getCategoryName(category)}
+                    </div>
+                    {tokens.map((token) => {
+                      const tokenInfo = tokenInfos[token];
+                      const balance = userBalances[token] || "0";
+                      const formattedBalance = formatAmount(balance, tokenInfo?.decimals || 18);
+                      return (
+                        <SelectItem key={token} value={token}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center">
+                              <span className="text-lg mr-2">
+                                {getTokenIcon(tokenInfo?.symbol || "")}
+                              </span>
+                              <span className="font-medium">
+                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500 ml-2">
+                              {formattedBalance}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </div>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -270,14 +344,38 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Select guarantee type" />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_COLLATERAL.map((token) => {
-                  const tokenInfo = tokenInfos[token];
-                  return (
-                    <SelectItem key={token} value={token}>
-                      {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                    </SelectItem>
-                  );
-                })}
+                {Object.entries(groupTokensByCategory(SUPPORTED_COLLATERAL)).map(([category, tokens]) => (
+                  <div key={category}>
+                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {getCategoryName(category)}
+                    </div>
+                    {tokens.map((token) => {
+                      const tokenInfo = tokenInfos[token];
+                      const balance = userBalances[token] || "0";
+                      const collateral = userCollaterals[token] || "0";
+                      const formattedBalance = formatAmount(balance, tokenInfo?.decimals || 18);
+                      const formattedCollateral = formatAmount(collateral, tokenInfo?.decimals || 18);
+                      return (
+                        <SelectItem key={token} value={token}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center">
+                              <span className="text-lg mr-2">
+                                {getTokenIcon(tokenInfo?.symbol || "")}
+                              </span>
+                              <span className="font-medium">
+                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 text-right">
+                              <div>Bal: {formattedBalance}</div>
+                              <div>Col: {formattedCollateral}</div>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </div>
+                ))}
               </SelectContent>
             </Select>
             {form.collateralToken && hasCollateral(form.collateralToken) && (

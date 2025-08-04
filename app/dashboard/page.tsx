@@ -4,11 +4,14 @@ import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRight } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
+import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
-import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS, thirdwebService } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
 interface UserData {
   deposits: Record<string, string>;
@@ -49,6 +52,8 @@ const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
 };
 
+
+
 const useDashboardData = (address: string | undefined, contract: any) => {
   const [userData, setUserData] = useState<UserData>({
     deposits: {},
@@ -71,48 +76,56 @@ const useDashboardData = (address: string | undefined, contract: any) => {
       const pools: Record<string, string> = {};
       const rates: Record<string, number> = {};
 
-      for (const token of SUPPORTED_STABLECOINS) {
+      // Load data in parallel for better performance
+      const promises = SUPPORTED_STABLECOINS.map(async (token) => {
         try {
-          const userDeposit = await readContract({
-            contract,
-            method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
-            params: [address, token, BigInt(0)],
-          });
+          const [userDeposit, userBorrow, userCollat] = await Promise.all([
+            readContract({
+              contract,
+              method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
+              params: [address, token, BigInt(0)],
+            }),
+            readContract({
+              contract,
+              method: "function userBorrows(address, address) view returns (uint256)",
+              params: [address, token],
+            }),
+            readContract({
+              contract,
+              method: "function userCollateral(address, address) view returns (uint256)",
+              params: [address, token],
+            })
+          ]);
           
-          const userBorrow = await readContract({
-            contract,
-            method: "function userBorrows(address, address) view returns (uint256)",
-            params: [address, token],
-          });
-          
-          const userCollat = await readContract({
-            contract,
-            method: "function userCollateral(address, address) view returns (uint256)",
-            params: [address, token],
-          });
-          
-          const totalSupply = await readContract({
-            contract,
-            method: "function totalSupply(address) view returns (uint256)",
-            params: [token],
-          });
-          
-          deposits[token] = userDeposit[0].toString();
-          borrows[token] = userBorrow.toString();
-          collateral[token] = userCollat.toString();
-          lockEnds[token] = Number(userDeposit[1]);
-          pools[token] = totalSupply.toString();
-          rates[token] = 1.0;
+          return {
+            token,
+            deposit: userDeposit[0].toString(),
+            borrow: userBorrow.toString(),
+            collateral: userCollat.toString(),
+            lockEnd: Number(userDeposit[1]),
+          };
         } catch (error) {
-          console.error(`Error loading data for token ${token}:`, error);
-          deposits[token] = "0";
-          borrows[token] = "0";
-          collateral[token] = "0";
-          lockEnds[token] = 0;
-          pools[token] = "0";
-          rates[token] = 1.0;
+          console.error(`Error loading data for token ${token.replace(/[\r\n]/g, '')}:`, error);
+          return {
+            token,
+            deposit: "0",
+            borrow: "0",
+            collateral: "0",
+            lockEnd: 0,
+          };
         }
-      }
+      });
+
+      const results = await Promise.all(promises);
+      
+      results.forEach(({ token, deposit, borrow, collateral, lockEnd }) => {
+        deposits[token] = deposit;
+        borrows[token] = borrow;
+        collateral[token] = collateral;
+        lockEnds[token] = lockEnd;
+        pools[token] = "0"; // Skip pool data for faster loading
+        rates[token] = 1.0;
+      });
 
       setUserData({ deposits, borrows, collateral, lockEnds });
       setPoolData(pools);
@@ -129,6 +142,8 @@ const useDashboardData = (address: string | undefined, contract: any) => {
 
 export default function DashboardPage() {
   const account = useActiveAccount();
+  const { data: session } = useSession();
+  const router = useRouter();
   const isConnected = !!account;
   const address = account?.address;
   
@@ -150,6 +165,19 @@ export default function DashboardPage() {
 
 
 
+  const getActualWithdrawableAmount = async (token: string): Promise<string> => {
+    if (!address) return "0";
+    
+    try {
+      // Use thirdweb getUserBalance function
+      const balance = await thirdwebService.getUserBalance(address, token);
+      return balance;
+    } catch (error) {
+      console.error(`Error getting user balance for ${token.replace(/[\r\n]/g, '')}:`, error);
+      return "0";
+    }
+  };
+
   const handleWithdraw = async (token: string, amount: string): Promise<void> => {
     try {
       // Validate Oracle price before withdrawal
@@ -161,11 +189,15 @@ export default function DashboardPage() {
       const tokenInfo = TOKEN_INFO[token];
       if (!tokenInfo) throw new Error("Token not supported");
       const amountWei = BigInt(parseFloat(amount) * Math.pow(10, tokenInfo.decimals));
+      
+      // The contract's withdraw function will automatically calculate withdrawable amount
+      // based on unlocked deposits and validate the request
       await withdrawFn(contract, token, amountWei);
       await loadDashboardData();
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = extractTransactionError(error);
       console.error("Error withdrawing:", error);
-      throw error;
+      throw new Error(errorMessage);
     }
   };
 
@@ -318,6 +350,23 @@ export default function DashboardPage() {
                 History
               </Button>
             </div>
+            {!session?.user?.verified && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Shield className="w-4 h-4 mr-2 text-blue-600" />
+                    <span className="text-sm text-blue-800">Verify your humanity for enhanced security</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => router.push("/self")}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
+                  >
+                    Verify
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -466,6 +515,8 @@ export default function DashboardPage() {
         depositLockEnds={userData.lockEnds}
         tokenInfos={TOKEN_INFO}
         loading={loading}
+        userAddress={address}
+        getWithdrawableAmount={getActualWithdrawableAmount}
       />
     </div>
   );

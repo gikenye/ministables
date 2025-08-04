@@ -17,7 +17,7 @@ export function LoadingIndicator({
   color = "primary",
   text,
   fullScreen = false,
-  delay = 300,
+  delay = 100,
 }: LoadingIndicatorProps) {
   const [show, setShow] = useState(delay === 0);
   const [lowBandwidth, setLowBandwidth] = useState(false);

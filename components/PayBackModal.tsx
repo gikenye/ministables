@@ -94,7 +94,6 @@ export function PayBackModal({
     try {
       const loans: ActiveLoan[] = [];
 
-      // Get actual borrow data from contract
       const borrowPromises = supportedStablecoins.map(async (tokenAddress) => {
         const tokenInfo = tokenInfos[tokenAddress];
         if (!tokenInfo) return null;
@@ -108,7 +107,7 @@ export function PayBackModal({
 
           if (borrowAmount && borrowAmount.toString() !== "0") {
             const principal = parseFloat(formatAmount(borrowAmount.toString(), tokenInfo.decimals));
-            const estimatedInterest = principal * 0.05; // 5% estimated interest
+            const estimatedInterest = principal * 0.05;
             const totalOwed = principal + estimatedInterest;
 
             return {
@@ -117,7 +116,7 @@ export function PayBackModal({
               principal: borrowAmount.toString(),
               estimatedInterest: (estimatedInterest * Math.pow(10, tokenInfo.decimals)).toString(),
               totalOwed: (totalOwed * Math.pow(10, tokenInfo.decimals)).toString(),
-              borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000, // Mock start time
+              borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000,
               decimals: tokenInfo.decimals,
             };
           }
@@ -135,7 +134,6 @@ export function PayBackModal({
         .map(result => result.value);
       
       loans.push(...validLoans);
-
       setActiveLoans(loans);
     } catch (error) {
       console.error("Error loading active loans:", error);
