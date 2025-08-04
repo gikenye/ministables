@@ -1,4 +1,4 @@
-import { oracleService } from '../services/oracleService';
+import { oracleService } from "../services/oracleService";
 
 export interface TransactionOptions {
   requireOracleValidation?: boolean;
