@@ -2,18 +2,7 @@ import { getContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
 import { readContract } from "thirdweb";
-import {
-  useSupportedStablecoins,
-  useSupportedCollateral,
-  useDefaultLockPeriods,
-  useGetUserBalance,
-  useUserDeposits,
-  useUserBorrows,
-  useUserCollateral,
-  useBorrowStartTime,
-  useTotalSupply,
-} from "../thirdweb/minilend-contract";
-import { oracleService } from "./oracleService";
+// Removed unused imports that were causing linting errors
 
 // Contract configuration
 export const MINILEND_ADDRESS = "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c";
@@ -259,8 +248,7 @@ class ThirdwebService {
     try {
       const balance = await readContract({
         contract: this.contract,
-        method:
-          "function getUserBalance(address user, address token) view returns (uint256)",
+        method: "function getUserBalance(address user, address token) returns (uint256)",
         params: [user, token],
       });
       return balance.toString();
@@ -330,159 +318,110 @@ class ThirdwebService {
     }
   }
 
-  async getBorrowStartTime(user: string, token: string): Promise<number> {
+  async getBorrowStartTime(user: string, token: string): Promise<string> {
     try {
       const startTime = await readContract({
         contract: this.contract,
-        method:
-          "function borrowStartTime(address, address) view returns (uint256)",
+        method: "function borrowStartTime(address, address) view returns (uint256)",
         params: [user, token],
       });
-      return Number(startTime);
+      return startTime.toString();
     } catch {
-      return 0;
+      return "0";
     }
   }
 
   async getTotalSupply(token: string): Promise<string> {
     try {
-      // Validate Oracle price before reading supply data
-      const isOracleValid = await oracleService.validatePriceData(token);
-      if (!isOracleValid) {
-        console.warn(`Oracle price validation failed for token ${token}`);
-      }
-      
       const supply = await readContract({
         contract: this.contract,
         method: "function totalSupply(address) view returns (uint256)",
         params: [token],
       });
       return supply.toString();
-    } catch (error) {
-      console.error(`Failed to get total supply for ${token}:`, error);
-      return "0";
-    }
-  }
-
-  async getTokenBalance(token: string, user: string): Promise<string> {
-    try {
-      const tokenContract = getContract({
-        client,
-        chain: celo,
-        address: token,
-      });
-      const balance = await readContract({
-        contract: tokenContract,
-        method: "function balanceOf(address) view returns (uint256)",
-        params: [user],
-      });
-      return balance.toString();
     } catch {
       return "0";
     }
   }
 
-  async getTokenInfo(
-    token: string
-  ): Promise<{ symbol: string; decimals: number }> {
-    // Check new supported tokens first
-    const newTokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
-      (t) => t.address.toLowerCase() === token.toLowerCase()
-    );
-
-    if (newTokenInfo) {
-      return { symbol: newTokenInfo.symbol, decimals: newTokenInfo.decimals };
-    }
-
-    // Fallback to old tokens
-    const tokenInfo = Object.values(ALL_SUPPORTED_TOKENS).find(
-      (t) => t.address.toLowerCase() === token.toLowerCase()
-    );
-
-    if (tokenInfo) {
-      return { symbol: tokenInfo.symbol, decimals: tokenInfo.decimals };
-    }
-
+  async getOracleRate(token: string): Promise<{ rate: string; timestamp: string }> {
     try {
-      const tokenContract = getContract({
-        client,
-        chain: celo,
-        address: token,
+      const result = await readContract({
+        contract: this.oracleContract,
+        method: "function getMedianRate(address) view returns (uint256, uint256)",
+        params: [token],
       });
-
-      const [symbol, decimals] = await Promise.all([
-        readContract({
-          contract: tokenContract,
-          method: "function symbol() view returns (string)",
-          params: [],
-        }),
-        readContract({
-          contract: tokenContract,
-          method: "function decimals() view returns (uint8)",
-          params: [],
-        }),
-      ]);
-
-      return { symbol, decimals: Number(decimals) };
-    } catch {
-      return { symbol: "UNKNOWN", decimals: 18 };
-    }
-  }
-
-  async getOracleRate(
-    token: string
-  ): Promise<{ rate: string; timestamp: number }> {
-    try {
-      const result = await oracleService.getMedianRate(token);
       return {
-        rate: result.rate.toString(),
-        timestamp: Number(result.timestamp),
+        rate: result[0].toString(),
+        timestamp: result[1].toString(),
       };
-    } catch (error) {
-      console.error(`Failed to get oracle rate for ${token}:`, error);
-      const fallbackRate = ORACLE_FALLBACK_RATES[token] || "1428571428571428571";
-      return { rate: fallbackRate, timestamp: Math.floor(Date.now() / 1000) };
+    } catch {
+      return {
+        rate: ORACLE_FALLBACK_RATES[token] || "1000000000000000000",
+        timestamp: Math.floor(Date.now() / 1000).toString(),
+      };
     }
   }
 
-  async batchGetUserData(user: string, tokens: string[]): Promise<any[]> {
-    const results = await Promise.all(
-      tokens.map(async (token) => {
-        const [deposits, borrows, collateral, lockEnd, totalSupply] =
-          await Promise.all([
-            this.getUserDeposits(user, token),
-            this.getUserBorrows(user, token),
-            this.getUserCollateral(user, token),
-            this.getDepositLockEnd(user, token),
-            this.getTotalSupply(token),
-          ]);
-
-        return {
-          token,
-          deposits: deposits.amount,
-          borrows,
-          collateral,
-          lockEnd,
-          totalSupply,
-        };
-      })
-    );
-
-    return results;
+  async getAllUserDeposits(user: string, token: string): Promise<Array<{ amount: string; lockEnd: number }>> {
+    const deposits = [];
+    let index = 0;
+    
+    try {
+      while (index < 50) {
+        try {
+          const result = await readContract({
+            contract: this.contract,
+            method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
+            params: [user, token, BigInt(index)],
+          });
+          
+          if (result[0] === BigInt(0)) break;
+          
+          deposits.push({
+            amount: result[0].toString(),
+            lockEnd: Number(result[1]),
+          });
+          index++;
+        } catch {
+          break;
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching deposits for ${token.replace(/[\r\n]/g, '')}:`, error);
+    }
+    
+    return deposits;
   }
 
-  // Contract constants
-  getSupportedStablecoinsStatic(): string[] {
-    return Object.values(ALL_SUPPORTED_TOKENS).map((t) => t.address);
+  async getWithdrawableAmount(user: string, token: string): Promise<string> {
+    try {
+      const deposits = await this.getAllUserDeposits(user, token);
+      const currentTime = Math.floor(Date.now() / 1000);
+      
+      let withdrawableAmount = BigInt(0);
+      
+      for (const deposit of deposits) {
+        if (currentTime >= deposit.lockEnd) {
+          withdrawableAmount += BigInt(deposit.amount);
+        }
+      }
+      
+      return withdrawableAmount.toString();
+    } catch (error) {
+      console.error(`Error calculating withdrawable amount for ${token.replace(/[\r\n]/g, '')}:`, error);
+      return "0";
+    }
   }
 
-  getSupportedCollateralStatic(): string[] {
-    return Object.values(ALL_SUPPORTED_TOKENS).map((t) => t.address);
+  getContract() {
+    return this.contract;
   }
 
-  getDefaultLockPeriodsStatic(): string[] {
-    return ["86400", "604800", "2592000", "7776000", "31536000"];
+  getOracleContract() {
+    return this.oracleContract;
   }
 }
 
 export const thirdwebService = new ThirdwebService();
+export default thirdwebService;

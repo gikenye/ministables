@@ -75,6 +75,7 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     event BorrowingPaused(address indexed token, bool paused);
     event InterestRateParamsUpdated(address indexed token, uint256 optimalUtilization, uint256 baseRate, uint256 slope1, uint256 slope2);
     event OraclesUpdated(address indexed oldOracles, address indexed newOracles);
+    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event BalanceUpdated(address indexed user, address indexed token, uint256 balance, uint256 yield);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -144,14 +145,14 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     function updateOracles(address newOracles) external onlyOwner {
         require(newOracles != address(0), "E1"); // Invalid oracle address
-        try ISortedOracles(newOracles).getMedianRate(address(usdc)) returns (uint256 rate, uint256 timestamp) {
-            require(rate > 0, "E2"); // Invalid oracle price
-            require(timestamp >= block.timestamp - 1 hours, "E3"); // Stale oracle price
-        } catch {
-            revert("E4"); // New oracles contract does not support ISortedOracles interface
-        }
         emit OraclesUpdated(address(oracles), newOracles);
         oracles = ISortedOracles(newOracles);
+    }
+
+    function updateTreasury(address newTreasury) external onlyOwner {
+        require(newTreasury != address(0), "E1"); // Invalid treasury address
+        emit TreasuryUpdated(treasury, newTreasury);
+        treasury = newTreasury;
     }
 
     function isValidLockPeriod(uint256 lockPeriod) internal view returns (bool) {
@@ -367,7 +368,7 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             uint256 totalReserves = totalSupply[token];
             require(totalReserves >= amount, "E11"); // Insufficient contract reserves
             require(totalReserves - amount >= minReserveThreshold[token], "E12"); // Below reserve threshold
-            contractReserves[token] = sub(contractReserves[token], amount);
+            contractReserves[msg.sender][token] = sub(contractReserves[msg.sender][token], amount);
             IERC20(token).safeTransfer(msg.sender, amount);
         }
         userBorrows[msg.sender][token] += amount;
@@ -411,7 +412,7 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
                 }
             } else {
                 contractReserves[msg.sender][token] += principalRepaid;
-                contractReserves[token] += principalRepaid;
+                totalSupply[token] += principalRepaid;
                 uint256 totalReserves = totalSupply[token];
                 if (totalReserves >= minReserveThreshold[token] && isBorrowingPaused[token]) {
                     isBorrowingPaused[token] = false;
@@ -544,8 +545,8 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
                 revert(string.concat("E9: ", reason)); // Aave repay failed
             }
         } else {
-            contractReserves[address(this)][token] -= userDebt;
-            totalSupply[token] -= userDebt;
+            contractReserves[user][token] += userDebt;
+            totalSupply[token] += userDebt;
             uint256 totalReserves = totalSupply[token];
             if (totalReserves >= minReserveThreshold[token] && isBorrowingPaused[token]) {
                 isBorrowingPaused[token] = false;

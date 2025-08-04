@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import { ArrowUpRight, Smartphone } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { offrampService } from "@/lib/services/offrampService";
+import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -31,6 +32,8 @@ interface WithdrawModalProps {
   depositLockEnds: Record<string, number>;
   tokenInfos: Record<string, { symbol: string; decimals: number }>;
   loading: boolean;
+  userAddress?: string;
+  getWithdrawableAmount?: (token: string) => Promise<string>;
 }
 
 export function WithdrawModal({
@@ -41,6 +44,8 @@ export function WithdrawModal({
   depositLockEnds,
   tokenInfos,
   loading,
+  userAddress,
+  getWithdrawableAmount: getActualWithdrawableAmount,
 }: WithdrawModalProps) {
 
   const [form, setForm] = useState({
@@ -65,7 +70,7 @@ export function WithdrawModal({
     }
 
     if (withdrawableAmount === "0") {
-      setError("No funds available to withdraw. Your funds may be locked. If you made multiple deposits with different lock periods, try a smaller amount.");
+      setError("No funds available to withdraw. Your deposits may still be locked or you may have mixed lock periods.");
       return;
     }
 
@@ -82,10 +87,12 @@ export function WithdrawModal({
       let errorMessage = err.message || "Failed to withdraw money. Please try again.";
 
       // Handle specific contract errors related to locked deposits
-      if (err.message?.includes("Deposit still locked")) {
-        errorMessage = `Withdrawal failed: Some of your ${tokenInfos[form.token]?.symbol} deposits are still locked. Try withdrawing a smaller amount or wait for all deposits to unlock.`;
-      } else if (err.message?.includes("Insufficient deposit balance")) {
-        errorMessage = `Insufficient balance. You may have mixed deposits with different lock periods. Try a smaller amount.`;
+      if (err.message?.includes("E4") || err.message?.includes("Insufficient matured deposit balance")) {
+        errorMessage = `Withdrawal failed: Insufficient unlocked deposits. Some of your ${tokenInfos[form.token]?.symbol} deposits may still be locked. Try a smaller amount or wait for more deposits to unlock.`;
+      } else if (err.message?.includes("E2") || err.message?.includes("Repay loans before withdrawing")) {
+        errorMessage = `Please repay all outstanding loans before withdrawing funds.`;
+      } else if (err.message?.includes("E5") || err.message?.includes("Insufficient contract reserve")) {
+        errorMessage = `Insufficient contract reserves. Please try again later.`;
       }
 
       setError(errorMessage);
@@ -107,47 +114,62 @@ export function WithdrawModal({
   const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
   const getTokenCategory = (tokenAddress: string) => {
-    // Simplified categorization
-    if (tokenAddress.includes("USDC") || tokenAddress.includes("USDT")) return "international";
-    if (tokenAddress.includes("cUSD") || tokenAddress.includes("cEUR")) return "regional";
-    return "stablecoin";
+    const tokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
+      t => t.address.toLowerCase() === tokenAddress.toLowerCase()
+    );
+    
+    if (!tokenInfo) return "other";
+    
+    if (['USDC', 'USDT', 'USDGLO'].includes(tokenInfo.symbol)) return "international";
+    if (['cKES', 'eXOF', 'PUSO', 'cCOP', 'cGHS'].includes(tokenInfo.symbol)) return "regional";
+    if (['cUSD', 'cEUR', 'cREAL'].includes(tokenInfo.symbol)) return "major";
+    if (tokenInfo.symbol === 'CELO') return "native";
+    
+    return "other";
+  };
+  
+  const getTokenIcon = (symbol: string) => {
+    const icons: Record<string, string> = {
+      CELO: "🟡",
+      cUSD: "🇺🇸",
+      cEUR: "🇪🇺", 
+      cREAL: "🇧🇷",
+      eXOF: "🌍",
+      cKES: "🇰🇪",
+      PUSO: "🇵🇭",
+      cCOP: "🇨🇴",
+      cGHS: "🇬🇭",
+      USDT: "🇺🇸",
+      USDC: "🇺🇸",
+      USDGLO: "🌍",
+    };
+    return icons[symbol] || "💱";
   };
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryName = (category: string) => {
     switch (category) {
-      case "regional":
-        return "🌍";
       case "international":
-        return "🌐";
-      case "stablecoin":
-        return "💰";
+        return "International";
+      case "regional":
+        return "Regional";
+      case "major":
+        return "Major Stablecoins";
+      case "native":
+        return "Native Token";
       default:
-        return "💱";
+        return "Other";
     }
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "regional":
-        return "text-green-600";
-      case "international":
-        return "text-blue-600";
-      case "stablecoin":
-        return "text-purple-600";
-      default:
-        return "text-gray-600";
-    }
-  };
 
-  // Memoize withdrawable amount calculation
+
+
+
   const getWithdrawableAmount = useCallback((tokenAddress: string) => {
     const deposit = userDeposits[tokenAddress] || "0";
     const lockEnd = depositLockEnds[tokenAddress] || 0;
 
     if (deposit === "0") return "0";
-
-    // If the latest deposit is still locked, assume all funds are locked
-    // This is a conservative approach due to the contract's limitation
     if (isLocked(lockEnd)) return "0";
 
     return deposit;
@@ -211,6 +233,7 @@ export function WithdrawModal({
                 {availableTokens.slice(0, 4).map((token) => {
                   const withdrawable = getWithdrawableAmount(token);
                   const isTokenLocked = isLocked(depositLockEnds[token]);
+                  
                   return (
                     <div key={token} className="flex justify-between items-center text-sm">
                       <span className="font-medium">{tokenInfos[token]?.symbol}</span>
@@ -222,9 +245,6 @@ export function WithdrawModal({
                         ) : (
                           <span>
                             {formatAmount(withdrawable, tokenInfos[token]?.decimals || 18)}
-                            {hasPotentialMixedLocks(token) && (
-                              <span className="text-xs text-orange-500 ml-1">*</span>
-                            )}
                           </span>
                         )}
                       </span>
@@ -237,21 +257,18 @@ export function WithdrawModal({
                   </p>
                 )}
               </div>
-              <div className="mt-2 text-xs text-orange-600">
-                <p>* May have mixed lock periods - actual withdrawable amount might differ</p>
-              </div>
+
             </div>
           )}
 
-          {/* Contract Limitation Warning */}
+          {/* Lock Period Information */}
           {availableTokens.some(token => hasPotentialMixedLocks(token)) && (
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-              <p className="text-sm font-medium text-orange-800 mb-1">
-                ⚠️ Important: Mixed Lock Periods
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-blue-800 mb-1">
+                ℹ️ Multiple Deposits Detected
               </p>
-              <p className="text-xs text-orange-700">
-                If you made multiple deposits with different lock periods, the displayed amounts may not be accurate.
-                If withdrawal fails, try a smaller amount as some deposits might still be locked.
+              <p className="text-xs text-blue-700">
+                You may have multiple deposits with different unlock dates. The contract will automatically calculate your available withdrawal amount based on unlocked deposits only.
               </p>
             </div>
           )}
@@ -280,19 +297,26 @@ export function WithdrawModal({
                 {Object.entries(groupedTokens).map(([category, tokens]) => (
                   <div key={category}>
                     <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {getCategoryIcon(category)} {category}
+                      {getCategoryName(category)}
                     </div>
                     {tokens.map((token) => {
                       const tokenInfo = tokenInfos[token];
-                      const categoryColor = getCategoryColor(category);
-                      const categoryIcon = getCategoryIcon(category);
+                      const withdrawable = getWithdrawableAmount(token);
+                      const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18);
                       return (
                         <SelectItem key={token} value={token}>
-                          <div className="flex items-center">
-                            <span className={`text-xs mr-2 ${categoryColor}`}>
-                              {categoryIcon}
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center">
+                              <span className="text-lg mr-2">
+                                {getTokenIcon(tokenInfo?.symbol || "")}
+                              </span>
+                              <span className="font-medium">
+                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500 ml-2">
+                              {formattedWithdrawable}
                             </span>
-                            {tokenInfo?.symbol || token.slice(0, 6) + "..."}
                           </div>
                         </SelectItem>
                       );
@@ -309,20 +333,44 @@ export function WithdrawModal({
           </div>
 
           <div>
-            <Label
-              htmlFor="withdraw-amount"
-              className="text-sm font-medium text-gray-700"
-            >
-              Amount
-            </Label>
+            <div className="flex justify-between items-center">
+              <Label
+                htmlFor="withdraw-amount"
+                className="text-sm font-medium text-gray-700"
+              >
+                Amount
+              </Label>
+              {form.token && getWithdrawableAmount(form.token) !== "0" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxAmount = formatAmount(
+                      getWithdrawableAmount(form.token),
+                      tokenInfos[form.token]?.decimals || 18
+                    );
+                    setForm({ ...form, amount: maxAmount });
+                  }}
+                  className="text-xs text-primary hover:text-secondary font-medium active:scale-95 transition-all"
+                >
+                  Use max: {formatAmount(
+                    getWithdrawableAmount(form.token),
+                    tokenInfos[form.token]?.decimals || 18
+                  )} {tokenInfos[form.token]?.symbol}
+                </button>
+              )}
+            </div>
             <Input
               id="withdraw-amount"
-              type="number"
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
               value={form.amount}
               onChange={(e) => {
                 const value = e.target.value;
-                setForm({ ...form, amount: value });
+                // Allow empty value or valid decimal numbers
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setForm({ ...form, amount: value });
+                }
 
                 // Clear error when user starts typing
                 if (error && value !== form.amount) {
@@ -330,8 +378,6 @@ export function WithdrawModal({
                 }
               }}
               className="mt-1 min-h-[48px]"
-              min="0.01"
-              step="0.01"
             />
             {form.token && userDeposits[form.token] && (
               <div className="mt-2 p-2 bg-blue-50 rounded-md">
@@ -361,18 +407,17 @@ export function WithdrawModal({
                     </span>
                   </div>
                   {isLocked(depositLockEnds[form.token]) && (
-                    <div className="bg-red-50 border border-red-200 rounded p-2">
-                      <p className="text-sm text-red-600">
-                        🔒 Your funds are locked until {formatDate(depositLockEnds[form.token])}
+                    <div className="bg-amber-50 border border-amber-200 rounded p-2">
+                      <p className="text-sm text-amber-700">
+                        🔒 Latest deposit locked until {formatDate(depositLockEnds[form.token])}
                       </p>
-                      <p className="text-xs text-red-500 mt-1">
-                        You cannot withdraw locked funds before the unlock date.
+                      <p className="text-xs text-amber-600 mt-1">
+                        {hasPotentialMixedLocks(form.token) ? (
+                          "You may have earlier deposits that are already unlocked. The contract will determine your actual withdrawable amount."
+                        ) : (
+                          "All your funds are locked until this date."
+                        )}
                       </p>
-                      {hasPotentialMixedLocks(form.token) && (
-                        <p className="text-xs text-orange-600 mt-2 font-medium">
-                          ⚠️ Note: If you made multiple deposits with different lock periods, some funds might be withdrawable even if others are locked. Try withdrawing a smaller amount if the transaction fails.
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>

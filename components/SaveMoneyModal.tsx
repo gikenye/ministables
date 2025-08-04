@@ -24,6 +24,7 @@ import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveAccount } from "thirdweb/react";
+import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 
 interface SaveMoneyModalProps {
   isOpen: boolean;
@@ -64,6 +65,19 @@ export function SaveMoneyModal({
       return;
     }
 
+    // Validate amount doesn't exceed available balance
+    if (form.token && userBalances[form.token]) {
+      const maxAmount = parseFloat(formatAmount(
+        userBalances[form.token],
+        tokenInfos[form.token]?.decimals || 18
+      ));
+      const inputAmount = parseFloat(form.amount);
+      if (inputAmount > maxAmount) {
+        setError(`Amount exceeds available balance of ${maxAmount} ${tokenInfos[form.token]?.symbol}`);
+        return;
+      }
+    }
+
     setError(null);
     setIsSaving(true);
 
@@ -81,44 +95,101 @@ export function SaveMoneyModal({
   };
 
   const getLockPeriodText = (seconds: string) => {
-    const days = Number.parseInt(seconds) / 86400;
-    return `${days} days`;
+    const totalSeconds = Number.parseInt(seconds);
+    if (totalSeconds < 3600) {
+      return `${totalSeconds} seconds`;
+    } else if (totalSeconds < 86400) {
+      const hours = Math.floor(totalSeconds / 3600);
+      return `${hours} hours`;
+    } else {
+      const days = totalSeconds / 86400;
+      return `${days} days`;
+    }
   };
 
   // Get supported tokens from props
   const supportedStablecoins = Object.keys(tokenInfos);
-  const defaultLockPeriods = ["2592000", "7776000", "15552000"]; // 30, 90, 180 days
+  const defaultLockPeriods = ["61", "604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
   const getTokenCategory = (tokenAddress: string) => {
-    // Simplified categorization
-    if (tokenAddress.includes("USDC") || tokenAddress.includes("USDT")) return "international";
-    if (tokenAddress.includes("cUSD") || tokenAddress.includes("cEUR")) return "regional";
+    const tokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
+      t => t.address.toLowerCase() === tokenAddress.toLowerCase()
+    );
+    
+    if (!tokenInfo) return "stablecoin";
+    
+    // International stablecoins
+    if (['USDC', 'USDT', 'USDGLO'].includes(tokenInfo.symbol)) return "international";
+    // Regional currencies
+    if (['cKES', 'eXOF', 'PUSO', 'cCOP', 'cGHS'].includes(tokenInfo.symbol)) return "regional";
+    // Major stablecoins
+    if (['cUSD', 'cEUR', 'cREAL'].includes(tokenInfo.symbol)) return "major";
+    // Native token
+    if (tokenInfo.symbol === 'CELO') return "native";
+    
     return "stablecoin";
   };
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case "regional":
-        return "🌍";
       case "international":
         return "🌐";
-      case "stablecoin":
+      case "regional":
+        return "🌍";
+      case "major":
         return "💰";
+      case "native":
+        return "🟡";
       default:
         return "💱";
     }
   };
+  
+  const getTokenIcon = (symbol: string) => {
+    const icons: Record<string, string> = {
+      CELO: "🟡",
+      cUSD: "🇺🇸",
+      cEUR: "🇪🇺", 
+      cREAL: "🇧🇷",
+      eXOF: "🌍",
+      cKES: "🇰🇪",
+      PUSO: "🇵🇭",
+      cCOP: "🇨🇴",
+      cGHS: "🇬🇭",
+      USDT: "🇺🇸",
+      USDC: "🇺🇸",
+      USDGLO: "🌍",
+    };
+    return icons[symbol] || "💱";
+  };
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case "regional":
-        return "text-green-600";
       case "international":
         return "text-blue-600";
-      case "stablecoin":
+      case "regional":
+        return "text-green-600";
+      case "major":
         return "text-purple-600";
+      case "native":
+        return "text-yellow-600";
       default:
         return "text-gray-600";
+    }
+  };
+  
+  const getCategoryName = (category: string) => {
+    switch (category) {
+      case "international":
+        return "International";
+      case "regional":
+        return "Regional";
+      case "major":
+        return "Major Stablecoins";
+      case "native":
+        return "Native Token";
+      default:
+        return "Other";
     }
   };
 
@@ -184,17 +255,26 @@ export function SaveMoneyModal({
                     return (
                       <div key={category}>
                         <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          {categoryIcon} {category}
+                          {categoryIcon} {getCategoryName(category)}
                         </div>
                         {tokens.map((token) => {
                           const tokenInfo = tokenInfos[token];
+                          const balance = userBalances[token] || "0";
+                          const formattedBalance = formatAmount(balance, tokenInfo?.decimals || 18);
                           return (
                             <SelectItem key={token} value={token}>
-                              <div className="flex items-center">
-                                <span className={`text-xs mr-2 ${categoryColor}`}>
-                                  {categoryIcon}
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center">
+                                  <span className="text-lg mr-2">
+                                    {getTokenIcon(tokenInfo?.symbol || "")}
+                                  </span>
+                                  <span className="font-medium">
+                                    {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-gray-500 ml-2">
+                                  {formattedBalance}
                                 </span>
-                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
                               </div>
                             </SelectItem>
                           );
@@ -207,32 +287,47 @@ export function SaveMoneyModal({
             </div>
 
             <div>
-              <Label
-                htmlFor="save-amount"
-                className="text-sm font-medium text-gray-700"
-              >
-                Amount
-              </Label>
+              <div className="flex justify-between items-center">
+                <Label
+                  htmlFor="save-amount"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Amount
+                </Label>
+                {form.token && userBalances[form.token] && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const maxAmount = formatAmount(
+                        userBalances[form.token],
+                        tokenInfos[form.token]?.decimals || 18
+                      );
+                      setForm({ ...form, amount: maxAmount });
+                    }}
+                    className="text-xs text-primary hover:text-secondary font-medium active:scale-95 transition-all"
+                  >
+                    Use max: {formatAmount(
+                      userBalances[form.token],
+                      tokenInfos[form.token]?.decimals || 18
+                    )} {tokenInfos[form.token]?.symbol}
+                  </button>
+                )}
+              </div>
               <Input
                 id="save-amount"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Allow empty value or valid decimal numbers
+                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                    setForm({ ...form, amount: value });
+                  }
+                }}
                 className="mt-1 min-h-[48px]"
-                min="0.01"
-                step="0.01"
               />
-              {form.token && userBalances[form.token] && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Available:{" "}
-                  {formatAmount(
-                    userBalances[form.token],
-                    tokenInfos[form.token]?.decimals || 18
-                  )}{" "}
-                  {tokenInfos[form.token]?.symbol}
-                </p>
-              )}
             </div>
 
             <div>
