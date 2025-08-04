@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowDownLeft, Shield, AlertCircle, CreditCard } from "lucide-react";
-import { useContract } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { parseUnits } from "viem";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
+import { oracleService } from "@/lib/services/oracleService";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -41,6 +41,38 @@ interface BorrowMoneyModalProps {
   loading: boolean;
 }
 
+// Constants
+const LOAN_TO_VALUE_RATIO = 0.67; // 67% LTV
+const COLLATERALIZATION_RATIO = 1.5; // 150% collateralization
+
+// Error handling utility
+const handleTransactionError = (error: any, toast: any, defaultMessage: string) => {
+  console.error("Transaction error:", error);
+  
+  if (error.message?.includes("FILE_ERROR_NO_SPACE") ||
+      error.message?.includes("QuotaExceededError") ||
+      error.message?.includes("no space")) {
+    toast({
+      title: "Storage Error",
+      description: "Your device is running out of disk space. Please free up some space and try again.",
+      variant: "destructive",
+    });
+  } else if (error.message?.includes("User rejected") ||
+             error.message?.includes("rejected the request")) {
+    toast({
+      title: "Transaction Cancelled",
+      description: "You cancelled the transaction in your wallet.",
+      variant: "default",
+    });
+  } else {
+    toast({
+      title: "Error",
+      description: error.message || defaultMessage,
+      variant: "destructive",
+    });
+  }
+};
+
 export function BorrowMoneyModal({
   isOpen,
   onClose,
@@ -52,7 +84,10 @@ export function BorrowMoneyModal({
   loading,
 }: BorrowMoneyModalProps) {
   const { toast } = useToast();
-  const { supportedStablecoins, supportedCollateral } = useContract();
+
+  // Memoize supported tokens to prevent re-renders
+  const SUPPORTED_STABLECOINS = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+  const SUPPORTED_COLLATERAL = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
   const [form, setForm] = useState({
     token: "",
@@ -60,7 +95,7 @@ export function BorrowMoneyModal({
     amount: "",
     collateralAmount: "",
   });
-  
+
   const [requiredCollateral, setRequiredCollateral] = useState<string | null>(null);
   const [needsMoreCollateral, setNeedsMoreCollateral] = useState(false);
   const [maxBorrowAmount, setMaxBorrowAmount] = useState<string | null>(null);
@@ -86,31 +121,7 @@ export function BorrowMoneyModal({
       await onDepositCollateral(form.collateralToken, form.collateralAmount);
       setForm((prev) => ({ ...prev, collateralAmount: "" }));
     } catch (error: any) {
-      console.error("Deposit collateral error:", error);
-      
-      // Check for specific errors
-      if (error.message?.includes("FILE_ERROR_NO_SPACE") ||
-          error.message?.includes("QuotaExceededError") ||
-          error.message?.includes("no space")) {
-        toast({
-          title: "Storage Error",
-          description: "Your device is running out of disk space. Please free up some space and try again.",
-          variant: "destructive",
-        });
-      } else if (error.message?.includes("User rejected") ||
-                error.message?.includes("rejected the request")) {
-        toast({
-          title: "Transaction Cancelled",
-          description: "You cancelled the transaction in your wallet.",
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to deposit collateral. Please try again.",
-          variant: "destructive",
-        });
-      }
+      handleTransactionError(error, toast, "Failed to deposit collateral. Please try again.");
     }
   };
 
@@ -134,159 +145,72 @@ export function BorrowMoneyModal({
     }
 
     try {
+      // Validate Oracle prices before borrowing
+      const isOracleValid = await oracleService.validateMultipleTokens([form.token, form.collateralToken]);
+      if (!isOracleValid) {
+        toast({
+          title: "Oracle Price Error",
+          description: "Unable to get current market prices. Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await onBorrow(form.token, form.amount, form.collateralToken);
-      setForm({
-        token: "",
-        collateralToken: "",
-        amount: "",
-        collateralAmount: "",
-      });
+      setForm({ token: "", collateralToken: "", amount: "", collateralAmount: "" });
       onClose();
     } catch (error: any) {
-      console.error("Borrow error:", error);
-      
-      // Check for specific errors
-      if (error.message?.includes("FILE_ERROR_NO_SPACE") ||
-          error.message?.includes("QuotaExceededError") ||
-          error.message?.includes("no space")) {
-        toast({
-          title: "Storage Error",
-          description: "Your device is running out of disk space. Please free up some space and try again.",
-          variant: "destructive",
-        });
-      } else if (error.message?.includes("User rejected") ||
-                error.message?.includes("rejected the request")) {
-        toast({
-          title: "Transaction Cancelled",
-          description: "You cancelled the transaction in your wallet.",
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to borrow money. Please try again.",
-          variant: "destructive",
-        });
-      }
+      handleTransactionError(error, toast, "Failed to borrow money. Please try again.");
     }
   };
 
-  // Calculate maximum borrowable amount based on current collateral
-  const calculateMaxBorrowAmount = async () => {
-    if (!form.token || !form.collateralToken || !hasCollateral(form.collateralToken)) {
+  const calculateMaxBorrowAmount = () => {
+    if (!form.collateralToken || !hasCollateral(form.collateralToken)) {
       setMaxBorrowAmount(null);
       return;
     }
 
-    try {
-      // Get token prices from oracle
-      const [tokenRateData, collateralRateData] = await Promise.all([
-        useContract().getOracleRate(form.token),
-        useContract().getOracleRate(form.collateralToken),
-      ]);
-
-      const tokenInfo = await useContract().getTokenInfo(form.token);
-      const collateralInfo = await useContract().getTokenInfo(form.collateralToken);
-      
-      // Get user's current collateral amount
-      const userCollateralAmount = BigInt(userCollaterals[form.collateralToken]);
-      
-      // Calculate collateral value (collateralAmount * collateralPrice / 1e6)
-      const collateralRate = BigInt(collateralRateData.rate);
-      const collateralValue = (userCollateralAmount * collateralRate) / BigInt(10 ** 6);
-      
-      // Calculate maximum loan value (collateralValue * 100 / 150)
-      const LIQUIDATION_THRESHOLD = 150;
-      const maxLoanValue = (collateralValue * BigInt(100)) / BigInt(LIQUIDATION_THRESHOLD);
-      
-      // Convert to token amount (maxLoanValue / tokenPrice * 1e18)
-      const tokenRate = BigInt(tokenRateData.rate);
-      const maxTokenAmount = (maxLoanValue * BigInt(10 ** 18)) / tokenRate;
-      
-      // Format the maximum borrowable amount
-      const formattedMaxAmount = formatAmount(
-        maxTokenAmount.toString(),
-        tokenInfo.decimals
-      );
-      
-      setMaxBorrowAmount(formattedMaxAmount);
-    } catch (error) {
-      console.error("Error calculating max borrow amount:", error);
-      setMaxBorrowAmount(null);
+    const collateralAmount = userCollaterals[form.collateralToken];
+    const tokenInfo = tokenInfos[form.collateralToken];
+    if (collateralAmount && tokenInfo) {
+      const maxAmount = (parseFloat(formatAmount(collateralAmount, tokenInfo.decimals)) * LOAN_TO_VALUE_RATIO).toFixed(6);
+      setMaxBorrowAmount(maxAmount);
     }
   };
 
-  // Set borrow amount to maximum
   const handleSetMaxAmount = () => {
     if (maxBorrowAmount) {
-      // Remove commas and convert to number for the input field
       const maxAmountValue = maxBorrowAmount.replace(/,/g, '');
       setForm(prev => ({ ...prev, amount: maxAmountValue }));
     }
   };
 
-  // Calculate required collateral based on loan amount
-  const calculateRequiredCollateral = async () => {
-    if (!form.token || !form.collateralToken || !form.amount || parseFloat(form.amount) <= 0) {
+  const calculateRequiredCollateral = () => {
+    if (!form.amount || parseFloat(form.amount) <= 0) {
       setRequiredCollateral(null);
       setNeedsMoreCollateral(false);
       return;
     }
 
-    try {
-      // Get token prices from oracle
-      const [tokenRateData, collateralRateData] = await Promise.all([
-        useContract().getOracleRate(form.token),
-        useContract().getOracleRate(form.collateralToken),
-      ]);
+    const required = (parseFloat(form.amount) * COLLATERALIZATION_RATIO).toFixed(6);
+    setRequiredCollateral(required);
 
-      const tokenInfo = await useContract().getTokenInfo(form.token);
-      const collateralInfo = await useContract().getTokenInfo(form.collateralToken);
-      
-      // Convert amount to BigInt with proper decimals
-      const amountWei = parseUnits(form.amount, tokenInfo.decimals);
-      
-      // Calculate loan value (amount * tokenPrice / 1e18)
-      const tokenRate = BigInt(tokenRateData.rate);
-      const loanValue = (amountWei * tokenRate) / BigInt(10 ** 18);
-      
-      // Calculate required collateral value (loanValue * 150 / 100)
-      const LIQUIDATION_THRESHOLD = 150;
-      const requiredCollateralValue = (loanValue * BigInt(LIQUIDATION_THRESHOLD)) / BigInt(100);
-      
-      // Convert to collateral amount (requiredCollateralValue / collateralPrice * 1e6)
-      const collateralRate = BigInt(collateralRateData.rate);
-      const requiredCollateralAmount = (requiredCollateralValue * BigInt(10 ** 6)) / collateralRate;
-      
-      // Format the required collateral amount
-      const formattedRequiredCollateral = formatAmount(
-        requiredCollateralAmount.toString(),
-        collateralInfo.decimals
-      );
-      
-      setRequiredCollateral(formattedRequiredCollateral);
-      
-      // Check if user has enough collateral
-      if (hasCollateral(form.collateralToken)) {
-        const userCollateralAmount = userCollaterals[form.collateralToken];
-        const userCollateralBigInt = BigInt(userCollateralAmount);
-        
-        // If user's collateral is less than required, they need to deposit more
-        setNeedsMoreCollateral(userCollateralBigInt < requiredCollateralAmount);
-      } else {
-        setNeedsMoreCollateral(true);
-      }
-    } catch (error) {
-      console.error("Error calculating required collateral:", error);
-      setRequiredCollateral(null);
+    if (hasCollateral(form.collateralToken)) {
+      const userCollateral = parseFloat(formatAmount(
+        userCollaterals[form.collateralToken],
+        tokenInfos[form.collateralToken]?.decimals || 18
+      ));
+      setNeedsMoreCollateral(userCollateral < parseFloat(required));
+    } else {
+      setNeedsMoreCollateral(true);
     }
   };
 
-  // Recalculate required collateral and max borrow amount when relevant form fields change
+  // Recalculate when form changes
   useEffect(() => {
     calculateRequiredCollateral();
     calculateMaxBorrowAmount();
-  }, [form.token, form.collateralToken, form.amount, userCollaterals[form.collateralToken]]);
+  }, [form.token, form.collateralToken, form.amount, userCollaterals]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -317,11 +241,14 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Select money type" />
               </SelectTrigger>
               <SelectContent>
-                {supportedStablecoins.map((token) => (
-                  <SelectItem key={token} value={token}>
-                    {tokenInfos[token]?.symbol || token.slice(0, 6) + "..."}
-                  </SelectItem>
-                ))}
+                {SUPPORTED_STABLECOINS.map((token) => {
+                  const tokenInfo = tokenInfos[token];
+                  return (
+                    <SelectItem key={token} value={token}>
+                      {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -343,11 +270,14 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Select guarantee type" />
               </SelectTrigger>
               <SelectContent>
-                {supportedCollateral.map((token) => (
-                  <SelectItem key={token} value={token}>
-                    {tokenInfos[token]?.symbol || token.slice(0, 6) + "..."}
-                  </SelectItem>
-                ))}
+                {SUPPORTED_COLLATERAL.map((token) => {
+                  const tokenInfo = tokenInfos[token];
+                  return (
+                    <SelectItem key={token} value={token}>
+                      {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             {form.collateralToken && hasCollateral(form.collateralToken) && (
@@ -357,7 +287,7 @@ export function BorrowMoneyModal({
                     ✓ Deposited:{" "}
                     {formatAmount(
                       userCollaterals[form.collateralToken],
-                      tokenInfos[form.collateralToken]?.decimals || 6
+                      tokenInfos[form.collateralToken]?.decimals || 18
                     )}{" "}
                     {tokenInfos[form.collateralToken]?.symbol}
                   </p>
@@ -422,7 +352,7 @@ export function BorrowMoneyModal({
                     Available:{" "}
                     {formatAmount(
                       userBalances[form.collateralToken],
-                      tokenInfos[form.collateralToken]?.decimals || 6
+                      tokenInfos[form.collateralToken]?.decimals || 18
                     )}{" "}
                     {tokenInfos[form.collateralToken]?.symbol}
                   </p>
@@ -436,22 +366,22 @@ export function BorrowMoneyModal({
                   >
                     {loading ? "Depositing..." : "Deposit from Wallet"}
                   </Button>
-                  
+
                   {/* Show onramp option only for supported assets */}
-                  {form.collateralToken && 
-                   onrampService.isAssetSupportedForOnramp(
-                     tokenInfos[form.collateralToken]?.symbol || ""
-                   ) && (
-                    <Button
-                      onClick={() => setShowOnrampModal(true)}
-                      disabled={loading}
-                      variant="outline"
-                      className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
-                    >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Deposit via Mobile Money
-                    </Button>
-                  )}
+                  {form.collateralToken &&
+                    onrampService.isAssetSupportedForOnramp(
+                      tokenInfos[form.collateralToken]?.symbol || ""
+                    ) && (
+                      <Button
+                        onClick={() => setShowOnrampModal(true)}
+                        disabled={loading}
+                        variant="outline"
+                        className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
+                      >
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Deposit via Mobile Money
+                      </Button>
+                    )}
                 </div>
               </div>
             </div>

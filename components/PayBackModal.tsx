@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,13 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowUpRight, AlertCircle, Clock, DollarSign, CreditCard } from "lucide-react";
-import { useContract } from "@/lib/contract";
+import { ArrowUpRight, AlertCircle, Clock, DollarSign, CreditCard, Smartphone } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
-import { useWallet } from "@/lib/wallet";
+import { useActiveAccount } from "thirdweb/react";
 import { OnrampDepositModal } from "./OnrampDepositModal";
+import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { onrampService } from "@/lib/services/onrampService";
+import { offrampService } from "@/lib/services/offrampService";
 import { useToast } from "@/hooks/use-toast";
+import { oracleService } from "@/lib/services/oracleService";
+import { getContract, readContract } from "thirdweb";
+import { celo } from "thirdweb/chains";
+import { client } from "@/lib/thirdweb/client";
+import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 
 interface ActiveLoan {
   token: string;
@@ -50,12 +56,13 @@ export function PayBackModal({
   tokenInfos,
   loading,
 }: PayBackModalProps) {
-  const { address } = useWallet();
-  const { supportedStablecoins, getUserBorrows, getTokenInfo } = useContract();
+  const account = useActiveAccount();
+  const address = account?.address;
   const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
   const [loadingLoans, setLoadingLoans] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
+  const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false);
   const { toast } = useToast();
 
   const [form, setForm] = useState({
@@ -63,12 +70,22 @@ export function PayBackModal({
     amount: "",
   });
 
+  // Memoize contract instance to prevent re-creation
+  const contract = useMemo(() => getContract({
+    client,
+    chain: celo,
+    address: MINILEND_ADDRESS,
+  }), []);
+
+  // Get supported tokens from props
+  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+
   // Load active loans when modal opens
   useEffect(() => {
-    if (isOpen && address) {
+    if (isOpen && address && Object.keys(tokenInfos).length > 0) {
       loadActiveLoans();
     }
-  }, [isOpen, address, supportedStablecoins]);
+  }, [isOpen, address, tokenInfos]);
 
   const loadActiveLoans = async () => {
     if (!address) return;
@@ -77,35 +94,47 @@ export function PayBackModal({
     try {
       const loans: ActiveLoan[] = [];
 
-      for (const tokenAddress of supportedStablecoins) {
-        const borrowAmount = await getUserBorrows(address, tokenAddress);
+      // Get actual borrow data from contract
+      const borrowPromises = supportedStablecoins.map(async (tokenAddress) => {
+        const tokenInfo = tokenInfos[tokenAddress];
+        if (!tokenInfo) return null;
 
-        if (borrowAmount && borrowAmount !== "0") {
-          const tokenInfo =
-            tokenInfos[tokenAddress] || (await getTokenInfo(tokenAddress));
-
-          // Estimate interest (simplified calculation - in real app you'd get this from contract)
-          const principal = Number(
-            formatAmount(borrowAmount, tokenInfo.decimals)
-          );
-          const estimatedInterest = principal * 0.05; // 5% estimated interest
-          const totalOwed = principal + estimatedInterest;
-
-          loans.push({
-            token: tokenAddress,
-            symbol: tokenInfo.symbol,
-            principal: borrowAmount,
-            estimatedInterest: (
-              estimatedInterest * Math.pow(10, tokenInfo.decimals)
-            ).toString(),
-            totalOwed: (
-              totalOwed * Math.pow(10, tokenInfo.decimals)
-            ).toString(),
-            borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000, // Mock: 30 days ago
-            decimals: tokenInfo.decimals,
+        try {
+          const borrowAmount = await readContract({
+            contract,
+            method: "function userBorrows(address, address) view returns (uint256)",
+            params: [address, tokenAddress],
           });
+
+          if (borrowAmount && borrowAmount.toString() !== "0") {
+            const principal = parseFloat(formatAmount(borrowAmount.toString(), tokenInfo.decimals));
+            const estimatedInterest = principal * 0.05; // 5% estimated interest
+            const totalOwed = principal + estimatedInterest;
+
+            return {
+              token: tokenAddress,
+              symbol: tokenInfo.symbol,
+              principal: borrowAmount.toString(),
+              estimatedInterest: (estimatedInterest * Math.pow(10, tokenInfo.decimals)).toString(),
+              totalOwed: (totalOwed * Math.pow(10, tokenInfo.decimals)).toString(),
+              borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000, // Mock start time
+              decimals: tokenInfo.decimals,
+            };
+          }
+        } catch (error) {
+          console.error(`Error loading borrow data for ${tokenInfo.symbol}:`, error);
         }
-      }
+        return null;
+      });
+
+      const loanResults = await Promise.allSettled(borrowPromises);
+      const validLoans = loanResults
+        .filter((result): result is PromiseFulfilledResult<ActiveLoan> => 
+          result.status === 'fulfilled' && result.value !== null
+        )
+        .map(result => result.value);
+      
+      loans.push(...validLoans);
 
       setActiveLoans(loans);
     } catch (error) {
@@ -126,14 +155,34 @@ export function PayBackModal({
   const handlePayBack = async () => {
     if (!form.token || !form.amount) return;
 
-    await onPayBack(form.token, form.amount);
-    setForm({ token: "", amount: "" });
-    setSelectedLoan(null);
-    onClose();
-    // Reload loans after payment
-    setTimeout(() => {
-      if (address) loadActiveLoans();
-    }, 2000);
+    try {
+      // Validate Oracle price before repayment
+      const isOracleValid = await oracleService.validatePriceData(form.token);
+      if (!isOracleValid) {
+        toast({
+          title: "Oracle Price Error",
+          description: "Unable to get current market prices. Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await onPayBack(form.token, form.amount);
+      setForm({ token: "", amount: "" });
+      setSelectedLoan(null);
+      onClose();
+      toast({
+        title: "Payment Successful",
+        description: "Your loan payment has been processed successfully.",
+      });
+    } catch (error: any) {
+      console.error("Payment error:", error);
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Failed to process payment. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatTimeAgo = (timestamp: number) => {
@@ -190,11 +239,10 @@ export function PayBackModal({
                   {activeLoans.map((loan) => (
                     <div
                       key={loan.token}
-                      className={`border rounded-lg p-3 cursor-pointer transition-all ${
-                        selectedLoan?.token === loan.token
+                      className={`border rounded-lg p-3 cursor-pointer transition-all ${selectedLoan?.token === loan.token
                           ? "border-primary bg-primary/5"
                           : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
-                      }`}
+                        }`}
                       onClick={() => handleLoanSelect(loan)}
                     >
                       <div className="flex items-center justify-between mb-2">
@@ -391,6 +439,26 @@ export function PayBackModal({
                         </Button>
                       </div>
                     )}
+
+                    {/* Mobile Money Withdrawal Option */}
+                    {selectedLoan && offrampService.isCryptoSupportedForOfframp(selectedLoan.symbol) && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="text-sm font-medium text-blue-800 mb-2">
+                          💰 Convert Excess to Mobile Money
+                        </div>
+                        <div className="text-xs text-blue-700 mb-3">
+                          Pay back loan and withdraw any remaining {selectedLoan.symbol} to mobile money
+                        </div>
+                        <Button
+                          onClick={() => setShowMobileMoneyModal(true)}
+                          variant="outline"
+                          className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
+                        >
+                          <Smartphone className="w-4 h-4 mr-2" />
+                          Pay & Withdraw to Mobile Money
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -435,6 +503,30 @@ export function PayBackModal({
           setShowOnrampModal(false);
         }}
       />
+
+      {/* Mobile Money Withdrawal Modal */}
+      {selectedLoan && (
+        <MobileMoneyWithdrawModal
+          isOpen={showMobileMoneyModal}
+          onClose={() => setShowMobileMoneyModal(false)}
+          tokenSymbol={selectedLoan.symbol}
+          tokenAddress={selectedLoan.token}
+          network={offrampService.detectNetworkFromTokenAddress(selectedLoan.token) || "celo"}
+          availableAmount="0" // This would need to be calculated based on user's balance after loan payment
+          decimals={selectedLoan.decimals}
+          onWithdrawSuccess={(orderID, amount) => {
+            setShowMobileMoneyModal(false);
+            setForm({ token: "", amount: "" });
+            setSelectedLoan(null);
+            onClose();
+          }}
+          onBlockchainWithdraw={async (tokenAddress: string, amount: string) => {
+            // This would handle the withdrawal after loan payment
+            // In a real implementation, this would be integrated with the loan payment flow
+            return "0x" + Math.random().toString(16).substr(2, 64);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,11 +19,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TrendingUp, CreditCard } from "lucide-react";
-import { useContract, ensureCeloNetwork } from "@/lib/contract";
 import { formatAmount } from "@/lib/utils";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
+import { useActiveAccount } from "thirdweb/react";
 
 interface SaveMoneyModalProps {
   isOpen: boolean;
@@ -42,7 +42,7 @@ export function SaveMoneyModal({
   tokenInfos,
   loading,
 }: SaveMoneyModalProps) {
-  const { supportedStablecoins, defaultLockPeriods, allTokens } = useContract();
+  const account = useActiveAccount();
 
   const [form, setForm] = useState({
     token: "",
@@ -58,14 +58,17 @@ export function SaveMoneyModal({
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
 
+    // Check if wallet is connected
+    if (!account) {
+      setError("Please connect your wallet first");
+      return;
+    }
+
     setError(null);
     setIsSaving(true);
 
     try {
-      // Ensure we're on the Celo network before proceeding
-      await ensureCeloNetwork();
-
-      // Proceed with the save operation
+      // The thirdweb contract provider handles network switching automatically
       await onSave(form.token, form.amount, Number.parseInt(form.lockPeriod));
       setForm({ token: "", amount: "", lockPeriod: "2592000" });
       onClose();
@@ -82,11 +85,15 @@ export function SaveMoneyModal({
     return `${days} days`;
   };
 
+  // Get supported tokens from props
+  const supportedStablecoins = Object.keys(tokenInfos);
+  const defaultLockPeriods = ["2592000", "7776000", "15552000"]; // 30, 90, 180 days
+
   const getTokenCategory = (tokenAddress: string) => {
-    const token = Object.values(allTokens).find(
-      (t) => t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    return token?.category || "unknown";
+    // Simplified categorization
+    if (tokenAddress.includes("USDC") || tokenAddress.includes("USDT")) return "international";
+    if (tokenAddress.includes("cUSD") || tokenAddress.includes("cEUR")) return "regional";
+    return "stablecoin";
   };
 
   const getCategoryIcon = (category: string) => {
@@ -115,16 +122,18 @@ export function SaveMoneyModal({
     }
   };
 
-  // Group tokens by category
-  const groupedTokens = supportedStablecoins.reduce(
-    (acc, tokenAddress) => {
-      const category = getTokenCategory(tokenAddress);
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(tokenAddress);
-      return acc;
-    },
-    {} as Record<string, string[]>
-  );
+  // Group tokens by category - memoized for performance
+  const groupedTokens = useMemo(() => {
+    return supportedStablecoins.reduce(
+      (acc, tokenAddress) => {
+        const category = getTokenCategory(tokenAddress);
+        if (!acc[category]) acc[category] = [];
+        acc[category].push(tokenAddress);
+        return acc;
+      },
+      {} as Record<string, string[]>
+    );
+  }, [supportedStablecoins]);
 
   return (
     <>
@@ -146,6 +155,13 @@ export function SaveMoneyModal({
             </div>
           )}
 
+          {/* Show wallet connection status */}
+          {!account && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-600 p-3 rounded-lg text-sm mb-4">
+              Please connect your wallet to continue
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <Label
@@ -162,34 +178,30 @@ export function SaveMoneyModal({
                   <SelectValue placeholder="Select money type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(groupedTokens).map(([category, tokens]) => (
-                    <div key={category}>
-                      <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        {getCategoryIcon(category)} {category}
+                  {Object.entries(groupedTokens).map(([category, tokens]) => {
+                    const categoryIcon = getCategoryIcon(category);
+                    const categoryColor = getCategoryColor(category);
+                    return (
+                      <div key={category}>
+                        <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          {categoryIcon} {category}
+                        </div>
+                        {tokens.map((token) => {
+                          const tokenInfo = tokenInfos[token];
+                          return (
+                            <SelectItem key={token} value={token}>
+                              <div className="flex items-center">
+                                <span className={`text-xs mr-2 ${categoryColor}`}>
+                                  {categoryIcon}
+                                </span>
+                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
                       </div>
-                      {tokens.map((token) => {
-                        const tokenInfo =
-                          tokenInfos[token] ||
-                          allTokens[
-                            Object.keys(allTokens).find(
-                              (key) => allTokens[key].address === token
-                            ) || ""
-                          ];
-                        return (
-                          <SelectItem key={token} value={token}>
-                            <div className="flex items-center">
-                              <span
-                                className={`text-xs mr-2 ${getCategoryColor(category)}`}
-                              >
-                                {getCategoryIcon(category)}
-                              </span>
-                              {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -274,7 +286,7 @@ export function SaveMoneyModal({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={loading || isSaving || !form.token || !form.amount}
+                disabled={loading || isSaving || !form.token || !form.amount || !account}
                 className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
               >
                 {loading || isSaving ? "Saving..." : "Save Now"}
@@ -291,11 +303,16 @@ export function SaveMoneyModal({
         selectedAsset={tokenInfos[form.token]?.symbol || ""}
         assetSymbol={tokenInfos[form.token]?.symbol || ""}
         onSuccess={(transactionCode, amount) => {
-          toast({
-            title: "Mobile Money Deposit Initiated",
-            description: `Your ${tokenInfos[form.token]?.symbol} deposit will be processed once payment is confirmed.`,
-          });
-          setShowOnrampModal(false);
+          try {
+            toast({
+              title: "Mobile Money Deposit Initiated",
+              description: `Your ${tokenInfos[form.token]?.symbol} deposit will be processed once payment is confirmed.`,
+            });
+          } catch (error) {
+            console.error("Error showing success toast:", error);
+          } finally {
+            setShowOnrampModal(false);
+          }
         }}
       />
     </>

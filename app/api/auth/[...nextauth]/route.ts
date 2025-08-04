@@ -25,13 +25,8 @@ export const authOptions: NextAuthOptions = {
           // Get or create the user in the database
           const userData = {
             address: credentials.address,
-            verified: true,
-            // We'll add identity data later when we have proper verification
-            identityData: {
-              name: ["Verified User"],
-              nationality: "Unknown",
-              gender: "Unknown"
-            },
+            verified: !!credentials.verificationData, // Only verified if verification data provided
+            identityData: credentials.verificationData ? JSON.parse(credentials.verificationData) : null,
           };
 
           // Store the user data in MongoDB

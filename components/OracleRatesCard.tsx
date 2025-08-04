@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
-import { useContract } from "@/lib/contract";
 import { formatUnits } from "viem";
+import { oracleService } from "@/lib/services/oracleService";
+import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+
+// CELO to USD conversion rate - should be updated with real-time data
+const CELO_USD_RATE = 0.7;
 
 interface OracleRate {
   token: string;
@@ -16,55 +20,67 @@ interface OracleRate {
 }
 
 export function OracleRatesCard() {
-  const { supportedStablecoins, allTokens, getOracleRate } = useContract();
   const [rates, setRates] = useState<OracleRate[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  const loadOracleRates = async () => {
+  // Get first 6 tokens from the new supported tokens
+  const displayTokens = useMemo(() => Object.values(NEW_SUPPORTED_TOKENS).slice(0, 6), []);
+
+  const loadOracleRates = useCallback(async () => {
     setLoading(true);
     try {
-      const ratePromises = supportedStablecoins
-        .slice(0, 6)
-        .map(async (tokenAddress) => {
-          const tokenInfo = Object.values(allTokens).find(
-            (t) => t.address.toLowerCase() === tokenAddress.toLowerCase()
-          );
-
-          if (!tokenInfo) return null;
-
-          const { rate, timestamp } = await getOracleRate(tokenAddress);
+      const ratePromises = displayTokens.map(async (tokenInfo) => {
+        try {
+          const { rate, timestamp } = await oracleService.getMedianRate(tokenInfo.address);
 
           // Convert rate to USD value (assuming CELO rate as base)
           const rateInCelo = Number(formatUnits(BigInt(rate), 18));
-          const usdValue = (rateInCelo * 0.7).toFixed(4); // Assuming 1 CELO ≈ $0.7
+          const usdValue = (rateInCelo * CELO_USD_RATE).toFixed(4);
 
           return {
-            token: tokenAddress,
+            token: tokenInfo.address,
             symbol: tokenInfo.symbol,
-            rate,
-            timestamp,
+            rate: rate.toString(),
+            timestamp: Number(timestamp),
             usdValue,
           };
-        });
+        } catch (error) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`Failed to get rate for ${tokenInfo.symbol.replace(/[\r\n]/g, '')}:`, error);
+          }
+          return {
+            token: tokenInfo.address,
+            symbol: tokenInfo.symbol,
+            rate: "0",
+            timestamp: Math.floor(Date.now() / 1000),
+            usdValue: "0.0000",
+          };
+        }
+      });
 
-      const resolvedRates = (await Promise.all(ratePromises)).filter(
-        Boolean
-      ) as OracleRate[];
+      const rateResults = await Promise.allSettled(ratePromises);
+      const resolvedRates = rateResults
+        .filter((result): result is PromiseFulfilledResult<OracleRate> => 
+          result.status === 'fulfilled'
+        )
+        .map(result => result.value);
+      
       setRates(resolvedRates);
       setLastUpdate(new Date());
     } catch (error) {
-      console.error("Error loading oracle rates:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error loading oracle rates:", error);
+      }
+      setRates([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [displayTokens, setRates, setLastUpdate, setLoading]);
 
   useEffect(() => {
-    if (supportedStablecoins.length > 0) {
-      loadOracleRates();
-    }
-  }, [supportedStablecoins]);
+    loadOracleRates();
+  }, [loadOracleRates]);
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleTimeString();
@@ -72,11 +88,12 @@ export function OracleRatesCard() {
 
   const getTokenFlag = (symbol: string) => {
     const flags: Record<string, string> = {
-      cKES: "🇰🇪",
+      CELO: "🟡",
       cUSD: "🇺🇸",
       cEUR: "🇪🇺",
       cREAL: "🇧🇷",
       eXOF: "🌍",
+      cKES: "🇰🇪",
       PUSO: "🇵🇭",
       cCOP: "🇨🇴",
       cGHS: "🇬🇭",

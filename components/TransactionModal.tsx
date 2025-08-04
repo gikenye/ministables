@@ -7,12 +7,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, ExternalLink, Loader2 } from "lucide-react";
 
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: "success" | "error";
+  type: "success" | "error" | "pending";
   message: string;
   txHash?: string;
 }
@@ -37,17 +37,19 @@ export function TransactionModal({
           <DialogTitle className="flex items-center justify-center">
             {type === "success" ? (
               <CheckCircle className="w-8 h-8 text-green-500 mr-2" />
-            ) : (
+            ) : type === "error" ? (
               <XCircle className="w-8 h-8 text-red-500 mr-2" />
+            ) : (
+              <Loader2 className="w-8 h-8 text-blue-500 mr-2 animate-spin" />
             )}
-            {type === "success" ? "Success!" : "Error"}
+            {type === "success" ? "Success!" : type === "error" ? "Error" : "Processing..."}
           </DialogTitle>
         </DialogHeader>
 
         <div className="text-center space-y-4">
           <p className="text-gray-700 font-medium">{message}</p>
 
-          {type === "success" && txHash && (
+          {(type === "success" || type === "pending") && txHash && (
             <Button
               onClick={handleViewOnCeloScan}
               variant="outline"
@@ -58,16 +60,18 @@ export function TransactionModal({
             </Button>
           )}
 
-          <Button
-            onClick={onClose}
-            className={`w-full ${
-              type === "success"
-                ? "bg-primary hover:bg-secondary"
-                : "bg-red-500 hover:bg-red-600"
-            } text-white`}
-          >
-            Close
-          </Button>
+          {type !== "pending" && (
+            <Button
+              onClick={onClose}
+              className={`w-full ${
+                type === "success"
+                  ? "bg-primary hover:bg-secondary"
+                  : "bg-red-500 hover:bg-red-600"
+              } text-white`}
+            >
+              Close
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

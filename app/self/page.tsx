@@ -13,22 +13,22 @@ import {
 const SelfQRcodeWrapper = (props: any) => {
   return <OriginalSelfQRcodeWrapper {...props} />;
 };
-import { v4 } from "uuid";
 import { ethers } from "ethers";
 import { signIn, useSession } from "next-auth/react";
-import Image from "next/image";
-import { useWallet } from "@/lib/wallet";
+import { useActiveAccount } from "thirdweb/react";
 
 export default function Home() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { address, isConnected } = useWallet();
+  const account = useActiveAccount();
+  const address = account?.address;
+  const isConnected = !!account;
   const [linkCopied, setLinkCopied] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [selfApp, setSelfApp] = useState<SelfApp | null>(null);
   const [universalLink, setUniversalLink] = useState("");
-  const [userId, setUserId] = useState(ethers.ZeroAddress);
+  const [userId, setUserId] = useState('0x0000000000000000000000000000000000000000');
   const [verifying, setVerifying] = useState(false);
   // Use useMemo to cache the array to avoid creating a new array on each render
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
@@ -49,7 +49,7 @@ export default function Home() {
 
   // Use useEffect to ensure code only executes on the client side
   useEffect(() => {
-    if (!userId || userId === ethers.ZeroAddress) return;
+    if (!userId || userId === '0x0000000000000000000000000000000000000000') return;
     try {
       const app = new SelfAppBuilder({
         version: 2,
@@ -114,13 +114,14 @@ export default function Home() {
   };
 
   // This is a wrapper function that matches the expected type for onSuccess
-  const handleVerificationSuccess = () => {
+  const handleVerificationSuccess = (verificationData?: any) => {
     setVerifying(true);
     displayToast("Verification successful! Creating session...");
     
-    // Simplified sign-in process - just use the wallet address
+    // Sign in with verification data
     signIn("self-protocol", {
       address: userId,
+      verificationData: JSON.stringify(verificationData || { verified: true, timestamp: Date.now() }),
       redirect: false,
     })
       .then((result) => {
@@ -199,6 +200,19 @@ export default function Home() {
           >
             {linkCopied ? "Copied!" : "Copy Link"}
           </button>
+          
+          <div className="border-t pt-2 mt-2">
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="w-full bg-gray-50 hover:bg-gray-100 transition-colors text-gray-600 p-2 rounded-md text-sm border"
+            >
+              Skip Verification
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-1">
+              You can verify later for enhanced security
+            </p>
+          </div>
         </div>
 
         {/* Toast notification */}

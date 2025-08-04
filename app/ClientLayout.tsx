@@ -2,24 +2,22 @@
 
 import type React from "react";
 import { useEffect } from "react";
-import { WalletProvider } from "@/lib/wallet";
-import { ContractProvider } from "@/lib/contract";
+import { ThirdwebProvider } from "thirdweb/react";
 import { Toaster } from "@/components/ui/toaster";
 import {
   registerServiceWorker,
   initializeDataSaver,
 } from "@/lib/serviceWorker";
 import { AuthProvider } from "@/lib/auth-provider";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Inter } from "next/font/google";
+
+const queryClient = new QueryClient();
 
 const inter = Inter({ subsets: ["latin"] });
 
-export default function ClientLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  // Register service worker and initialize data saver
+
+export default function ClientLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     registerServiceWorker();
     initializeDataSaver();
@@ -28,26 +26,23 @@ export default function ClientLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} pb-safe`}>
-        <AuthProvider>
-          <WalletProvider>
-            <ContractProvider>
-              {children}
-              <Toaster />
-              <div
-                id="connection-status"
-                className="fixed bottom-0 left-0 right-0 bg-yellow-500 text-white text-center py-1 text-sm hidden"
-              >
-                You are offline. Some features may be limited.
-              </div>
-            </ContractProvider>
-          </WalletProvider>
-        </AuthProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-            // Monitor online/offline status
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ThirdwebProvider>
+                {children}
+                <Toaster />
+                {/* Connection Status Banner */}
+                <div id="connection-status" className="fixed bottom-0 left-0 right-0 bg-yellow-500 text-white text-center py-1 text-sm hidden">
+                  You are offline. Some features may be limited.
+                </div>
+            </ThirdwebProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+        {/* Connection Status Script */}
+        <script dangerouslySetInnerHTML={{
+          __html: `
             function updateOnlineStatus() {
-              var status = document.getElementById('connection-status');
+              const status = document.getElementById('connection-status');
               if (status) {
                 if (navigator.onLine) {
                   status.classList.add('hidden');
@@ -60,8 +55,7 @@ export default function ClientLayout({
             window.addEventListener('offline', updateOnlineStatus);
             updateOnlineStatus();
           `,
-          }}
-        />
+        }} />
       </body>
     </html>
   );
