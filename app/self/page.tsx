@@ -114,13 +114,14 @@ export default function Home() {
   };
 
   // This is a wrapper function that matches the expected type for onSuccess
-  const handleVerificationSuccess = () => {
+  const handleVerificationSuccess = (verificationData?: any) => {
     setVerifying(true);
     displayToast("Verification successful! Creating session...");
     
-    // Simplified sign-in process - just use the wallet address
+    // Sign in with verification data
     signIn("self-protocol", {
       address: userId,
+      verificationData: JSON.stringify(verificationData || { verified: true, timestamp: Date.now() }),
       redirect: false,
     })
       .then((result) => {
@@ -199,6 +200,19 @@ export default function Home() {
           >
             {linkCopied ? "Copied!" : "Copy Link"}
           </button>
+          
+          <div className="border-t pt-2 mt-2">
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="w-full bg-gray-50 hover:bg-gray-100 transition-colors text-gray-600 p-2 rounded-md text-sm border"
+            >
+              Skip Verification
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-1">
+              You can verify later for enhanced security
+            </p>
+          </div>
         </div>
 
         {/* Toast notification */}

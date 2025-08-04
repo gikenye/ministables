@@ -7,6 +7,7 @@ import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRigh
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { WithdrawModal } from "@/components/WithdrawModal";
+import { OracleRatesCard } from "@/components/OracleRatesCard";
 import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
 interface UserData {
@@ -438,36 +439,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="flex items-center text-sm text-primary">
-                <ArrowUpRight className="w-4 h-4 mr-1.5" />
-                Rates
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="space-y-1.5">
-                {useMemo(() => 
-                  SUPPORTED_STABLECOINS
-                    .filter((token) => TOKEN_INFO[token])
-                    .slice(4, 8)
-                    .map((token) => {
-                      const info = TOKEN_INFO[token];
-                      const rate = exchangeRates[token];
-                      if (!rate) return null;
-                      return (
-                        <div key={token} className="flex justify-between items-center">
-                          <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                          <span className="text-primary font-semibold text-xs">
-                            ${rate.toFixed(5)}
-                          </span>
-                        </div>
-                      );
-                    }), [exchangeRates]
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white border-secondary shadow-sm rounded-lg">
+            <OracleRatesCard />
+          </div>
         </div>
       </main>
 

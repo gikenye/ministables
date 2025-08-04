@@ -48,7 +48,6 @@ import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
-import { OracleRatesCard } from "@/components/OracleRatesCard";
 
 // Action Cards Grid Component
 const ActionCardsGrid = ({ actionCards, onCardClick }: { actionCards: any[], onCardClick: (id: string) => void }) => {
@@ -258,23 +257,12 @@ export default function HomePage() {
     }
   }, [isConnected, address, session]);
 
+  // Remove forced verification - make it optional
   useEffect(() => {
     if (sessionStatus === "loading") return;
-    if (isConnected && !session?.user?.verified) {
-      setNeedsVerification(true);
-    } else {
-      setNeedsVerification(false);
-    }
+    // Don't force verification, just track the state
+    setNeedsVerification(isConnected && !session?.user?.verified);
   }, [isConnected, session, sessionStatus]);
-
-  useEffect(() => {
-    if (needsVerification && isConnected) {
-      const timer = setTimeout(() => {
-        router.push("/self");
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [needsVerification, isConnected, router]);
 
   useEffect(() => {
     const updateStatus = () => setIsOnline(navigator.onLine);
@@ -523,8 +511,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 px-3 py-4 sticky top-0 z-40">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between max-w-6xl mx-auto">
-          <div className="flex items-center space-x-3 mb-3 sm:mb-0">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="flex items-center space-x-3">
             <div className="w-10 h-10 flex items-center justify-center">
               <img
                 src="/minilend-logo.png"
@@ -542,8 +530,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="w-full sm:w-auto sm:text-right">
-            <ThirdwebConnectWalletButton />
+          <div className="flex-shrink-0">
+            <ThirdwebConnectWalletButton size="sm" />
           </div>
         </div>
       </header>
@@ -568,12 +556,30 @@ export default function HomePage() {
         )}
 
         {needsVerification && isConnected && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm flex items-center">
-            <Shield className="w-4 h-4 mr-2" />
-            <p>
-              Identity verification required. Redirecting to verification
-              page...
-            </p>
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Shield className="w-4 h-4 mr-2" />
+                <p>Verify you're human for enhanced security (optional)</p>
+              </div>
+              <div className="flex gap-2 ml-4">
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/self")}
+                  className="bg-primary hover:bg-primary/90 text-white text-xs px-3 py-1 h-7"
+                >
+                  Verify
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setNeedsVerification(false)}
+                  className="text-gray-600 hover:text-gray-800 text-xs px-3 py-1 h-7"
+                >
+                  Skip
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -598,7 +604,7 @@ export default function HomePage() {
                     <p className="text-red-600 text-sm">{error}</p>
                   </div>
                 )}
-                <ThirdwebConnectWalletButton className="bg-primary hover:bg-secondary text-white w-full min-h-[48px] rounded-xl shadow-lg hover:shadow-xl transition-all duration-200" />
+                <ThirdwebConnectWalletButton size="lg" />
                 {typeof window !== "undefined" && !window.ethereum && (
                   <p className="text-gray-500 text-xs sm:text-sm mt-4">
                     Don&apos;t have a wallet?{" "}
@@ -624,20 +630,20 @@ export default function HomePage() {
               <p className="text-gray-600 text-base sm:text-lg">
                 Choose an action to get started
               </p>
-              {session?.user?.verified && (
+              {session?.user?.verified ? (
                 <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                   <Shield className="w-3 h-3 mr-1" />
-                  Verified
+                  Verified Human
+                </div>
+              ) : isConnected && (
+                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                  <Shield className="w-3 h-3 mr-1" />
+                  Unverified
                 </div>
               )}
             </div>
             {/* Action Cards Grid */}
             <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />
-
-            {/* Exchange Rates */}
-            <div className="max-w-2xl mx-auto">
-              <OracleRatesCard />
-            </div>
 
             {/* Quick Stats */}
             <div className="bg-white/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl mx-auto border-0 shadow-md sm:shadow-lg">
