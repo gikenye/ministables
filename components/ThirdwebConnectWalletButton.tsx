@@ -141,7 +141,7 @@ export function ThirdwebConnectWalletButton({ className, size = "md" }: Thirdweb
         }}
         connectModal={{
           showThirdwebBranding: false,
-          size: isMobile ? "compact" : "wide",
+          size: isMobile ? "compact" : "compact",
           title: "Minilend",
           titleIcon: "https://ministables.vercel.app/minilend-logo.png",
         }}

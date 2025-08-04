@@ -44,27 +44,15 @@ const TOKEN_INFO: Record<string, { symbol: string; flag: string }> = {
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", flag: "🌍" },
 };
 
-const PRIMARY_TOKENS = [
+const DISPLAY_TOKENS = [
   "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
   "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
   "0x471EcE3750Da237f93B8E339c536989b8978a438", // cNGN
 ];
 
-const SECONDARY_TOKENS = [
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
-  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-];
-
 export function OracleRatesCard() {
   const [displayedRates, setDisplayedRates] = useState<TokenRate[]>([]);
-  const [showSecondary, setShowSecondary] = useState(false);
 
   const createTokenRate = (address: string): TokenRate => {
     const rate = HARDCODED_RATES[address] || "0";
@@ -80,17 +68,8 @@ export function OracleRatesCard() {
   };
 
   useEffect(() => {
-    const primaryRates = PRIMARY_TOKENS.map(createTokenRate);
-    setDisplayedRates(primaryRates);
-
-    const timer = setTimeout(() => {
-      const shuffled = [...SECONDARY_TOKENS].sort(() => 0.5 - Math.random());
-      const randomSecondary = shuffled.slice(0, 4).map(createTokenRate);
-      setDisplayedRates([...primaryRates, ...randomSecondary]);
-      setShowSecondary(true);
-    }, 5000);
-
-    return () => clearTimeout(timer);
+    const rates = DISPLAY_TOKENS.map(createTokenRate);
+    setDisplayedRates(rates);
   }, []);
 
   return (
@@ -101,30 +80,18 @@ export function OracleRatesCard() {
           Rates
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {displayedRates.map((rate, index) => (
+      <CardContent className="space-y-2">
+        {displayedRates.map((rate) => (
           <div
             key={rate.address}
-            className={`flex items-center justify-between p-2 bg-gray-50 rounded-lg transition-opacity duration-500 ${
-              index >= 4 && !showSecondary ? "opacity-0" : "opacity-100"
-            }`}
+            className="flex items-center justify-between py-1"
           >
-            <div className="flex items-center">
-              <span className="text-lg mr-2">
-                {TOKEN_INFO[rate.address]?.flag || "💱"}
-              </span>
-              <span className="font-medium text-gray-900">
-                {rate.symbol}
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="font-semibold text-primary">
-                ≈ ${rate.usdValue}
-              </div>
-              <div className="text-xs text-gray-500">
-                {Number(formatUnits(BigInt(rate.rate), 18)).toFixed(4)} CELO
-              </div>
-            </div>
+            <span className="font-medium text-gray-900 text-sm">
+              {rate.symbol}
+            </span>
+            <span className="font-semibold text-primary text-sm">
+              ${rate.usdValue}
+            </span>
           </div>
         ))}
       </CardContent>
