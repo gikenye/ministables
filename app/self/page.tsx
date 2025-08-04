@@ -60,7 +60,7 @@ export default function Home() {
         userId: userId,
         endpointType: "staging_celo",
         userIdType: "hex", // use 'hex' for ethereum address or 'uuid' for uuidv4
-        userDefinedData: "Hakuna Matata 😁 !!",
+        userDefinedData: "Hakuna Matata 😁!",
         disclosures: {
           // Only request minimal information
           minimumAge: 18,
