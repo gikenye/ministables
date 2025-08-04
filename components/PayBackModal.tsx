@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,10 @@ import { onrampService } from "@/lib/services/onrampService";
 import { offrampService } from "@/lib/services/offrampService";
 import { useToast } from "@/hooks/use-toast";
 import { oracleService } from "@/lib/services/oracleService";
+import { getContract, readContract } from "thirdweb";
+import { celo } from "thirdweb/chains";
+import { client } from "@/lib/thirdweb/client";
+import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 
 interface ActiveLoan {
   token: string;
@@ -66,19 +70,22 @@ export function PayBackModal({
     amount: "",
   });
 
-  // Mock supported tokens
-  const supportedStablecoins = [
-    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  ];
+  // Memoize contract instance to prevent re-creation
+  const contract = useMemo(() => getContract({
+    client,
+    chain: celo,
+    address: MINILEND_ADDRESS,
+  }), []);
+
+  // Get supported tokens from props
+  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
   // Load active loans when modal opens
   useEffect(() => {
-    if (isOpen && address) {
+    if (isOpen && address && Object.keys(tokenInfos).length > 0) {
       loadActiveLoans();
     }
-  }, [isOpen, address]);
+  }, [isOpen, address, tokenInfos]);
 
   const loadActiveLoans = async () => {
     if (!address) return;
@@ -87,27 +94,47 @@ export function PayBackModal({
     try {
       const loans: ActiveLoan[] = [];
 
-      // Mock loan data - replace with actual contract calls
-      for (const tokenAddress of supportedStablecoins) {
+      // Get actual borrow data from contract
+      const borrowPromises = supportedStablecoins.map(async (tokenAddress) => {
         const tokenInfo = tokenInfos[tokenAddress];
-        if (tokenInfo) {
-          // Mock some loan data for demonstration
-          const mockBorrowAmount = "1000000000000000000"; // 1 token
-          const principal = parseFloat(formatAmount(mockBorrowAmount, tokenInfo.decimals));
-          const estimatedInterest = principal * 0.05;
-          const totalOwed = principal + estimatedInterest;
+        if (!tokenInfo) return null;
 
-          loans.push({
-            token: tokenAddress,
-            symbol: tokenInfo.symbol,
-            principal: mockBorrowAmount,
-            estimatedInterest: (estimatedInterest * Math.pow(10, tokenInfo.decimals)).toString(),
-            totalOwed: (totalOwed * Math.pow(10, tokenInfo.decimals)).toString(),
-            borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000,
-            decimals: tokenInfo.decimals,
+        try {
+          const borrowAmount = await readContract({
+            contract,
+            method: "function userBorrows(address, address) view returns (uint256)",
+            params: [address, tokenAddress],
           });
+
+          if (borrowAmount && borrowAmount.toString() !== "0") {
+            const principal = parseFloat(formatAmount(borrowAmount.toString(), tokenInfo.decimals));
+            const estimatedInterest = principal * 0.05; // 5% estimated interest
+            const totalOwed = principal + estimatedInterest;
+
+            return {
+              token: tokenAddress,
+              symbol: tokenInfo.symbol,
+              principal: borrowAmount.toString(),
+              estimatedInterest: (estimatedInterest * Math.pow(10, tokenInfo.decimals)).toString(),
+              totalOwed: (totalOwed * Math.pow(10, tokenInfo.decimals)).toString(),
+              borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000, // Mock start time
+              decimals: tokenInfo.decimals,
+            };
+          }
+        } catch (error) {
+          console.error(`Error loading borrow data for ${tokenInfo.symbol}:`, error);
         }
-      }
+        return null;
+      });
+
+      const loanResults = await Promise.allSettled(borrowPromises);
+      const validLoans = loanResults
+        .filter((result): result is PromiseFulfilledResult<ActiveLoan> => 
+          result.status === 'fulfilled' && result.value !== null
+        )
+        .map(result => result.value);
+      
+      loans.push(...validLoans);
 
       setActiveLoans(loans);
     } catch (error) {

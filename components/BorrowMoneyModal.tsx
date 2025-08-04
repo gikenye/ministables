@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,15 +44,6 @@ interface BorrowMoneyModalProps {
 // Constants
 const LOAN_TO_VALUE_RATIO = 0.67; // 67% LTV
 const COLLATERALIZATION_RATIO = 1.5; // 150% collateralization
-const SUPPORTED_STABLECOINS = [
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-];
-const SUPPORTED_COLLATERAL = [
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-];
 
 // Error handling utility
 const handleTransactionError = (error: any, toast: any, defaultMessage: string) => {
@@ -93,6 +84,10 @@ export function BorrowMoneyModal({
   loading,
 }: BorrowMoneyModalProps) {
   const { toast } = useToast();
+
+  // Memoize supported tokens to prevent re-renders
+  const SUPPORTED_STABLECOINS = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+  const SUPPORTED_COLLATERAL = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
   const [form, setForm] = useState({
     token: "",

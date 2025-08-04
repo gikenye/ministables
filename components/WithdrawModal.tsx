@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -103,12 +103,8 @@ export function WithdrawModal({
     return new Date(timestamp * 1000).toLocaleDateString();
   };
 
-  // Mock supported tokens
-  const supportedStablecoins = [
-    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  ];
+  // Memoize supported tokens to prevent re-renders
+  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
   const getTokenCategory = (tokenAddress: string) => {
     // Simplified categorization
@@ -143,12 +139,8 @@ export function WithdrawModal({
     }
   };
 
-  // Calculate withdrawable amount for each token
-  // Note: This is a simplified calculation. The actual contract has a bug where
-  // multiple deposits with different lock periods overwrite each other.
-  // In reality, we should track individual deposits, but since the contract
-  // only stores the latest lock end, we show a warning when funds might be locked.
-  const getWithdrawableAmount = (tokenAddress: string) => {
+  // Memoize withdrawable amount calculation
+  const getWithdrawableAmount = useCallback((tokenAddress: string) => {
     const deposit = userDeposits[tokenAddress] || "0";
     const lockEnd = depositLockEnds[tokenAddress] || 0;
 
@@ -159,21 +151,23 @@ export function WithdrawModal({
     if (isLocked(lockEnd)) return "0";
 
     return deposit;
-  };
+  }, [userDeposits, depositLockEnds]);
 
-  // Check if there might be mixed lock periods (contract limitation)
-  const hasPotentialMixedLocks = (tokenAddress: string) => {
+  // Memoize mixed locks check
+  const hasPotentialMixedLocks = useCallback((tokenAddress: string) => {
     const deposit = userDeposits[tokenAddress] || "0";
     const lockEnd = depositLockEnds[tokenAddress] || 0;
 
     // If there's a deposit and a lock end time, there might be mixed locks
     // This is a heuristic since we can't know the actual deposit history
     return deposit !== "0" && lockEnd > 0;
-  };
+  }, [userDeposits, depositLockEnds]);
 
-  // Filter tokens to show all with deposits (even if locked)
-  const availableTokens = supportedStablecoins.filter(
-    (token) => userDeposits[token] && userDeposits[token] !== "0"
+  // Memoize available tokens filter
+  const availableTokens = useMemo(() => 
+    supportedStablecoins.filter(
+      (token) => userDeposits[token] && userDeposits[token] !== "0"
+    ), [supportedStablecoins, userDeposits]
   );
 
   // Group tokens by category - memoized for performance

@@ -35,7 +35,6 @@ import { formatAddress } from "@/lib/utils";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
-import { executeWithOracleValidation } from "@/lib/utils/contractUtils";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +48,7 @@ import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
+import { OracleRatesCard } from "@/components/OracleRatesCard";
 
 // Action Cards Grid Component
 const ActionCardsGrid = ({ actionCards, onCardClick }: { actionCards: any[], onCardClick: (id: string) => void }) => {
@@ -299,6 +299,30 @@ export default function HomePage() {
 
   const getTokenInfo = (tokenAddress: string) => {
     return tokenInfos[tokenAddress] || { symbol: "UNKNOWN", decimals: 18 };
+  };
+
+  const executeWithOracleValidation = async (
+    transactionFn: () => Promise<string>,
+    options: {
+      tokens: string[];
+      onOracleError: (error: string) => void;
+    }
+  ): Promise<string> => {
+    try {
+      // Validate oracle prices for all tokens
+      const isValid = await oracleService.validateMultipleTokens(options.tokens);
+      if (!isValid) {
+        throw new Error("Unable to get current market prices. Please try again in a moment.");
+      }
+      
+      return await transactionFn();
+    } catch (error: any) {
+      if (error.message.includes("Oracle") || error.message.includes("price")) {
+        options.onOracleError(error.message);
+        throw error;
+      }
+      throw error;
+    }
   };
 
   const handleSaveMoney = async (token: string, amount: string, lockPeriod: number) => {
@@ -609,6 +633,11 @@ export default function HomePage() {
             </div>
             {/* Action Cards Grid */}
             <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />
+
+            {/* Exchange Rates */}
+            <div className="max-w-2xl mx-auto">
+              <OracleRatesCard />
+            </div>
 
             {/* Quick Stats */}
             <div className="bg-white/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl mx-auto border-0 shadow-md sm:shadow-lg">

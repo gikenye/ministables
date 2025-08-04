@@ -23,7 +23,6 @@ import { formatAmount } from "@/lib/utils";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
-// Import thirdweb wallet hook
 import { useActiveAccount } from "thirdweb/react";
 
 interface SaveMoneyModalProps {
@@ -86,13 +85,8 @@ export function SaveMoneyModal({
     return `${days} days`;
   };
 
-  // Mock supported tokens
-  const supportedStablecoins = [
-    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  ];
-
+  // Get supported tokens from props
+  const supportedStablecoins = Object.keys(tokenInfos);
   const defaultLockPeriods = ["2592000", "7776000", "15552000"]; // 30, 90, 180 days
 
   const getTokenCategory = (tokenAddress: string) => {
