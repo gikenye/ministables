@@ -100,7 +100,7 @@ export function MobileMoneyWithdrawModal({
   const [processing, setProcessing] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
   const [orderID, setOrderID] = useState("");
-  const [error, setError] = useState("");
+
   const [optimizationSuggestion, setOptimizationSuggestion] = useState<any>(null);
   const [constraintValidation, setConstraintValidation] = useState<any>(null);
 
@@ -151,7 +151,6 @@ export function MobileMoneyWithdrawModal({
       setQuote(null);
       setTransactionHash("");
       setOrderID("");
-      setError("");
       setOptimizationSuggestion(null);
       setConstraintValidation(null);
     }
@@ -198,7 +197,6 @@ export function MobileMoneyWithdrawModal({
     if (!form.amount || parseFloat(form.amount) <= 0) return;
 
     setLoadingQuote(true);
-    setError("");
 
     try {
       const quoteRequest: OfframpQuoteRequest = {
@@ -218,7 +216,11 @@ export function MobileMoneyWithdrawModal({
         throw new Error(result.error || "Failed to get quote");
       }
     } catch (error: any) {
-      setError(error.message);
+      toast({
+        title: "Quote Error",
+        description: "Unable to get current rates. Please try again.",
+        variant: "destructive",
+      });
       setQuote(null);
     } finally {
       setLoadingQuote(false);
@@ -227,37 +229,56 @@ export function MobileMoneyWithdrawModal({
 
   const validateForm = (): boolean => {
     if (!form.phoneNumber || !form.amount) {
-      setError("Please fill in all required fields");
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
       return false;
     }
 
     if (!enhancedOfframpService.validatePhoneNumber(form.phoneNumber, form.fiatCurrency)) {
-      setError("Please enter a valid phone number");
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number for your selected currency",
+        variant: "destructive",
+      });
       return false;
     }
 
     // Check constraint validation
     if (constraintValidation && !constraintValidation.valid) {
-      setError(constraintValidation.reason);
-      return false;
+      return false; // Error already shown in UI
     }
 
     const amount = parseFloat(form.amount);
     const available = parseFloat(availableAmount);
 
     if (amount <= 0) {
-      setError("Amount must be greater than 0");
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter an amount greater than 0",
+        variant: "destructive",
+      });
       return false;
     }
 
     if (amount > available) {
-      setError("Amount exceeds available balance");
+      toast({
+        title: "Insufficient Balance",
+        description: "The withdrawal amount exceeds your available balance",
+        variant: "destructive",
+      });
       return false;
     }
 
     const limits = enhancedOfframpService.getWithdrawalLimits(form.fiatCurrency);
     if (quote && parseFloat(quote.outputAmount) < limits.min) {
-      setError(`Minimum withdrawal is ${formatEnhancedCurrencyAmount(limits.min, form.fiatCurrency)}`);
+      toast({
+        title: "Amount Too Small",
+        description: `Minimum withdrawal is ${formatEnhancedCurrencyAmount(limits.min, form.fiatCurrency)}`,
+        variant: "destructive",
+      });
       return false;
     }
 
@@ -277,7 +298,6 @@ export function MobileMoneyWithdrawModal({
   const handleBlockchainWithdraw = async () => {
     setCurrentStep(3);
     setProcessing(true);
-    setError("");
 
     try {
       // Calculate transaction breakdown for complex scenarios
@@ -310,7 +330,21 @@ export function MobileMoneyWithdrawModal({
       // Initiate mobile money transfer with enhanced data
       await initiateMobileMoneyTransfer(hash, loanPaymentAmount, excessWithdrawalAmount);
     } catch (error: any) {
-      setError(error.message);
+      let userMessage = "Transaction failed. Please try again.";
+      
+      if (error.message?.includes('insufficient')) {
+        userMessage = "Insufficient balance for this transaction.";
+      } else if (error.message?.includes('rejected') || error.message?.includes('denied')) {
+        userMessage = "Transaction was cancelled.";
+      } else if (error.message?.includes('network')) {
+        userMessage = "Network error. Please check your connection.";
+      }
+      
+      toast({
+        title: "Transaction Failed",
+        description: userMessage,
+        variant: "destructive",
+      });
       setCurrentStep(2); // Go back to review step
     } finally {
       setProcessing(false);
@@ -355,10 +389,19 @@ export function MobileMoneyWithdrawModal({
         throw new Error(result.error || "Failed to initiate mobile money transfer");
       }
     } catch (error: any) {
-      setError(error.message);
+      let userMessage = "Unable to complete mobile money transfer. Please try again.";
+      
+      if (error.message?.includes('phone')) {
+        userMessage = "Invalid phone number. Please check and try again.";
+      } else if (error.message?.includes('limit')) {
+        userMessage = "Transaction amount exceeds daily limits.";
+      } else if (error.message?.includes('network')) {
+        userMessage = "Mobile money service temporarily unavailable.";
+      }
+      
       toast({
-        title: "Mobile Money Transfer Failed",
-        description: error.message,
+        title: "Transfer Failed",
+        description: userMessage,
         variant: "destructive",
       });
     }
@@ -576,15 +619,21 @@ export function MobileMoneyWithdrawModal({
 
                 {/* Constraint Validation */}
                 {constraintValidation && !constraintValidation.valid && (
-                  <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                     <div className="flex items-start">
-                      <AlertCircle className="w-4 h-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <div className="font-medium text-red-800 mb-1">Constraint Violation</div>
-                        <div className="text-red-700 mb-2">{constraintValidation.reason}</div>
+                        <div className="font-medium text-amber-800 mb-1">Unable to Process</div>
+                        <div className="text-amber-700 mb-2">
+                          {constraintValidation.reason.includes('exceeds') 
+                            ? 'Withdrawal amount exceeds your available balance.'
+                            : constraintValidation.reason.includes('Minimum')
+                            ? `Minimum withdrawal amount is ${constraintValidation.reason.match(/\d+/)?.[0] || '10'} ${form.fiatCurrency}.`
+                            : 'Please check your withdrawal amount and try again.'}
+                        </div>
                         {constraintValidation.suggestions && (
-                          <div className="text-xs text-red-600">
-                            Suggestions: {constraintValidation.suggestions.join(', ')}
+                          <div className="text-xs text-amber-600">
+                            💡 Try: Reduce withdrawal amount, Check your available balance
                           </div>
                         )}
                       </div>
@@ -593,14 +642,7 @@ export function MobileMoneyWithdrawModal({
                 )}
               </div>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <div className="flex items-start">
-                    <AlertCircle className="w-4 h-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-red-800">{error}</div>
-                  </div>
-                </div>
-              )}
+
             </div>
           )}
 
@@ -726,16 +768,7 @@ export function MobileMoneyWithdrawModal({
             </div>
           )}
 
-          {error && currentStep > 1 && (
-            <div className="p-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="flex items-start">
-                  <AlertCircle className="w-4 h-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-800">{error}</div>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
 
         {/* Enhanced Action Buttons */}

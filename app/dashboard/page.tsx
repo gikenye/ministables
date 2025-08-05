@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { extractTransactionError } from "@/lib/utils/errorMapping";
-import { WithdrawModal } from "@/components/WithdrawModal";
+import { FundsWithdrawalModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
 import { MINILEND_ADDRESS, ORACLE_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
@@ -26,9 +26,9 @@ import {
   useTotalSupply
 } from '@/lib/thirdweb/minilend-contract';
 import { getContract, readContract } from "thirdweb";
-import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
-import { Imprima } from "next/font/google";
+import { celo } from "thirdweb/chains";
+
 
 // Supported stablecoins from deployment config
 const SUPPORTED_STABLECOINS = [
@@ -73,83 +73,39 @@ const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
 
 
 
-// const TVLCard = ({ contract }: { contract: any }) => {
-//   const [tvlData, setTvlData] = useState<Record<string, string>>({});
-//   const [loading, setLoading] = useState(true);
+import TVLCard from "@/components/TVLCard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { NetworkStatus, RateLimitWarning } from "@/components/NetworkStatus";
 
-//   useEffect(() => {
-//     const loadTVL = async () => {
-//       setLoading(true);
-//       try {
-//         const tvl: Record<string, string> = {};
-        
-//         const promises = SUPPORTED_STABLECOINS.map(async (token) => {
-//           try {
-//             const totalSupply = await readContract({
-//               contract,
-//               method: "function totalSupply(address) view returns (uint256)",
-//               params: [token],
-//             });
-//             tvl[token] = totalSupply.toString();
-//           } catch (error) {
-//             tvl[token] = "0";
-//           }
-//         });
+// Rate limiting utility
+const createRateLimiter = (maxRequests: number, windowMs: number) => {
+  const requests: number[] = [];
+  
+  return {
+    canMakeRequest: () => {
+      const now = Date.now();
+      const windowStart = now - windowMs;
+      
+      // Remove old requests
+      while (requests.length > 0 && requests[0] < windowStart) {
+        requests.shift();
+      }
+      
+      return requests.length < maxRequests;
+    },
+    recordRequest: () => {
+      requests.push(Date.now());
+    },
+    getWaitTime: () => {
+      if (requests.length === 0) return 0;
+      const oldestRequest = requests[0];
+      const windowStart = Date.now() - windowMs;
+      return Math.max(0, oldestRequest - windowStart + 100); // Add 100ms buffer
+    }
+  };
+};
 
-//         await Promise.all(promises);
-//         setTvlData(tvl);
-//       } catch (error) {
-//         console.error("Error loading TVL:", error);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     loadTVL();
-//   }, [contract]);
-
-//   if (loading) {
-//     return <div className="text-xs text-gray-500 text-center py-3">Loading TVL...</div>;
-//   }
-
-//   const totalTVL = Object.entries(tvlData).reduce((acc, [token, amount]) => {
-//     if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
-//     const info = TOKEN_INFO[token];
-//     const numericAmount = Number(formatAmount(amount, info.decimals));
-//     return acc + numericAmount;
-//   }, 0);
-
-//   return (
-//     <>
-//       <h2 className="text-lg font-semibold text-center text-primary mb-3">
-//         Total Value Locked
-//       </h2>
-//       <div className="text-center p-3 bg-green-50 rounded-lg mb-4">
-//         <TrendingUp className="w-5 h-5 mx-auto mb-1 text-green-600" />
-//         <p className="text-xs font-medium mb-1 text-gray-600">Available Liquidity</p>
-//         <p className="text-lg font-bold text-green-600">
-//           ${totalTVL.toFixed(2)}
-//         </p>
-//       </div>
-//       <div className="space-y-1.5">
-//         {Object.entries(tvlData)
-//           .filter(([token, amount]) => amount && amount !== "0" && TOKEN_INFO[token])
-//           .slice(0, 4)
-//           .map(([token, amount]) => {
-//             const info = TOKEN_INFO[token];
-//             return (
-//               <div key={token} className="flex justify-between items-center">
-//                 <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-//                 <span className="text-green-600 font-semibold text-xs">
-//                   {formatAmount(amount, info.decimals)}
-//                 </span>
-//               </div>
-//             );
-//           })}
-//       </div>
-//     </>
-//   );
-// };
+const rateLimiter = createRateLimiter(5, 1000); // 5 requests per second
 
 const useDashboardData = (address: string | undefined, contract: any) => {
   const [userData, setUserData] = useState<UserData>({
@@ -161,20 +117,16 @@ const useDashboardData = (address: string | undefined, contract: any) => {
   const [poolData, setPoolData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  const [showRateLimitWarning, setShowRateLimitWarning] = useState(false);
 
-  const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3): Promise<any> => {
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await fn();
-      } catch (error: any) {
-        if (error.message?.includes('429') && i < maxRetries - 1) {
-          const delay = Math.pow(2, i) * 1000; // Exponential backoff
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-        throw error;
-      }
+  const makeRateLimitedRequest = async <T>(requestFn: () => Promise<T>): Promise<T> => {
+    while (!rateLimiter.canMakeRequest()) {
+      const waitTime = rateLimiter.getWaitTime();
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
+    
+    rateLimiter.recordRequest();
+    return await requestFn();
   };
 
   const loadDashboardData = async () => {
@@ -188,28 +140,32 @@ const useDashboardData = (address: string | undefined, contract: any) => {
       const pools: Record<string, string> = {};
       const rates: Record<string, number> = {};
 
-      // Process tokens sequentially to avoid rate limiting
-      for (const token of SUPPORTED_STABLECOINS) {
+      // Process only first 3 tokens to reduce requests
+      const tokensToProcess = SUPPORTED_STABLECOINS.slice(0, 3);
+      
+      for (const token of tokensToProcess) {
         try {
-          // Add delay between requests to prevent rate limiting
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Add delay between token processing
+          if (tokensToProcess.indexOf(token) > 0) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
           
           const contractCalls = await Promise.allSettled([
-            readContract({
+            makeRateLimitedRequest(() => readContract({
               contract,
               method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
               params: [address, token, BigInt(0)],
-            }),
-            readContract({
+            })),
+            makeRateLimitedRequest(() => readContract({
               contract,
               method: "function userBorrows(address, address) view returns (uint256)",
               params: [address, token],
-            }),
-            readContract({
+            })),
+            makeRateLimitedRequest(() => readContract({
               contract,
               method: "function userCollateral(address, address) view returns (uint256)",
               params: [address, token],
-            })
+            }))
           ]);
           
           const userDeposit = contractCalls[0].status === 'fulfilled' ? contractCalls[0].value : [BigInt(0), BigInt(0)];
@@ -225,6 +181,14 @@ const useDashboardData = (address: string | undefined, contract: any) => {
         } catch (error: any) {
           const tokenSymbol = TOKEN_INFO[token]?.symbol || 'Unknown';
           console.warn(`Skipping ${tokenSymbol} due to contract error:`, error.code || error.message);
+          
+          if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
+            setShowRateLimitWarning(true);
+            setTimeout(() => setShowRateLimitWarning(false), 5000);
+            // Wait longer on rate limit
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+          
           deposits[token] = "0";
           borrows[token] = "0";
           collateral[token] = "0";
@@ -233,6 +197,16 @@ const useDashboardData = (address: string | undefined, contract: any) => {
           rates[token] = 1.0;
         }
       }
+      
+      // Set default values for remaining tokens
+      SUPPORTED_STABLECOINS.slice(3).forEach(token => {
+        deposits[token] = "0";
+        borrows[token] = "0";
+        collateral[token] = "0";
+        lockEnds[token] = 0;
+        pools[token] = "0";
+        rates[token] = 1.0;
+      });
 
       setUserData({ deposits, borrows, collateral, lockEnds });
       setPoolData(pools);
@@ -253,7 +227,7 @@ const useDashboardData = (address: string | undefined, contract: any) => {
     }
   };
 
-  return { userData, poolData, loading, exchangeRates, loadDashboardData };
+  return { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning };
 };
 
 export default function DashboardPage() {
@@ -267,15 +241,19 @@ export default function DashboardPage() {
     client,
     chain: celo,
     address: MINILEND_ADDRESS,
-    });
+  });
 
   const withdrawFn = useWithdrawContract();
   const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const { userData, poolData, loading, exchangeRates, loadDashboardData } = useDashboardData(address, contract);
+  const { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning } = useDashboardData(address, contract);
 
   useEffect(() => {
     if (isConnected && address) {
-      loadDashboardData();
+      // Add delay before loading to prevent immediate rate limiting
+      const timer = setTimeout(() => {
+        loadDashboardData();
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [isConnected, address]);
 
@@ -409,6 +387,11 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <NetworkStatus />
+      <RateLimitWarning 
+        show={showRateLimitWarning} 
+        onDismiss={() => setShowRateLimitWarning(false)} 
+      />
       <header className="bg-white border-b border-gray-200 px-3 py-2">
         <div className="flex items-center max-w-lg mx-auto">
           <Link href="/">
@@ -608,11 +591,17 @@ export default function DashboardPage() {
             <OracleRatesCard />
           </div>
 
-          {/* <Card className="bg-white border-secondary shadow-sm col-span-2">
+          <Card className="bg-white border-secondary shadow-sm col-span-2">
             <CardContent className="p-4">
-              <TVLCard contract={contract} />
+              <ErrorBoundary>
+                <TVLCard 
+                  contract={contract} 
+                  supportedTokens={SUPPORTED_STABLECOINS}
+                  tokenInfo={TOKEN_INFO}
+                />
+              </ErrorBoundary>
             </CardContent>
-          </Card> */}
+          </Card>
         </div>
       </main>
 
@@ -629,7 +618,7 @@ export default function DashboardPage() {
         </div>
       </footer>
 
-      <WithdrawModal
+      <FundsWithdrawalModal
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={handleWithdraw}
