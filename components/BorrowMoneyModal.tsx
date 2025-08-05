@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowDownLeft, Shield, AlertCircle, CreditCard } from "lucide-react";
+import { ArrowDownLeft, Shield, AlertCircle, CreditCard, ChevronDown } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { parseUnits } from "viem";
@@ -26,6 +26,7 @@ import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { oracleService } from "@/lib/services/oracleService";
 import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { getTokenIcon } from "@/lib/utils/tokenIcons";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -43,7 +44,6 @@ interface BorrowMoneyModalProps {
 }
 
 // Constants
-const LOAN_TO_VALUE_RATIO = 0.67; // 67% LTV
 const COLLATERALIZATION_RATIO = 1.5; // 150% collateralization
 
 // Error handling utility
@@ -86,468 +86,296 @@ export function BorrowMoneyModal({
 }: BorrowMoneyModalProps) {
   const { toast } = useToast();
 
-  // Memoize supported tokens to prevent re-renders
+  // Valid collateral assets from deployment config
+  const SUPPORTED_COLLATERAL = useMemo(() => [
+    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+    "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+    "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+  ], []);
+  
   const SUPPORTED_STABLECOINS = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
-  const SUPPORTED_COLLATERAL = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
   
-  const getTokenIcon = (symbol: string) => {
-    const icons: Record<string, string> = {
-      CELO: "🟡",
-      cUSD: "🇺🇸",
-      cEUR: "🇪🇺", 
-      cREAL: "🇧🇷",
-      eXOF: "🌍",
-      cKES: "🇰🇪",
-      PUSO: "🇵🇭",
-      cCOP: "🇨🇴",
-      cGHS: "🇬🇭",
-      USDT: "🇺🇸",
-      USDC: "🇺🇸",
-      USDGLO: "🌍",
-    };
-    return icons[symbol] || "💱";
-  };
+
   
-  const getTokenCategory = (tokenAddress: string) => {
-    const tokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
-      t => t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    
-    if (!tokenInfo) return "other";
-    
-    if (['USDC', 'USDT', 'USDGLO'].includes(tokenInfo.symbol)) return "international";
-    if (['cKES', 'eXOF', 'PUSO', 'cCOP', 'cGHS'].includes(tokenInfo.symbol)) return "regional";
-    if (['cUSD', 'cEUR', 'cREAL'].includes(tokenInfo.symbol)) return "major";
-    if (tokenInfo.symbol === 'CELO') return "native";
-    
-    return "other";
-  };
-  
-  const groupTokensByCategory = (tokens: string[]) => {
-    return tokens.reduce((acc, token) => {
-      const category = getTokenCategory(token);
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(token);
-      return acc;
-    }, {} as Record<string, string[]>);
-  };
-  
-  const getCategoryName = (category: string) => {
-    switch (category) {
-      case "international": return "International";
-      case "regional": return "Regional";
-      case "major": return "Major Stablecoins";
-      case "native": return "Native Token";
-      default: return "Other";
-    }
-  };
+
 
   const [form, setForm] = useState({
     token: "",
     collateralToken: "",
     amount: "",
-    collateralAmount: "",
   });
 
   const [requiredCollateral, setRequiredCollateral] = useState<string | null>(null);
-  const [needsMoreCollateral, setNeedsMoreCollateral] = useState(false);
-  const [maxBorrowAmount, setMaxBorrowAmount] = useState<string | null>(null);
-  const [showAddCollateral, setShowAddCollateral] = useState(false);
+  const [transactionStatus, setTransactionStatus] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
+  const [showSecurityDropdown, setShowSecurityDropdown] = useState(false);
+  const securityDropdownRef = useRef<HTMLDivElement>(null);
 
   const hasCollateral = (token: string) => {
     const collateral = userCollaterals[token];
     return collateral && collateral !== "0";
   };
 
-  const handleDepositCollateral = async () => {
-    if (!form.collateralToken || !form.collateralAmount) {
-      toast({
-        title: "Missing Information",
-        description: "Please select collateral type and enter amount.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      await onDepositCollateral(form.collateralToken, form.collateralAmount);
-      setForm((prev) => ({ ...prev, collateralAmount: "" }));
-    } catch (error: any) {
-      handleTransactionError(error, toast, "Failed to deposit collateral. Please try again.");
-    }
+  const hasSufficientCollateral = (token: string, required: string) => {
+    if (!hasCollateral(token)) return false;
+    const available = parseFloat(formatAmount(
+      userCollaterals[token],
+      tokenInfos[token]?.decimals || 18
+    ));
+    return available >= parseFloat(required);
   };
 
-  const handleBorrow = async () => {
-    if (!form.token || !form.collateralToken || !form.amount) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all fields to borrow money.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const handleBorrowWithCollateral = async () => {
+    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return;
 
-    if (!hasCollateral(form.collateralToken)) {
-      toast({
-        title: "No Collateral",
-        description: "You need to deposit collateral first before borrowing.",
-        variant: "destructive",
-      });
-      return;
-    }
+    setIsProcessing(true);
+    setTransactionStatus("Preparing transaction...");
 
     try {
-      // Validate Oracle prices before borrowing
-      const isOracleValid = await oracleService.validateMultipleTokens([form.token, form.collateralToken]);
-      if (!isOracleValid) {
-        toast({
-          title: "Oracle Price Error",
-          description: "Unable to get current market prices. Please try again in a moment.",
-          variant: "destructive",
-        });
-        return;
+      // Step 1: Deposit collateral if needed
+      if (!hasSufficientCollateral(form.collateralToken, requiredCollateral)) {
+        setTransactionStatus("Depositing collateral...");
+        await onDepositCollateral(form.collateralToken, requiredCollateral);
+        setTransactionStatus("Collateral received ✓");
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
+      // Step 2: Execute borrow
+      setTransactionStatus(`Sending your loan of ${tokenInfos[form.token]?.symbol}...`);
       await onBorrow(form.token, form.amount, form.collateralToken);
-      setForm({ token: "", collateralToken: "", amount: "", collateralAmount: "" });
-      onClose();
+      
+      setTransactionStatus("Complete ✓");
+      toast({
+        title: "Loan Successful",
+        description: `${form.amount} ${tokenInfos[form.token]?.symbol} borrowed successfully`,
+      });
+      
+      setTimeout(() => {
+        setForm({ token: "", collateralToken: "", amount: "" });
+        setTransactionStatus(null);
+        onClose();
+      }, 2000);
     } catch (error: any) {
-      handleTransactionError(error, toast, "Failed to borrow money. Please try again.");
+      setTransactionStatus("Failed ✗");
+      handleTransactionError(error, toast, "Failed to complete loan transaction");
+      setTimeout(() => setTransactionStatus(null), 3000);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const calculateMaxBorrowAmount = () => {
-    if (!form.collateralToken || !hasCollateral(form.collateralToken)) {
-      setMaxBorrowAmount(null);
-      return;
-    }
 
-    const collateralAmount = userCollaterals[form.collateralToken];
-    const tokenInfo = tokenInfos[form.collateralToken];
-    if (collateralAmount && tokenInfo) {
-      const maxAmount = (parseFloat(formatAmount(collateralAmount, tokenInfo.decimals)) * LOAN_TO_VALUE_RATIO).toFixed(6);
-      setMaxBorrowAmount(maxAmount);
-    }
-  };
-
-  const handleSetMaxAmount = () => {
-    if (maxBorrowAmount) {
-      const maxAmountValue = maxBorrowAmount.replace(/,/g, '');
-      setForm(prev => ({ ...prev, amount: maxAmountValue }));
-    }
-  };
 
   const calculateRequiredCollateral = () => {
     if (!form.amount || parseFloat(form.amount) <= 0) {
       setRequiredCollateral(null);
-      setNeedsMoreCollateral(false);
       return;
     }
-
     const required = (parseFloat(form.amount) * COLLATERALIZATION_RATIO).toFixed(6);
     setRequiredCollateral(required);
-
-    if (hasCollateral(form.collateralToken)) {
-      const userCollateral = parseFloat(formatAmount(
-        userCollaterals[form.collateralToken],
-        tokenInfos[form.collateralToken]?.decimals || 18
-      ));
-      setNeedsMoreCollateral(userCollateral < parseFloat(required));
-    } else {
-      setNeedsMoreCollateral(true);
-    }
   };
 
-  // Recalculate when form changes
   useEffect(() => {
     calculateRequiredCollateral();
-    calculateMaxBorrowAmount();
-  }, [form.token, form.collateralToken, form.amount, userCollaterals]);
+  }, [form.amount]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (securityDropdownRef.current && !securityDropdownRef.current.contains(event.target as Node)) {
+        setShowSecurityDropdown(false);
+      }
+    };
+
+    if (showSecurityDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSecurityDropdown]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm mx-auto bg-white border-0 shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center text-gray-900 text-lg font-semibold">
-            <ArrowDownLeft className="w-5 h-5 mr-2 text-primary" />
+      <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
+        <DialogHeader className="pb-3">
+          <DialogTitle className="text-base font-medium text-gray-900">
             Borrow Money
           </DialogTitle>
-          <DialogDescription>
-            Borrow money using your collateral as a guarantee
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div>
-            <Label
-              htmlFor="borrow-token"
-              className="text-sm font-medium text-gray-700"
-            >
+            <Label className="text-xs font-medium text-gray-600 mb-1 block">
               Borrow
             </Label>
             <Select
               value={form.token}
               onValueChange={(value) => setForm({ ...form, token: value })}
             >
-              <SelectTrigger className="mt-1 min-h-[48px]">
-                <SelectValue placeholder="Select money type" />
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Choose token" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(groupTokensByCategory(SUPPORTED_STABLECOINS)).map(([category, tokens]) => (
-                  <div key={category}>
-                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {getCategoryName(category)}
-                    </div>
-                    {tokens.map((token) => {
-                      const tokenInfo = tokenInfos[token];
-                      const balance = userBalances[token] || "0";
-                      const formattedBalance = formatAmount(balance, tokenInfo?.decimals || 18);
-                      return (
-                        <SelectItem key={token} value={token}>
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center">
-                              <span className="text-lg mr-2">
-                                {getTokenIcon(tokenInfo?.symbol || "")}
-                              </span>
-                              <span className="font-medium">
-                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                              </span>
-                            </div>
-                            <span className="text-xs text-gray-500 ml-2">
-                              {formattedBalance}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </div>
-                ))}
+                {SUPPORTED_STABLECOINS.map((token) => {
+                  const tokenInfo = tokenInfos[token];
+                  const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
+                  return (
+                    <SelectItem key={token} value={token}>
+                      <div className="flex items-center gap-2">
+                        {getTokenIcon(symbol).startsWith('http') ? (
+                          <img src={getTokenIcon(symbol)} alt={symbol} className="w-4 h-4 rounded-full" />
+                        ) : (
+                          <span className="text-sm">{getTokenIcon(symbol)}</span>
+                        )}
+                        <span className="font-medium">{symbol}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <Label
-              htmlFor="collateral-token"
-              className="text-sm font-medium text-gray-700"
-            >
-              Use as Guarantee
+            <Label className="text-xs font-medium text-gray-600 mb-1 block">
+              Amount
             </Label>
-            <Select
-              value={form.collateralToken}
-              onValueChange={(value) =>
-                setForm({ ...form, collateralToken: value })
-              }
-            >
-              <SelectTrigger className="mt-1 min-h-[48px]">
-                <SelectValue placeholder="Select guarantee type" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(groupTokensByCategory(SUPPORTED_COLLATERAL)).map(([category, tokens]) => (
-                  <div key={category}>
-                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {getCategoryName(category)}
-                    </div>
-                    {tokens.map((token) => {
-                      const tokenInfo = tokenInfos[token];
-                      const balance = userBalances[token] || "0";
-                      const collateral = userCollaterals[token] || "0";
-                      const formattedBalance = formatAmount(balance, tokenInfo?.decimals || 18);
-                      const formattedCollateral = formatAmount(collateral, tokenInfo?.decimals || 18);
-                      return (
-                        <SelectItem key={token} value={token}>
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center">
-                              <span className="text-lg mr-2">
-                                {getTokenIcon(tokenInfo?.symbol || "")}
-                              </span>
-                              <span className="font-medium">
-                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500 text-right">
-                              <div>Bal: {formattedBalance}</div>
-                              <div>Col: {formattedCollateral}</div>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </div>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.collateralToken && hasCollateral(form.collateralToken) && (
-              <div className="mt-1">
-                <div className="flex justify-between items-center">
-                  <p className={`text-sm ${needsMoreCollateral ? "text-amber-600" : "text-green-600"}`}>
-                    ✓ Deposited:{" "}
-                    {formatAmount(
-                      userCollaterals[form.collateralToken],
-                      tokenInfos[form.collateralToken]?.decimals || 18
-                    )}{" "}
-                    {tokenInfos[form.collateralToken]?.symbol}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setShowAddCollateral(!showAddCollateral)}
-                    className="h-6 text-xs text-blue-600 hover:text-blue-800 p-0"
-                  >
-                    {showAddCollateral ? "Hide" : "Add More"}
-                  </Button>
-                </div>
-                {requiredCollateral && (
-                  <p className="text-sm text-gray-600">
-                    Required: {requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
-                  </p>
-                )}
-                {maxBorrowAmount && (
-                  <p className="text-sm text-blue-600 mt-1">
-                    Max borrowable: {maxBorrowAmount} {tokenInfos[form.token]?.symbol}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Collateral Deposit Section */}
-          {form.collateralToken && (!hasCollateral(form.collateralToken) || needsMoreCollateral || showAddCollateral) && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <div className="flex items-center mb-2">
-                <Shield className="w-4 h-4 text-yellow-600 mr-2" />
-                <span className="text-sm font-medium text-yellow-800">
-                  {!hasCollateral(form.collateralToken)
-                    ? "Deposit Collateral First"
-                    : needsMoreCollateral
-                      ? "Additional Collateral Needed"
-                      : "Add More Collateral"}
-                </span>
-              </div>
-              {requiredCollateral && (
-                <div className="flex items-start mb-2 text-xs text-yellow-700">
-                  <AlertCircle className="w-3 h-3 text-yellow-600 mr-1 mt-0.5" />
-                  <span>
-                    You need at least {requiredCollateral} {tokenInfos[form.collateralToken]?.symbol} as collateral for this loan amount
-                  </span>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Input
-                  type="number"
-                  placeholder="Collateral amount"
-                  value={form.collateralAmount}
-                  onChange={(e) =>
-                    setForm({ ...form, collateralAmount: e.target.value })
-                  }
-                  className="min-h-[40px]"
-                  min="0.01"
-                  step="0.01"
-                />
-                {form.collateralToken && userBalances[form.collateralToken] && (
-                  <p className="text-xs text-gray-600">
-                    Available:{" "}
-                    {formatAmount(
-                      userBalances[form.collateralToken],
-                      tokenInfos[form.collateralToken]?.decimals || 18
-                    )}{" "}
-                    {tokenInfos[form.collateralToken]?.symbol}
-                  </p>
-                )}
-                <div className="space-y-2">
-                  <Button
-                    onClick={handleDepositCollateral}
-                    disabled={loading || !form.collateralAmount}
-                    variant="outline"
-                    className="w-full border-yellow-400 text-yellow-700 hover:bg-yellow-100 min-h-[40px] bg-transparent"
-                  >
-                    {loading ? "Depositing..." : "Deposit from Wallet"}
-                  </Button>
-
-                  {/* Show onramp option only for supported assets */}
-                  {form.collateralToken &&
-                    onrampService.isAssetSupportedForOnramp(
-                      tokenInfos[form.collateralToken]?.symbol || ""
-                    ) && (
-                      <Button
-                        onClick={() => setShowOnrampModal(true)}
-                        disabled={loading}
-                        variant="outline"
-                        className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
-                      >
-                        <CreditCard className="w-4 h-4 mr-2" />
-                        Deposit via Mobile Money
-                      </Button>
-                    )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="flex justify-between items-center">
-              <Label
-                htmlFor="borrow-amount"
-                className="text-sm font-medium text-gray-700"
-              >
-                Amount
-              </Label>
-              {maxBorrowAmount && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleSetMaxAmount}
-                  className="h-6 text-xs text-blue-600 hover:text-blue-800 p-0"
-                >
-                  Max
-                </Button>
-              )}
-            </div>
             <Input
-              id="borrow-amount"
               type="number"
               placeholder="0.00"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              className="mt-1 min-h-[48px]"
+              className="h-10"
               min="0.01"
               step="0.01"
             />
-            {form.amount && maxBorrowAmount && parseFloat(form.amount) > parseFloat(maxBorrowAmount.replace(/,/g, '')) && (
-              <p className="text-xs text-red-600 mt-1">
-                Amount exceeds your maximum borrowable amount
-              </p>
+          </div>
+
+          <div className="relative" ref={securityDropdownRef}>
+            <Label className="text-xs font-medium text-gray-600 mb-1 block">
+              Use as Security
+            </Label>
+            <button
+              type="button"
+              onClick={() => setShowSecurityDropdown(!showSecurityDropdown)}
+              className="w-full h-10 px-3 py-2 bg-white border border-gray-200 rounded-md text-left flex items-center justify-between hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <div className="flex items-center gap-2">
+                {form.collateralToken ? (
+                  <>
+                    {getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '').startsWith('http') ? (
+                      <img src={getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '')} alt={tokenInfos[form.collateralToken]?.symbol} className="w-4 h-4 rounded-full" />
+                    ) : (
+                      <span className="text-sm">{getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '')}</span>
+                    )}
+                    <span className="font-medium">{tokenInfos[form.collateralToken]?.symbol}</span>
+                  </>
+                ) : (
+                  <span className="text-gray-500">Select security</span>
+                )}
+              </div>
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showSecurityDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showSecurityDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                {SUPPORTED_COLLATERAL.map((token) => {
+                  const tokenInfo = tokenInfos[token];
+                  const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
+                  return (
+                    <button
+                      key={token}
+                      type="button"
+                      onClick={() => {
+                        setForm({ ...form, collateralToken: token });
+                        setShowSecurityDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100 last:border-b-0"
+                    >
+                      {getTokenIcon(symbol).startsWith('http') ? (
+                        <img src={getTokenIcon(symbol)} alt={symbol} className="w-4 h-4 rounded-full" />
+                      ) : (
+                        <span className="text-sm">{getTokenIcon(symbol)}</span>
+                      )}
+                      <span className="font-medium">{symbol}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <div className="flex gap-3 pt-4">
+          {requiredCollateral && form.collateralToken && (
+            <div className="bg-blue-50 border border-blue-200 rounded p-2">
+              <div className="text-xs text-blue-800">
+                Required: {requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
+                {hasCollateral(form.collateralToken) && (
+                  <div className="text-green-600 mt-1">
+                    Available: {formatAmount(
+                      userCollaterals[form.collateralToken],
+                      tokenInfos[form.collateralToken]?.decimals || 18
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {form.collateralToken && requiredCollateral && !hasSufficientCollateral(form.collateralToken, requiredCollateral) && onrampService.isAssetSupportedForOnramp(tokenInfos[form.collateralToken]?.symbol || "") && (
+            <div className="bg-green-50 border border-green-200 rounded p-2">
+              <div className="text-xs font-medium text-green-800 mb-2">
+                Need {tokenInfos[form.collateralToken]?.symbol}?
+              </div>
+              <Button
+                onClick={() => setShowOnrampModal(true)}
+                variant="outline"
+                size="sm"
+                className="w-full h-8 text-xs border-green-400 text-green-700 hover:bg-green-100"
+              >
+                <CreditCard className="w-3 h-3 mr-1" />
+                Mobile Money
+              </Button>
+            </div>
+          )}
+
+          {transactionStatus && (
+            <div className="bg-blue-50 border border-blue-200 rounded p-2">
+              <div className="text-xs text-blue-800 font-medium">
+                {transactionStatus}
+              </div>
+            </div>
+          )}
+
+
+
+          <div className="flex gap-2 pt-3">
             <Button
               onClick={onClose}
               variant="outline"
-              className="flex-1 min-h-[48px] bg-transparent"
+              className="flex-1 h-9 text-sm"
+              disabled={isProcessing}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleBorrow}
+              onClick={handleBorrowWithCollateral}
               disabled={
-                loading ||
+                isProcessing ||
                 !form.token ||
                 !form.collateralToken ||
                 !form.amount ||
-                !hasCollateral(form.collateralToken) ||
-                needsMoreCollateral
+                !requiredCollateral
               }
-              className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
+              className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
             >
-              {loading ? "Borrowing..." : "Borrow Now"}
+              {isProcessing ? "Processing..." : "Borrow"}
             </Button>
           </div>
         </div>
       </DialogContent>
 
-      {/* Onramp Deposit Modal */}
       <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
@@ -555,8 +383,8 @@ export function BorrowMoneyModal({
         assetSymbol={tokenInfos[form.collateralToken]?.symbol || ""}
         onSuccess={(transactionCode, amount) => {
           toast({
-            title: "Mobile Money Deposit Initiated",
-            description: `Your ${tokenInfos[form.collateralToken]?.symbol} deposit will be processed once payment is confirmed.`,
+            title: "Deposit Initiated",
+            description: `${tokenInfos[form.collateralToken]?.symbol} deposit processing`,
           });
           setShowOnrampModal(false);
         }}
