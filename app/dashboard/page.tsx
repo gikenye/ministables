@@ -11,7 +11,7 @@ import { formatAmount, formatAddress } from "@/lib/utils";
 import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
-import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS, thirdwebService } from "@/lib/services/thirdwebService";
+import { MINILEND_ADDRESS, ORACLE_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
 interface UserData {
   deposits: Record<string, string>;
@@ -22,37 +22,134 @@ interface UserData {
 
 import { useActiveAccount } from "thirdweb/react";
 import {
-  useWithdraw as useWithdrawContract
+  useWithdraw as useWithdrawContract,
+  useTotalSupply
 } from '@/lib/thirdweb/minilend-contract';
 import { getContract, readContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { Imprima } from "next/font/google";
 
-// Supported tokens - from README
+// Supported stablecoins from deployment config
 const SUPPORTED_STABLECOINS = [
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
+  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
+  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
+  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
+  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+];
+
+// Valid collateral assets from deployment config
+const SUPPORTED_COLLATERAL = [
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
   "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
   "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
   "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
 ];
 
-const SUPPORTED_COLLATERAL = SUPPORTED_STABLECOINS;
-
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
+  "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", decimals: 18 },
   "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
   "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
   "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
+  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", decimals: 18 },
   "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", decimals: 18 },
+  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", decimals: 18 },
+  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", decimals: 18 },
+  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", decimals: 18 },
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { symbol: "cNGN", decimals: 18 },
 };
 
 
+
+// const TVLCard = ({ contract }: { contract: any }) => {
+//   const [tvlData, setTvlData] = useState<Record<string, string>>({});
+//   const [loading, setLoading] = useState(true);
+
+//   useEffect(() => {
+//     const loadTVL = async () => {
+//       setLoading(true);
+//       try {
+//         const tvl: Record<string, string> = {};
+        
+//         const promises = SUPPORTED_STABLECOINS.map(async (token) => {
+//           try {
+//             const totalSupply = await readContract({
+//               contract,
+//               method: "function totalSupply(address) view returns (uint256)",
+//               params: [token],
+//             });
+//             tvl[token] = totalSupply.toString();
+//           } catch (error) {
+//             tvl[token] = "0";
+//           }
+//         });
+
+//         await Promise.all(promises);
+//         setTvlData(tvl);
+//       } catch (error) {
+//         console.error("Error loading TVL:", error);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+
+//     loadTVL();
+//   }, [contract]);
+
+//   if (loading) {
+//     return <div className="text-xs text-gray-500 text-center py-3">Loading TVL...</div>;
+//   }
+
+//   const totalTVL = Object.entries(tvlData).reduce((acc, [token, amount]) => {
+//     if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
+//     const info = TOKEN_INFO[token];
+//     const numericAmount = Number(formatAmount(amount, info.decimals));
+//     return acc + numericAmount;
+//   }, 0);
+
+//   return (
+//     <>
+//       <h2 className="text-lg font-semibold text-center text-primary mb-3">
+//         Total Value Locked
+//       </h2>
+//       <div className="text-center p-3 bg-green-50 rounded-lg mb-4">
+//         <TrendingUp className="w-5 h-5 mx-auto mb-1 text-green-600" />
+//         <p className="text-xs font-medium mb-1 text-gray-600">Available Liquidity</p>
+//         <p className="text-lg font-bold text-green-600">
+//           ${totalTVL.toFixed(2)}
+//         </p>
+//       </div>
+//       <div className="space-y-1.5">
+//         {Object.entries(tvlData)
+//           .filter(([token, amount]) => amount && amount !== "0" && TOKEN_INFO[token])
+//           .slice(0, 4)
+//           .map(([token, amount]) => {
+//             const info = TOKEN_INFO[token];
+//             return (
+//               <div key={token} className="flex justify-between items-center">
+//                 <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
+//                 <span className="text-green-600 font-semibold text-xs">
+//                   {formatAmount(amount, info.decimals)}
+//                 </span>
+//               </div>
+//             );
+//           })}
+//       </div>
+//     </>
+//   );
+// };
 
 const useDashboardData = (address: string | undefined, contract: any) => {
   const [userData, setUserData] = useState<UserData>({
@@ -65,6 +162,21 @@ const useDashboardData = (address: string | undefined, contract: any) => {
   const [loading, setLoading] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
 
+  const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3): Promise<any> => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        if (error.message?.includes('429') && i < maxRetries - 1) {
+          const delay = Math.pow(2, i) * 1000; // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+  };
+
   const loadDashboardData = async () => {
     if (!address) return;
     setLoading(true);
@@ -76,10 +188,13 @@ const useDashboardData = (address: string | undefined, contract: any) => {
       const pools: Record<string, string> = {};
       const rates: Record<string, number> = {};
 
-      // Load data in parallel for better performance
-      const promises = SUPPORTED_STABLECOINS.map(async (token) => {
+      // Process tokens sequentially to avoid rate limiting
+      for (const token of SUPPORTED_STABLECOINS) {
         try {
-          const [userDeposit, userBorrow, userCollat] = await Promise.all([
+          // Add delay between requests to prevent rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const contractCalls = await Promise.allSettled([
             readContract({
               contract,
               method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
@@ -97,41 +212,42 @@ const useDashboardData = (address: string | undefined, contract: any) => {
             })
           ]);
           
-          return {
-            token,
-            deposit: userDeposit[0].toString(),
-            borrow: userBorrow.toString(),
-            collateral: userCollat.toString(),
-            lockEnd: Number(userDeposit[1]),
-          };
-        } catch (error) {
-          console.error(`Error loading data for token ${token.replace(/[\r\n]/g, '')}:`, error);
-          return {
-            token,
-            deposit: "0",
-            borrow: "0",
-            collateral: "0",
-            lockEnd: 0,
-          };
+          const userDeposit = contractCalls[0].status === 'fulfilled' ? contractCalls[0].value : [BigInt(0), BigInt(0)];
+          const userBorrow = contractCalls[1].status === 'fulfilled' ? contractCalls[1].value : BigInt(0);
+          const userCollat = contractCalls[2].status === 'fulfilled' ? contractCalls[2].value : BigInt(0);
+          
+          deposits[token] = userDeposit[0].toString();
+          borrows[token] = userBorrow.toString();
+          collateral[token] = userCollat.toString();
+          lockEnds[token] = Number(userDeposit[1]);
+          pools[token] = "0";
+          rates[token] = 1.0;
+        } catch (error: any) {
+          const tokenSymbol = TOKEN_INFO[token]?.symbol || 'Unknown';
+          console.warn(`Skipping ${tokenSymbol} due to contract error:`, error.code || error.message);
+          deposits[token] = "0";
+          borrows[token] = "0";
+          collateral[token] = "0";
+          lockEnds[token] = 0;
+          pools[token] = "0";
+          rates[token] = 1.0;
         }
-      });
-
-      const results = await Promise.all(promises);
-      
-      results.forEach(({ token, deposit, borrow, collateral, lockEnd }) => {
-        deposits[token] = deposit;
-        borrows[token] = borrow;
-        collateral[token] = collateral;
-        lockEnds[token] = lockEnd;
-        pools[token] = "0"; // Skip pool data for faster loading
-        rates[token] = 1.0;
-      });
+      }
 
       setUserData({ deposits, borrows, collateral, lockEnds });
       setPoolData(pools);
       setExchangeRates(rates);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      // Set empty data on error to prevent UI crashes
+      setUserData({
+        deposits: {},
+        borrows: {},
+        collateral: {},
+        lockEnds: {},
+      });
+      setPoolData({});
+      setExchangeRates({});
     } finally {
       setLoading(false);
     }
@@ -144,8 +260,8 @@ export default function DashboardPage() {
   const account = useActiveAccount();
   const { data: session } = useSession();
   const router = useRouter();
-  const isConnected = !!account;
   const address = account?.address;
+  const isConnected = !!address;
   
   const contract = getContract({
     client,
@@ -161,7 +277,7 @@ export default function DashboardPage() {
     if (isConnected && address) {
       loadDashboardData();
     }
-  }, [isConnected, address, loadDashboardData]);
+  }, [isConnected, address]);
 
 
 
@@ -173,7 +289,7 @@ export default function DashboardPage() {
       const balance = await thirdwebService.getUserBalance(address, token);
       return balance;
     } catch (error) {
-      console.error(`Error getting user balance for ${token.replace(/[\r\n]/g, '')}:`, error);
+      console.error(`Error getting user balance:`, error);
       return "0";
     }
   };
@@ -491,6 +607,12 @@ export default function DashboardPage() {
           <div className="bg-white border-secondary shadow-sm rounded-lg">
             <OracleRatesCard />
           </div>
+
+          {/* <Card className="bg-white border-secondary shadow-sm col-span-2">
+            <CardContent className="p-4">
+              <TVLCard contract={contract} />
+            </CardContent>
+          </Card> */}
         </div>
       </main>
 

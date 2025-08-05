@@ -25,6 +25,7 @@ import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveAccount } from "thirdweb/react";
 import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { getTokenIcon } from "@/lib/utils/tokenIcons";
 
 interface SaveMoneyModalProps {
   isOpen: boolean;
@@ -82,13 +83,18 @@ export function SaveMoneyModal({
     setIsSaving(true);
 
     try {
-      // The thirdweb contract provider handles network switching automatically
+      // Note: The parent component's onSave function should handle token approval
+      // before attempting to deposit tokens to the contract
       await onSave(form.token, form.amount, Number.parseInt(form.lockPeriod));
       setForm({ token: "", amount: "", lockPeriod: "2592000" });
       onClose();
     } catch (err: any) {
       console.error("Error saving money:", err);
-      setError(err.message || "Failed to save money. Please try again.");
+      if (err.message?.includes("ERC20: insufficient allowance") || err.message?.includes("Approve contract first")) {
+        setError("Please approve the contract to spend your tokens first. This should happen automatically.");
+      } else {
+        setError(err.message || "Failed to save money. Please try again.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -111,175 +117,63 @@ export function SaveMoneyModal({
   const supportedStablecoins = Object.keys(tokenInfos);
   const defaultLockPeriods = ["61", "604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
-  const getTokenCategory = (tokenAddress: string) => {
-    const tokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
-      t => t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    
-    if (!tokenInfo) return "stablecoin";
-    
-    // International stablecoins
-    if (['USDC', 'USDT', 'USDGLO'].includes(tokenInfo.symbol)) return "international";
-    // Regional currencies
-    if (['cKES', 'eXOF', 'PUSO', 'cCOP', 'cGHS'].includes(tokenInfo.symbol)) return "regional";
-    // Major stablecoins
-    if (['cUSD', 'cEUR', 'cREAL'].includes(tokenInfo.symbol)) return "major";
-    // Native token
-    if (tokenInfo.symbol === 'CELO') return "native";
-    
-    return "stablecoin";
-  };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "international":
-        return "🌐";
-      case "regional":
-        return "🌍";
-      case "major":
-        return "💰";
-      case "native":
-        return "🟡";
-      default:
-        return "💱";
-    }
-  };
   
-  const getTokenIcon = (symbol: string) => {
-    const icons: Record<string, string> = {
-      CELO: "🟡",
-      cUSD: "🇺🇸",
-      cEUR: "🇪🇺", 
-      cREAL: "🇧🇷",
-      eXOF: "🌍",
-      cKES: "🇰🇪",
-      PUSO: "🇵🇭",
-      cCOP: "🇨🇴",
-      cGHS: "🇬🇭",
-      USDT: "🇺🇸",
-      USDC: "🇺🇸",
-      USDGLO: "🌍",
-    };
-    return icons[symbol] || "💱";
-  };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "international":
-        return "text-blue-600";
-      case "regional":
-        return "text-green-600";
-      case "major":
-        return "text-purple-600";
-      case "native":
-        return "text-yellow-600";
-      default:
-        return "text-gray-600";
-    }
-  };
-  
-  const getCategoryName = (category: string) => {
-    switch (category) {
-      case "international":
-        return "International";
-      case "regional":
-        return "Regional";
-      case "major":
-        return "Major Stablecoins";
-      case "native":
-        return "Native Token";
-      default:
-        return "Other";
-    }
-  };
 
-  // Group tokens by category - memoized for performance
-  const groupedTokens = useMemo(() => {
-    return supportedStablecoins.reduce(
-      (acc, tokenAddress) => {
-        const category = getTokenCategory(tokenAddress);
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(tokenAddress);
-        return acc;
-      },
-      {} as Record<string, string[]>
-    );
-  }, [supportedStablecoins]);
+
+
+
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-sm mx-auto bg-white border-0 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center text-gray-900 text-lg font-semibold">
-              <TrendingUp className="w-5 h-5 mr-2 text-primary" />
+        <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-base font-medium text-gray-900">
               Save Money
             </DialogTitle>
-            <DialogDescription>
-              Deposit money to earn interest over time
-            </DialogDescription>
           </DialogHeader>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm mb-4">
+            <div className="bg-red-50 border border-red-200 text-red-600 p-2 rounded text-xs mb-3">
               {error}
             </div>
           )}
 
-          {/* Show wallet connection status */}
           {!account && (
-            <div className="bg-yellow-50 border border-yellow-200 text-yellow-600 p-3 rounded-lg text-sm mb-4">
-              Please connect your wallet to continue
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-600 p-2 rounded text-xs mb-3">
+              Connect wallet to continue
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <Label
-                htmlFor="save-token"
-                className="text-sm font-medium text-gray-700"
-              >
+              <Label className="text-xs font-medium text-gray-600 mb-1 block">
                 Money Type
               </Label>
               <Select
                 value={form.token}
                 onValueChange={(value) => setForm({ ...form, token: value })}
               >
-                <SelectTrigger className="mt-1 min-h-[48px]">
-                  <SelectValue placeholder="Select money type" />
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(groupedTokens).map(([category, tokens]) => {
-                    const categoryIcon = getCategoryIcon(category);
-                    const categoryColor = getCategoryColor(category);
+                  {supportedStablecoins.map((token) => {
+                    const tokenInfo = tokenInfos[token];
+                    const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
                     return (
-                      <div key={category}>
-                        <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          {categoryIcon} {getCategoryName(category)}
+                      <SelectItem key={token} value={token}>
+                        <div className="flex items-center gap-2">
+                          {getTokenIcon(symbol).startsWith('http') ? (
+                            <img src={getTokenIcon(symbol)} alt={symbol} className="w-4 h-4 rounded-full" />
+                          ) : (
+                            <span className="text-sm">{getTokenIcon(symbol)}</span>
+                          )}
+                          <span className="font-medium">{symbol}</span>
                         </div>
-                        {tokens.map((token) => {
-                          const tokenInfo = tokenInfos[token];
-                          const balance = userBalances[token] || "0";
-                          const formattedBalance = formatAmount(balance, tokenInfo?.decimals || 18);
-                          return (
-                            <SelectItem key={token} value={token}>
-                              <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center">
-                                  <span className="text-lg mr-2">
-                                    {getTokenIcon(tokenInfo?.symbol || "")}
-                                  </span>
-                                  <span className="font-medium">
-                                    {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                                  </span>
-                                </div>
-                                <span className="text-xs text-gray-500 ml-2">
-                                  {formattedBalance}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </div>
+                      </SelectItem>
                     );
                   })}
                 </SelectContent>
@@ -288,10 +182,7 @@ export function SaveMoneyModal({
 
             <div>
               <div className="flex justify-between items-center">
-                <Label
-                  htmlFor="save-amount"
-                  className="text-sm font-medium text-gray-700"
-                >
+                <Label className="text-xs font-medium text-gray-600 mb-1 block">
                   Amount
                 </Label>
                 {form.token && userBalances[form.token] && (
@@ -304,45 +195,37 @@ export function SaveMoneyModal({
                       );
                       setForm({ ...form, amount: maxAmount });
                     }}
-                    className="text-xs text-primary hover:text-secondary font-medium active:scale-95 transition-all"
+                    className="text-xs text-blue-600 hover:text-blue-800"
                   >
-                    Use max: {formatAmount(
-                      userBalances[form.token],
-                      tokenInfos[form.token]?.decimals || 18
-                    )} {tokenInfos[form.token]?.symbol}
+                    Max
                   </button>
                 )}
               </div>
               <Input
-                id="save-amount"
                 type="text"
                 inputMode="decimal"
                 placeholder="0.00"
                 value={form.amount}
                 onChange={(e) => {
                   const value = e.target.value;
-                  // Allow empty value or valid decimal numbers
                   if (value === '' || /^\d*\.?\d*$/.test(value)) {
                     setForm({ ...form, amount: value });
                   }
                 }}
-                className="mt-1 min-h-[48px]"
+                className="h-10"
               />
             </div>
 
             <div>
-              <Label
-                htmlFor="save-lock"
-                className="text-sm font-medium text-gray-700"
-              >
+              <Label className="text-xs font-medium text-gray-600 mb-1 block">
                 Lock For
               </Label>
               <Select
                 value={form.lockPeriod}
                 onValueChange={(value) => setForm({ ...form, lockPeriod: value })}
               >
-                <SelectTrigger className="mt-1 min-h-[48px]">
-                  <SelectValue placeholder="Select lock period" />
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select period" />
                 </SelectTrigger>
                 <SelectContent>
                   {defaultLockPeriods.map((period) => (
@@ -354,44 +237,26 @@ export function SaveMoneyModal({
               </Select>
             </div>
 
-            {/* Deposit Options */}
-            {form.token && onrampService.isAssetSupportedForOnramp(tokenInfos[form.token]?.symbol || "") && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="text-sm font-medium text-blue-800 mb-2">
-                  Need to deposit {tokenInfos[form.token]?.symbol}?
-                </div>
-                <Button
-                  onClick={() => setShowOnrampModal(true)}
-                  variant="outline"
-                  className="w-full border-blue-400 text-blue-700 hover:bg-blue-100 min-h-[40px] bg-transparent"
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Deposit via Mobile Money
-                </Button>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-2 pt-3">
               <Button
                 onClick={onClose}
                 variant="outline"
-                className="flex-1 min-h-[48px] bg-transparent"
+                className="flex-1 h-9 text-sm"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSave}
                 disabled={loading || isSaving || !form.token || !form.amount || !account}
-                className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
+                className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
               >
-                {loading || isSaving ? "Saving..." : "Save Now"}
+                {loading || isSaving ? "Saving..." : "Save"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Optimized Onramp Deposit Modal */}
       <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
@@ -400,8 +265,8 @@ export function SaveMoneyModal({
         onSuccess={(transactionCode, amount) => {
           try {
             toast({
-              title: "Mobile Money Deposit Initiated",
-              description: `Your ${tokenInfos[form.token]?.symbol} deposit will be processed once payment is confirmed.`,
+              title: "Deposit Initiated",
+              description: `${tokenInfos[form.token]?.symbol} deposit processing`,
             });
           } catch (error) {
             console.error("Error showing success toast:", error);

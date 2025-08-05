@@ -23,6 +23,7 @@ import { formatAmount } from "@/lib/utils";
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { offrampService } from "@/lib/services/offrampService";
 import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { getTokenIcon } from "@/lib/utils/tokenIcons";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -113,58 +114,6 @@ export function WithdrawModal({
   // Memoize supported tokens to prevent re-renders
   const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
-  const getTokenCategory = (tokenAddress: string) => {
-    const tokenInfo = Object.values(NEW_SUPPORTED_TOKENS).find(
-      t => t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    
-    if (!tokenInfo) return "other";
-    
-    if (['USDC', 'USDT', 'USDGLO'].includes(tokenInfo.symbol)) return "international";
-    if (['cKES', 'eXOF', 'PUSO', 'cCOP', 'cGHS'].includes(tokenInfo.symbol)) return "regional";
-    if (['cUSD', 'cEUR', 'cREAL'].includes(tokenInfo.symbol)) return "major";
-    if (tokenInfo.symbol === 'CELO') return "native";
-    
-    return "other";
-  };
-  
-  const getTokenIcon = (symbol: string) => {
-    const icons: Record<string, string> = {
-      CELO: "🟡",
-      cUSD: "🇺🇸",
-      cEUR: "🇪🇺", 
-      cREAL: "🇧🇷",
-      eXOF: "🌍",
-      cKES: "🇰🇪",
-      PUSO: "🇵🇭",
-      cCOP: "🇨🇴",
-      cGHS: "🇬🇭",
-      USDT: "🇺🇸",
-      USDC: "🇺🇸",
-      USDGLO: "🌍",
-    };
-    return icons[symbol] || "💱";
-  };
-
-  const getCategoryName = (category: string) => {
-    switch (category) {
-      case "international":
-        return "International";
-      case "regional":
-        return "Regional";
-      case "major":
-        return "Major Stablecoins";
-      case "native":
-        return "Native Token";
-      default:
-        return "Other";
-    }
-  };
-
-
-
-
-
   const getWithdrawableAmount = useCallback((tokenAddress: string) => {
     const deposit = userDeposits[tokenAddress] || "0";
     const lockEnd = depositLockEnds[tokenAddress] || 0;
@@ -192,22 +141,11 @@ export function WithdrawModal({
     ), [supportedStablecoins, userDeposits]
   );
 
-  // Group tokens by category - memoized for performance
-  const groupedTokens = useMemo(() => 
-    availableTokens.reduce(
-      (acc, tokenAddress) => {
-        const category = getTokenCategory(tokenAddress);
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(tokenAddress);
-        return acc;
-      },
-      {} as Record<string, string[]>
-    ), [availableTokens]
-  );
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm mx-auto bg-white border-0 shadow-2xl">
+      <DialogContent className="w-[95vw] max-w-sm mx-auto bg-white border-0 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center text-gray-900 text-lg font-semibold">
             <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
@@ -261,17 +199,7 @@ export function WithdrawModal({
             </div>
           )}
 
-          {/* Lock Period Information */}
-          {availableTokens.some(token => hasPotentialMixedLocks(token)) && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-sm font-medium text-blue-800 mb-1">
-                ℹ️ Multiple Deposits Detected
-              </p>
-              <p className="text-xs text-blue-700">
-                You may have multiple deposits with different unlock dates. The contract will automatically calculate your available withdrawal amount based on unlocked deposits only.
-              </p>
-            </div>
-          )}
+
 
           <div>
             <Label
@@ -289,44 +217,36 @@ export function WithdrawModal({
               </SelectTrigger>
 
               <SelectContent>
-                {availableTokens.length === 0 && (
+                {availableTokens.length === 0 ? (
                   <div className="px-2 py-3 text-sm text-gray-500 text-center">
                     No funds available to withdraw
                   </div>
-                )}
-                {Object.entries(groupedTokens).map(([category, tokens]) => (
-                  <div key={category}>
-                    <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {getCategoryName(category)}
-                    </div>
-                    {tokens.map((token) => {
-                      const tokenInfo = tokenInfos[token];
-                      const withdrawable = getWithdrawableAmount(token);
-                      const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18);
-                      return (
-                        <SelectItem key={token} value={token}>
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center">
-                              <span className="text-lg mr-2">
-                                {getTokenIcon(tokenInfo?.symbol || "")}
-                              </span>
-                              <span className="font-medium">
-                                {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                              </span>
-                            </div>
-                            <span className="text-xs text-gray-500 ml-2">
-                              {formattedWithdrawable}
+                ) : (
+                  availableTokens.map((token) => {
+                    const tokenInfo = tokenInfos[token];
+                    const withdrawable = getWithdrawableAmount(token);
+                    const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18);
+                    const iconUrl = getTokenIcon(tokenInfo?.symbol || "");
+                    return (
+                      <SelectItem key={token} value={token}>
+                        <div className="flex items-center justify-between w-full min-w-0">
+                          <div className="flex items-center min-w-0 flex-1">
+                            {iconUrl.startsWith('http') ? (
+                              <img src={iconUrl} alt={tokenInfo?.symbol} className="w-4 h-4 mr-2 flex-shrink-0" />
+                            ) : (
+                              <span className="text-sm mr-2 flex-shrink-0">{iconUrl}</span>
+                            )}
+                            <span className="font-medium text-sm truncate">
+                              {tokenInfo?.symbol || token.slice(0, 6) + "..."}
                             </span>
                           </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </div>
-                ))}
-                {Object.keys(groupedTokens).length === 0 && (
-                  <div className="px-2 py-3 text-sm text-gray-500 text-center">
-                    No available tokens to withdraw
-                  </div>
+                          <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                            {formattedWithdrawable}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })
                 )}
               </SelectContent>
             </Select>
