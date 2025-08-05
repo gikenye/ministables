@@ -2,7 +2,7 @@ import { getContract, readContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
 
-export const ORACLE_ADDRESS = "0x6c844bF2c73Ab4230a09FaACfe6e6e05765f1031";
+export const ORACLE_ADDRESS = "0x184BE0911c8d0931782a21698098C4bC4265d6DB";
 
 // Price validation constants
 const ONE_HOUR_IN_SECONDS = 3600;
@@ -26,24 +26,20 @@ class OracleService {
 
   async getMedianRate(tokenAddress: string): Promise<OracleRate> {
     try {
-      const result = await readContract({
+      // Use direct rates mapping instead of getMedianRate function
+      const rate = await readContract({
         contract: this.contract,
-        method: "function getMedianRate(address token) view returns (uint256 rate, uint256 timestamp)",
+        method: "function rates(address) view returns (uint256)",
         params: [tokenAddress],
       });
       
-      // Debug logging only in development
-      if (process.env.NODE_ENV === 'development') {
-        console.debug(`Oracle data for ${tokenAddress.replace(/[\r\n]/g, '')}:`, {
-          rate: result[0].toString(),
-          timestamp: result[1].toString(),
-          currentTime: Math.floor(Date.now() / 1000)
-        });
+      if (rate === BigInt(0)) {
+        throw new Error(`No price feed for token ${tokenAddress}`);
       }
       
       return {
-        rate: result[0],
-        timestamp: result[1],
+        rate,
+        timestamp: BigInt(Math.floor(Date.now() / 1000)),
       };
     } catch (error) {
       console.error(`Failed to get oracle rate for ${tokenAddress.replace(/[\r\n]/g, '')}:`, error);
@@ -92,6 +88,17 @@ class OracleService {
     } catch (error) {
       console.error('Failed to validate multiple tokens:', error);
       return false;
+    }
+  }
+
+  async getTokenPrice(tokenAddress: string): Promise<number> {
+    try {
+      const { rate } = await this.getMedianRate(tokenAddress);
+      // Convert from wei (1e18) to decimal
+      return Number(rate) / 1e18;
+    } catch (error) {
+      console.error(`Failed to get token price for ${tokenAddress}:`, error);
+      throw error;
     }
   }
 }

@@ -28,8 +28,8 @@ import {
   useGetUserBalance,
 } from "../lib/thirdweb/minilend-contract";
 import { getContract, prepareContractCall, sendTransaction, waitForReceipt, readContract } from "thirdweb";
-import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
+import { client } from "@/lib/thirdweb/client";
 import { parseUnits, formatUnits } from "viem";
 import { formatAddress } from "@/lib/utils";
 import { extractTransactionError } from "@/lib/utils/errorMapping";
@@ -162,6 +162,7 @@ export default function HomePage() {
   // Get actual wallet balances from ERC20 contracts
   const [walletBalances, setWalletBalances] = useState<Record<string, string>>({});
   
+
   
   useEffect(() => {
     const fetchWalletBalances = async () => {
@@ -430,9 +431,19 @@ export default function HomePage() {
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Borrowing money...', txHash: undefined });
       
-      const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await borrowFn(contract, token, amountWei, collateralToken);
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          const tokenInfo = getTokenInfo(token);
+          const amountWei = parseUnits(amount, tokenInfo.decimals);
+          return await borrowFn(contract, token, amountWei, collateralToken);
+        },
+        { 
+          tokens: [token, collateralToken],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });
@@ -481,7 +492,17 @@ export default function HomePage() {
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Depositing collateral...', txHash: undefined });
       
-      const txHash = await depositCollateralFn(contract, token, amountWei);
+      const txHash = await executeWithOracleValidation(
+        async () => {
+          return await depositCollateralFn(contract, token, amountWei);
+        },
+        { 
+          tokens: [token],
+          onOracleError: (error) => {
+            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+          }
+        }
+      );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });

@@ -25,8 +25,14 @@ import { parseUnits } from "viem";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { oracleService } from "@/lib/services/oracleService";
-import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
+import { NEW_SUPPORTED_TOKENS, MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
+import { getContract } from "thirdweb";
+import { client } from "@/lib/thirdweb/client";
+import { celo } from "thirdweb/chains";
+
+import { useActiveAccount } from "thirdweb/react";
+import { useReadContract } from "thirdweb/react";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -83,9 +89,17 @@ export function BorrowMoneyModal({
   userCollaterals,
   tokenInfos,
   loading,
+
 }: BorrowMoneyModalProps) {
   const { toast } = useToast();
-
+  const account = useActiveAccount();
+  
+  const contract = getContract({
+    client,
+    chain: celo,
+    address: MINILEND_ADDRESS,
+  });
+  
   // Valid collateral assets from deployment config
   const SUPPORTED_COLLATERAL = useMemo(() => [
     "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
@@ -95,7 +109,13 @@ export function BorrowMoneyModal({
     "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
   ], []);
   
-  const SUPPORTED_STABLECOINS = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+  // Only cKES available for borrowing for now
+  const SUPPORTED_STABLECOINS = useMemo(() => {
+    return ["0x456a3D042C0DbD3db53D5489e98dFb038553B0d0"]; // cKES only
+    // return Object.keys(tokenInfos).filter(token => 
+    //   !["0xcebA9300f2b948710d2653dD7B07f33A8B32118C", "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3"].includes(token)
+    // );
+  }, []);
   
 
   
@@ -112,6 +132,7 @@ export function BorrowMoneyModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
   const [showSecurityDropdown, setShowSecurityDropdown] = useState(false);
+
   const securityDropdownRef = useRef<HTMLDivElement>(null);
 
   const hasCollateral = (token: string) => {
@@ -128,29 +149,74 @@ export function BorrowMoneyModal({
     return available >= parseFloat(required);
   };
 
+  // Use same simplified logic as TVL - only fetch totalSupply to reduce requests
+  const { data: totalSupply, isPending: checkingLiquidity } = useReadContract({
+    contract,
+    method: "function totalSupply(address) view returns (uint256)",
+    params: [form.token || "0x0000000000000000000000000000000000000000"],
+    queryOptions: {
+      enabled: !!form.token,
+      retry: (failureCount, error) => {
+        if (error?.message?.includes('429')) {
+          return failureCount < 2;
+        }
+        return false;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    },
+  });
+
+  const selectedTokenLiquidity = useMemo(() => {
+    if (!form.token || checkingLiquidity) return null;
+    if (!totalSupply || totalSupply <= 0) return "0";
+    
+    const decimals = tokenInfos[form.token]?.decimals || 18;
+    return formatAmount(totalSupply.toString(), decimals);
+  }, [form.token, totalSupply, tokenInfos, checkingLiquidity]);
+
   const handleBorrowWithCollateral = async () => {
     if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return;
 
+    // Check if there's liquidity for the selected token
+    if (selectedTokenLiquidity === "0") {
+      toast({
+        title: "No Liquidity Available",
+        description: `There is no liquidity available for ${tokenInfos[form.token]?.symbol}. Please select a different token.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
-    setTransactionStatus("Preparing transaction...");
+    setTransactionStatus("Processing loan request...");
 
     try {
-      // Step 1: Deposit collateral if needed
+      // Always check and deposit collateral if needed
       if (!hasSufficientCollateral(form.collateralToken, requiredCollateral)) {
         setTransactionStatus("Depositing collateral...");
+        const walletBalance = parseFloat(formatAmount(
+          userBalances[form.collateralToken] || "0",
+          tokenInfos[form.collateralToken]?.decimals || 18
+        ));
+        
+        if (walletBalance < parseFloat(requiredCollateral)) {
+          throw new Error(`Insufficient ${tokenInfos[form.collateralToken]?.symbol} in wallet. You need ${requiredCollateral} but only have ${walletBalance.toFixed(4)}.`);
+        }
+
+        setTransactionStatus("Depositing collateral...");
         await onDepositCollateral(form.collateralToken, requiredCollateral);
-        setTransactionStatus("Collateral received ✓");
+        setTransactionStatus("Collateral deposited ✓");
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       // Step 2: Execute borrow
-      setTransactionStatus(`Sending your loan of ${tokenInfos[form.token]?.symbol}...`);
+      setTransactionStatus("Processing loan...");
       await onBorrow(form.token, form.amount, form.collateralToken);
       
-      setTransactionStatus("Complete ✓");
+      setTransactionStatus("Loan completed ✓");
       toast({
         title: "Loan Successful",
-        description: `${form.amount} ${tokenInfos[form.token]?.symbol} borrowed successfully`,
+        description: `${form.amount} ${tokenInfos[form.token]?.symbol} has been sent to your wallet`,
       });
       
       setTimeout(() => {
@@ -159,8 +225,19 @@ export function BorrowMoneyModal({
         onClose();
       }, 2000);
     } catch (error: any) {
-      setTransactionStatus("Failed ✗");
-      handleTransactionError(error, toast, "Failed to complete loan transaction");
+      setTransactionStatus("Transaction failed ✗");
+      
+      // Don't show success message if transaction failed
+      if (error.message?.includes("insufficient reserves") || error.message?.includes("E5")) {
+        toast({
+          title: "Insufficient Contract Reserves",
+          description: "The contract doesn't have enough funds for this loan. Please try a smaller amount.",
+          variant: "destructive",
+        });
+      } else {
+        handleTransactionError(error, toast, "Failed to complete loan transaction");
+      }
+      
       setTimeout(() => setTransactionStatus(null), 3000);
     } finally {
       setIsProcessing(false);
@@ -170,17 +247,41 @@ export function BorrowMoneyModal({
 
 
   const calculateRequiredCollateral = () => {
-    if (!form.amount || parseFloat(form.amount) <= 0) {
+    if (!form.amount || parseFloat(form.amount) <= 0 || !form.token || !form.collateralToken) {
       setRequiredCollateral(null);
       return;
     }
-    const required = (parseFloat(form.amount) * COLLATERALIZATION_RATIO).toFixed(6);
-    setRequiredCollateral(required);
+    
+    // Hardcoded prices from oracle contract
+    const prices: Record<string, number> = {
+      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": 0.0077, // cKES
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": 1.00,   // USDC
+      "0x765DE816845861e75A25fCA122bb6898B8B1282a": 1.00,   // cUSD
+      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": 1.10,   // cEUR
+      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": 1.00,   // USDT
+      "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": 1.00,   // USDGLO
+    };
+    
+    const borrowTokenPrice = prices[form.token] || 1.0;
+    const collateralTokenPrice = prices[form.collateralToken] || 1.0;
+    
+    // Calculate USD value of borrowed amount
+    const borrowValueUSD = parseFloat(form.amount) * borrowTokenPrice;
+    
+    // Calculate required collateral in USD (150% of borrow value)
+    const requiredCollateralUSD = borrowValueUSD * COLLATERALIZATION_RATIO;
+    
+    // Convert to collateral token amount
+    const requiredCollateralAmount = requiredCollateralUSD / collateralTokenPrice;
+    
+    setRequiredCollateral(requiredCollateralAmount.toFixed(6));
   };
 
   useEffect(() => {
     calculateRequiredCollateral();
-  }, [form.amount]);
+  }, [form.amount, form.token, form.collateralToken]);
+
+
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -203,6 +304,9 @@ export function BorrowMoneyModal({
           <DialogTitle className="text-base font-medium text-gray-900">
             Borrow Money
           </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Borrow tokens using collateral
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -218,24 +322,42 @@ export function BorrowMoneyModal({
                 <SelectValue placeholder="Choose token" />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_STABLECOINS.map((token) => {
-                  const tokenInfo = tokenInfos[token];
-                  const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
-                  return (
-                    <SelectItem key={token} value={token}>
-                      <div className="flex items-center gap-2">
-                        {getTokenIcon(symbol).startsWith('http') ? (
-                          <img src={getTokenIcon(symbol)} alt={symbol} className="w-4 h-4 rounded-full" />
-                        ) : (
-                          <span className="text-sm">{getTokenIcon(symbol)}</span>
-                        )}
-                        <span className="font-medium">{symbol}</span>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
+                {SUPPORTED_STABLECOINS.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                    No tokens available for borrowing
+                  </div>
+                ) : (
+                  SUPPORTED_STABLECOINS.map((token) => {
+                    const tokenInfo = tokenInfos[token];
+                    const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
+                    return (
+                      <SelectItem key={token} value={token}>
+                        <div className="flex items-center gap-2">
+                          {getTokenIcon(symbol).startsWith('http') || getTokenIcon(symbol).startsWith('/') ? (
+                            <img src={getTokenIcon(symbol)} alt={symbol} className="w-4 h-4 rounded-full" />
+                          ) : (
+                            <span className="text-sm">{getTokenIcon(symbol)}</span>
+                          )}
+                          <span className="font-medium">{symbol}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })
+                )}
               </SelectContent>
             </Select>
+            
+            {form.token && (
+              <div className="mt-2 text-xs text-gray-600">
+                {checkingLiquidity ? (
+                  <span>Checking liquidity...</span>
+                ) : selectedTokenLiquidity === "0" ? (
+                  <span className="text-red-600 font-medium">⚠️ No liquidity available for this asset</span>
+                ) : selectedTokenLiquidity ? (
+                  <span className="text-green-600">Available: {selectedTokenLiquidity} {tokenInfos[form.token]?.symbol}</span>
+                ) : null}
+              </div>
+            )}
           </div>
 
           <div>
@@ -265,7 +387,7 @@ export function BorrowMoneyModal({
               <div className="flex items-center gap-2">
                 {form.collateralToken ? (
                   <>
-                    {getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '').startsWith('http') ? (
+                    {getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '').startsWith('http') || getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '').startsWith('/') ? (
                       <img src={getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '')} alt={tokenInfos[form.collateralToken]?.symbol} className="w-4 h-4 rounded-full" />
                     ) : (
                       <span className="text-sm">{getTokenIcon(tokenInfos[form.collateralToken]?.symbol || '')}</span>
@@ -294,7 +416,7 @@ export function BorrowMoneyModal({
                       }}
                       className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100 last:border-b-0"
                     >
-                      {getTokenIcon(symbol).startsWith('http') ? (
+                      {getTokenIcon(symbol).startsWith('http') || getTokenIcon(symbol).startsWith('/') ? (
                         <img src={getTokenIcon(symbol)} alt={symbol} className="w-4 h-4 rounded-full" />
                       ) : (
                         <span className="text-sm">{getTokenIcon(symbol)}</span>
@@ -366,7 +488,9 @@ export function BorrowMoneyModal({
                 !form.token ||
                 !form.collateralToken ||
                 !form.amount ||
-                !requiredCollateral
+                !requiredCollateral ||
+                selectedTokenLiquidity === "0" ||
+                checkingLiquidity
               }
               className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
             >

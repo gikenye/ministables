@@ -24,19 +24,19 @@ import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { oracleService } from "@/lib/services/oracleService";
-import { getContract, readContract } from "thirdweb";
+import { getContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
+import { useUserBorrows } from "@/hooks/useContractData";
+import { LoanItem } from "./LoanItem";
 
 interface ActiveLoan {
   token: string;
   symbol: string;
   principal: string;
-  estimatedInterest: string;
   totalOwed: string;
-  borrowStartTime: number;
   decimals: number;
 }
 
@@ -57,8 +57,6 @@ export function PayBackModal({
 }: PayBackModalProps) {
   const account = useActiveAccount();
   const address = account?.address;
-  const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
-  const [loadingLoans, setLoadingLoans] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
   const { toast } = useToast();
@@ -78,67 +76,7 @@ export function PayBackModal({
   // Get supported tokens from props
   const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
 
-  // Load active loans when modal opens
-  useEffect(() => {
-    if (isOpen && address && Object.keys(tokenInfos).length > 0) {
-      loadActiveLoans();
-    }
-  }, [isOpen, address, tokenInfos]);
 
-  const loadActiveLoans = async () => {
-    if (!address) return;
-
-    setLoadingLoans(true);
-    try {
-      const loans: ActiveLoan[] = [];
-
-      const borrowPromises = supportedStablecoins.map(async (tokenAddress) => {
-        const tokenInfo = tokenInfos[tokenAddress];
-        if (!tokenInfo) return null;
-
-        try {
-          const borrowAmount = await readContract({
-            contract,
-            method: "function userBorrows(address, address) view returns (uint256)",
-            params: [address, tokenAddress],
-          });
-
-          if (borrowAmount && borrowAmount.toString() !== "0") {
-            const principal = parseFloat(formatAmount(borrowAmount.toString(), tokenInfo.decimals));
-            const estimatedInterest = principal * 0.05;
-            const totalOwed = principal + estimatedInterest;
-
-            return {
-              token: tokenAddress,
-              symbol: tokenInfo.symbol,
-              principal: borrowAmount.toString(),
-              estimatedInterest: (estimatedInterest * Math.pow(10, tokenInfo.decimals)).toString(),
-              totalOwed: (totalOwed * Math.pow(10, tokenInfo.decimals)).toString(),
-              borrowStartTime: Date.now() - 30 * 24 * 60 * 60 * 1000,
-              decimals: tokenInfo.decimals,
-            };
-          }
-        } catch (error) {
-          console.error(`Error loading borrow data:`, error);
-        }
-        return null;
-      });
-
-      const loanResults = await Promise.allSettled(borrowPromises);
-      const validLoans = loanResults
-        .filter((result): result is PromiseFulfilledResult<ActiveLoan> => 
-          result.status === 'fulfilled' && result.value !== null
-        )
-        .map(result => result.value);
-      
-      loans.push(...validLoans);
-      setActiveLoans(loans);
-    } catch (error) {
-      console.error("Error loading active loans:", error);
-    } finally {
-      setLoadingLoans(false);
-    }
-  };
 
   const handleLoanSelect = (loan: ActiveLoan) => {
     setSelectedLoan(loan);
@@ -206,41 +144,26 @@ export function PayBackModal({
           </DialogHeader>
 
           <div className="space-y-3">
-            {loadingLoans ? (
-              <div className="text-center py-4">
-                <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
-                <p className="text-xs text-gray-600 mt-2">Loading...</p>
-              </div>
-            ) : activeLoans.length > 0 ? (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {activeLoans.map((loan) => (
-                  <div
-                    key={loan.token}
-                    className={`border rounded p-2 cursor-pointer transition-all ${selectedLoan?.token === loan.token
-                        ? "border-primary bg-primary/5"
-                        : "border-gray-200 hover:border-primary/50"
-                      }`}
-                    onClick={() => handleLoanSelect(loan)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{loan.symbol}</span>
-                      <span className="text-sm text-red-600 font-medium">
-                        {formatAmount(loan.totalOwed, loan.decimals)}
-                      </span>
-                    </div>
-                    {selectedLoan?.token === loan.token && (
-                      <div className="text-xs text-primary mt-1">✓ Selected</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4 bg-gray-50 rounded">
-                <p className="text-sm text-gray-600">No Active Loans</p>
-              </div>
-            )}
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {supportedStablecoins.map((tokenAddress) => {
+                const tokenInfo = tokenInfos[tokenAddress];
+                if (!tokenInfo || !address) return null;
+                
+                return (
+                  <LoanItem
+                    key={tokenAddress}
+                    contract={contract}
+                    userAddress={address}
+                    tokenAddress={tokenAddress}
+                    tokenInfo={tokenInfo}
+                    onSelect={handleLoanSelect}
+                    isSelected={selectedLoan?.token === tokenAddress}
+                  />
+                );
+              })}
+            </div>
 
-            {activeLoans.length > 0 && (
+            {address && (
               <>
                 <div className="border-t pt-3">
                   <div className="space-y-3">
@@ -251,8 +174,16 @@ export function PayBackModal({
                       <Select
                         value={form.token}
                         onValueChange={(value) => {
-                          const loan = activeLoans.find((l) => l.token === value);
-                          if (loan) {
+                          const tokenInfo = tokenInfos[value];
+                          if (tokenInfo) {
+                            // Create a minimal loan object for selection
+                            const loan = {
+                              token: value,
+                              symbol: tokenInfo.symbol,
+                              principal: "0",
+                              totalOwed: "0",
+                              decimals: tokenInfo.decimals,
+                            };
                             handleLoanSelect(loan);
                           }
                         }}
@@ -261,20 +192,25 @@ export function PayBackModal({
                           <SelectValue placeholder="Select loan" />
                         </SelectTrigger>
                         <SelectContent>
-                          {activeLoans.map((loan) => (
-                            <SelectItem key={loan.token} value={loan.token}>
-                              <div className="flex items-center gap-2">
-                                {getTokenIcon(loan.symbol).startsWith('http') ? (
-                                  <img src={getTokenIcon(loan.symbol)} alt={loan.symbol} className="w-4 h-4 rounded-full" />
-                                ) : (
-                                  <span className="text-sm">{getTokenIcon(loan.symbol)}</span>
-                                )}
-                                <span className="font-medium">
-                                  {loan.symbol} - {formatAmount(loan.totalOwed, loan.decimals)}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
+                          {supportedStablecoins.map((tokenAddress) => {
+                            const tokenInfo = tokenInfos[tokenAddress];
+                            if (!tokenInfo) return null;
+                            
+                            return (
+                              <SelectItem key={tokenAddress} value={tokenAddress}>
+                                <div className="flex items-center gap-2">
+                                  {getTokenIcon(tokenInfo.symbol).startsWith('http') ? (
+                                    <img src={getTokenIcon(tokenInfo.symbol)} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />
+                                  ) : (
+                                    <span className="text-sm">{getTokenIcon(tokenInfo.symbol)}</span>
+                                  )}
+                                  <span className="font-medium">
+                                    {tokenInfo.symbol}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>

@@ -320,18 +320,72 @@ class EnhancedOfframpService {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          result.error || `HTTP error! status: ${response.status}`
-        );
+        const userFriendlyError = this.transformApiError(result.error || `HTTP ${response.status}`, response.status);
+        throw new Error(userFriendlyError);
       }
 
       return result;
     } catch (error: any) {
       console.error("Enhanced Offramp API error:", error);
-      throw new Error(
-        error.message || "Failed to communicate with offramp service"
-      );
+      
+      if (error.name === 'TypeError' || error.message.includes('fetch')) {
+        throw new Error("Unable to connect to mobile money service. Please check your internet connection.");
+      }
+      
+      if (error.message.includes('JSON')) {
+        throw new Error("Service temporarily unavailable. Please try again in a moment.");
+      }
+      
+      throw new Error(error.message || "Mobile money service is currently unavailable");
     }
+  }
+
+  private transformApiError(errorMessage: string, statusCode: number): string {
+    const lowerError = errorMessage.toLowerCase();
+    
+    if (statusCode >= 500) {
+      return "Mobile money service is temporarily down. Please try again later.";
+    }
+    
+    if (statusCode === 401 || statusCode === 403) {
+      return "Service authentication failed. Please contact support.";
+    }
+    
+    if (statusCode === 429) {
+      return "Too many requests. Please wait a moment and try again.";
+    }
+    
+    if (lowerError.includes('insufficient') || lowerError.includes('balance')) {
+      return "Insufficient balance for this transaction.";
+    }
+    
+    if (lowerError.includes('limit') || lowerError.includes('exceed')) {
+      return "Transaction amount exceeds daily limits.";
+    }
+    
+    if (lowerError.includes('phone') || lowerError.includes('number')) {
+      return "Invalid phone number. Please check and try again.";
+    }
+    
+    if (lowerError.includes('minimum') && lowerError.includes('kes')) {
+      const match = errorMessage.match(/(\d+)\s*kes/i);
+      const minAmount = match ? match[1] : '10';
+      return `Minimum withdrawal amount is ${minAmount} KES.`;
+    }
+    
+    if (lowerError.includes('network') || lowerError.includes('connection')) {
+      return "Network error. Please check your connection and try again.";
+    }
+    
+    if (lowerError.includes('timeout')) {
+      return "Request timed out. Please try again.";
+    }
+    
+    if (lowerError.includes('maintenance')) {
+      return "Mobile money service is under maintenance. Please try again later.";
+    }
+    
+    return "Unable to process your request. Please try again or contact support.";
   }
 
   // Enhanced quote method with DAP integration
@@ -363,13 +417,13 @@ class EnhancedOfframpService {
           tokenInfo,
           estimatedGasFee: this.estimateGasFee(request.network),
           processingTime: this.getProcessingTime(request.fiatCurrency),
-          slippageTolerance: 0.5, // 0.5% default slippage
+          slippageTolerance: 0.5,
         },
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error.message,
+        error: error.message || "Unable to get current exchange rates. Please try again.",
       };
     }
   }
@@ -404,7 +458,7 @@ class EnhancedOfframpService {
     } catch (error: any) {
       return {
         success: false,
-        error: error.message,
+        error: error.message || "Unable to initiate mobile money transfer. Please try again.",
       };
     }
   }
@@ -420,7 +474,6 @@ class EnhancedOfframpService {
         success: true,
         data: {
           ...result.data,
-          // Add enhanced status tracking
           loanPaymentProcessed: result.data?.transactionType?.includes("loan"),
           excessWithdrawalProcessed:
             result.data?.transactionType?.includes("excess"),
@@ -429,7 +482,7 @@ class EnhancedOfframpService {
     } catch (error: any) {
       return {
         success: false,
-        error: error.message,
+        error: error.message || "Unable to check transaction status. Please try again.",
       };
     }
   }
