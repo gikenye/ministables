@@ -234,6 +234,12 @@ export function BorrowMoneyModal({
           description: "The contract doesn't have enough funds for this loan. Please try a smaller amount.",
           variant: "destructive",
         });
+      } else if (error.message?.includes("Minimum deposit") || error.message?.includes("100 cKES")) {
+        toast({
+          title: "Minimum Deposit Required",
+          description: "Mobile money deposits require a minimum of 100 cKES. Please deposit more collateral first.",
+          variant: "destructive",
+        });
       } else {
         handleTransactionError(error, toast, "Failed to complete loan transaction");
       }
@@ -447,8 +453,11 @@ export function BorrowMoneyModal({
 
           {form.collateralToken && requiredCollateral && !hasSufficientCollateral(form.collateralToken, requiredCollateral) && onrampService.isAssetSupportedForOnramp(tokenInfos[form.collateralToken]?.symbol || "") && (
             <div className="bg-green-50 border border-green-200 rounded p-2">
-              <div className="text-xs font-medium text-green-800 mb-2">
+              <div className="text-xs font-medium text-green-800 mb-1">
                 Need {tokenInfos[form.collateralToken]?.symbol}?
+              </div>
+              <div className="text-xs text-green-700 mb-2">
+                Min: 100 cKES • Sent to your wallet after payment
               </div>
               <Button
                 onClick={() => setShowOnrampModal(true)}
@@ -508,7 +517,7 @@ export function BorrowMoneyModal({
         onSuccess={(transactionCode, amount) => {
           toast({
             title: "Deposit Initiated",
-            description: `${tokenInfos[form.collateralToken]?.symbol} deposit processing`,
+            description: `Payment request sent. ${tokenInfos[form.collateralToken]?.symbol} will be credited after payment completion.`,
           });
           setShowOnrampModal(false);
         }}

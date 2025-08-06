@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,26 +10,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowUpRight, DollarSign, CreditCard } from "lucide-react";
+
+import { CreditCard } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { useActiveAccount } from "thirdweb/react";
 import { OnrampDepositModal } from "./OnrampDepositModal";
-import { onrampService } from "@/lib/services/onrampService";
+
 import { useToast } from "@/hooks/use-toast";
 import { oracleService } from "@/lib/services/oracleService";
 import { getContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
-import { getTokenIcon } from "@/lib/utils/tokenIcons";
-import { useUserBorrows } from "@/hooks/useContractData";
+
+
 import { LoanItem } from "./LoanItem";
 
 interface ActiveLoan {
@@ -73,10 +67,7 @@ export function PayBackModal({
     address: MINILEND_ADDRESS,
   }), []);
 
-  // Get supported tokens from props
   const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
-
-
 
   const handleLoanSelect = (loan: ActiveLoan) => {
     setSelectedLoan(loan);
@@ -111,9 +102,10 @@ export function PayBackModal({
         title: "Payment Successful",
         description: "Your loan payment has been processed successfully.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Payment error:", error);
-      if (error.message?.includes("ERC20: insufficient allowance") || error.message?.includes("Approve contract first")) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("ERC20: insufficient allowance") || errorMessage.includes("Approve contract first")) {
         toast({
           title: "Approval Required",
           description: "Please approve the contract to spend your tokens first. This should happen automatically.",
@@ -122,7 +114,7 @@ export function PayBackModal({
       } else {
         toast({
           title: "Payment Failed",
-          description: error.message || "Failed to process payment. Please try again.",
+          description: errorMessage || "Failed to process payment. Please try again.",
           variant: "destructive",
         });
       }
@@ -144,115 +136,73 @@ export function PayBackModal({
           </DialogHeader>
 
           <div className="space-y-3">
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {supportedStablecoins.map((tokenAddress) => {
-                const tokenInfo = tokenInfos[tokenAddress];
-                if (!tokenInfo || !address) return null;
-                
-                return (
-                  <LoanItem
-                    key={tokenAddress}
-                    contract={contract}
-                    userAddress={address}
-                    tokenAddress={tokenAddress}
-                    tokenInfo={tokenInfo}
-                    onSelect={handleLoanSelect}
-                    isSelected={selectedLoan?.token === tokenAddress}
-                  />
-                );
-              })}
+            <div>
+              <Label className="text-xs font-medium text-gray-600 mb-2 block">
+                Your Active Loans
+              </Label>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {address ? (
+                  supportedStablecoins.map((tokenAddress) => {
+                    const tokenInfo = tokenInfos[tokenAddress];
+                    if (!tokenInfo) return null;
+                    
+                    return (
+                      <LoanItem
+                        key={tokenAddress}
+                        contract={contract}
+                        userAddress={address}
+                        tokenAddress={tokenAddress}
+                        tokenInfo={tokenInfo}
+                        onSelect={handleLoanSelect}
+                        isSelected={selectedLoan?.token === tokenAddress}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-gray-500 text-sm py-4">
+                    Connect wallet to view loans
+                  </div>
+                )}
+              </div>
             </div>
 
-            {address && (
-              <>
-                <div className="border-t pt-3">
-                  <div className="space-y-3">
-                    <div>
+            {selectedLoan && (
+              <div className="border-t pt-3">
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between items-center">
                       <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                        Select Loan
+                        Payment Amount
                       </Label>
-                      <Select
-                        value={form.token}
-                        onValueChange={(value) => {
-                          const tokenInfo = tokenInfos[value];
-                          if (tokenInfo) {
-                            // Create a minimal loan object for selection
-                            const loan = {
-                              token: value,
-                              symbol: tokenInfo.symbol,
-                              principal: "0",
-                              totalOwed: "0",
-                              decimals: tokenInfo.decimals,
-                            };
-                            handleLoanSelect(loan);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Select loan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {supportedStablecoins.map((tokenAddress) => {
-                            const tokenInfo = tokenInfos[tokenAddress];
-                            if (!tokenInfo) return null;
-                            
-                            return (
-                              <SelectItem key={tokenAddress} value={tokenAddress}>
-                                <div className="flex items-center gap-2">
-                                  {getTokenIcon(tokenInfo.symbol).startsWith('http') ? (
-                                    <img src={getTokenIcon(tokenInfo.symbol)} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />
-                                  ) : (
-                                    <span className="text-sm">{getTokenIcon(tokenInfo.symbol)}</span>
-                                  )}
-                                  <span className="font-medium">
-                                    {tokenInfo.symbol}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-center">
-                        <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                          Amount
-                        </Label>
-                        {selectedLoan && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setForm({
-                                ...form,
-                                amount: formatAmount(
-                                  selectedLoan.totalOwed,
-                                  selectedLoan.decimals
-                                ),
-                              })
-                            }
-                            className="text-xs text-blue-600 hover:text-blue-800"
-                          >
-                            Full
-                          </button>
-                        )}
-                      </div>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={form.amount}
-                        onChange={(e) =>
-                          setForm({ ...form, amount: e.target.value })
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            amount: formatAmount(
+                              selectedLoan.totalOwed,
+                              selectedLoan.decimals
+                            ),
+                          })
                         }
-                        className="h-10"
-                        min="0.01"
-                        step="0.01"
-                      />
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Pay Full
+                      </button>
                     </div>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={form.amount}
+                      onChange={(e) =>
+                        setForm({ ...form, amount: e.target.value })
+                      }
+                      className="h-10"
+                      min="0.01"
+                      step="0.01"
+                    />
                   </div>
                 </div>
-
                 <div className="flex gap-2 pt-3">
                   <Button
                     onClick={onClose}
@@ -274,7 +224,7 @@ export function PayBackModal({
                     {loading ? "Processing..." : "Pay Back"}
                   </Button>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </DialogContent>

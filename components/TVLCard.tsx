@@ -4,6 +4,7 @@ import { Contract, getContract } from "thirdweb";
 import { formatAmount } from "@/lib/utils";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
+import { oracleService } from "@/lib/services/oracleService";
 
 interface TVLCardProps {
   contract: Contract;
@@ -83,7 +84,8 @@ function TVLSummary({
 
     if (totalSupply && tokenInfo[token]) {
       const info = tokenInfo[token];
-      return Number(formatAmount(totalSupply.toString(), info.decimals));
+      // Convert to USD using oracle service
+      return oracleService.convertToUSD(token, totalSupply.toString(), info.decimals);
     }
     return 0;
   });
@@ -131,12 +133,20 @@ function TokenReserveItem({
     return null;
   }
 
+  const tokenAmount = formatAmount(totalSupply.toString(), tokenInfo.decimals);
+  const usdValue = oracleService.convertToUSD(token, totalSupply.toString(), tokenInfo.decimals);
+
   return (
     <div className="flex justify-between items-center">
       <span className="font-medium text-xs text-gray-700">{tokenInfo.symbol}</span>
-      <span className="text-green-600 font-semibold text-xs">
-        {formatAmount(totalSupply.toString(), tokenInfo.decimals)}
-      </span>
+      <div className="text-right">
+        <div className="text-green-600 font-semibold text-xs">
+          {tokenAmount} {tokenInfo.symbol}
+        </div>
+        <div className="text-gray-500 text-xs">
+          ${usdValue.toFixed(2)}
+        </div>
+      </div>
     </div>
   );
 }
