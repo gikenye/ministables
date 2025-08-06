@@ -23,8 +23,6 @@ export const TOKEN_ICONS: Record<string, string> = {
  * @returns Icon URL or fallback emoji
  */
 export const getTokenIcon = (symbol: string): string => {
-  if (symbol === 'USDC') {
-    return "/usdc-usd-coin-svgrepo-com.svg";
-  }
+
   return TOKEN_ICONS[symbol] || "💱";
 };
