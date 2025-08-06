@@ -508,8 +508,7 @@ export function BorrowMoneyModal({
           </div>
         </div>
       </DialogContent>
-
-      <OnrampDepositModal
+      {isOpen && <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
         selectedAsset={tokenInfos[form.collateralToken]?.symbol || ""}
@@ -521,7 +520,7 @@ export function BorrowMoneyModal({
           });
           setShowOnrampModal(false);
         }}
-      />
+      />}
     </Dialog>
   );
 }

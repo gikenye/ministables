@@ -126,8 +126,7 @@ export function SaveMoneyModal({
 
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
           <DialogHeader className="pb-3">
             <DialogTitle className="text-base font-medium text-gray-900">
@@ -255,9 +254,7 @@ export function SaveMoneyModal({
             </div>
           </div>
         </DialogContent>
-      </Dialog>
-
-      <OnrampDepositModal
+      {isOpen && <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
         selectedAsset={tokenInfos[form.token]?.symbol || ""}
@@ -274,7 +271,7 @@ export function SaveMoneyModal({
             setShowOnrampModal(false);
           }
         }}
-      />
-    </>
+      />}
+    </Dialog>
   );
 }

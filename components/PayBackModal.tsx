@@ -6,16 +6,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { CreditCard } from "lucide-react";
+
 import { formatAmount } from "@/lib/utils";
 import { useActiveAccount } from "thirdweb/react";
-import { OnrampDepositModal } from "./OnrampDepositModal";
-
 import { useToast } from "@/hooks/use-toast";
 import { oracleService } from "@/lib/services/oracleService";
 import { getContract } from "thirdweb";
@@ -52,13 +51,11 @@ export function PayBackModal({
   const account = useActiveAccount();
   const address = account?.address;
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
-  const [showOnrampModal, setShowOnrampModal] = useState(false);
-  const { toast } = useToast();
-
   const [form, setForm] = useState({
     token: "",
     amount: "",
   });
+  const { toast } = useToast();
 
   // Memoize contract instance to prevent re-creation
   const contract = useMemo(() => getContract({
@@ -71,10 +68,11 @@ export function PayBackModal({
 
   const handleLoanSelect = (loan: ActiveLoan) => {
     setSelectedLoan(loan);
-    setForm({
+    setForm(prev => ({
+      ...prev,
       token: loan.token,
       amount: formatAmount(loan.totalOwed, loan.decimals),
-    });
+    }));
   };
 
   const handlePayBack = async () => {
@@ -126,14 +124,16 @@ export function PayBackModal({
 
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader className="pb-3">
-            <DialogTitle className="text-base font-medium text-gray-900">
-              Pay Back Loans
-            </DialogTitle>
-          </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader className="pb-3">
+          <DialogTitle className="text-base font-medium text-gray-900">
+            Pay Back Loans
+          </DialogTitle>
+          <DialogDescription className="text-sm text-gray-600">
+            Select a loan to pay back from your active loans below.
+          </DialogDescription>
+        </DialogHeader>
 
           <div className="space-y-3">
             <div>
@@ -226,23 +226,8 @@ export function PayBackModal({
                 </div>
               </div>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <OnrampDepositModal
-        isOpen={showOnrampModal}
-        onClose={() => setShowOnrampModal(false)}
-        selectedAsset={selectedLoan?.symbol || ""}
-        assetSymbol={selectedLoan?.symbol || ""}
-        onSuccess={(transactionCode, amount) => {
-          toast({
-            title: "Deposit Initiated",
-            description: `${selectedLoan?.symbol} deposit processing`,
-          });
-          setShowOnrampModal(false);
-        }}
-      />
-    </>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

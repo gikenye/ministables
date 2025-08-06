@@ -411,9 +411,8 @@ export function FundsWithdrawalModal({
             </Button>
           </div>
         </div>
-
         {/* Mobile Money Withdrawal Modal */}
-        {form.token && tokenInfos[form.token] && (
+        {isOpen && form.token && tokenInfos[form.token] && (
           <MobileMoneyWithdrawModal
             isOpen={showMobileMoneyModal}
             onClose={() => setShowMobileMoneyModal(false)}

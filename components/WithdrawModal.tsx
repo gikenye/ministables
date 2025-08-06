@@ -156,7 +156,7 @@ export function FundsWithdrawalModal({
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[95vw] max-w-sm mx-auto bg-white border-0 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center text-gray-900 text-lg font-semibold">
