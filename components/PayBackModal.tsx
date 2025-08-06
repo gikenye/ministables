@@ -73,8 +73,13 @@ export function PayBackModal({
     address: MINILEND_ADDRESS,
   }), []);
 
-  // Get supported tokens from props
-  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+  // Get supported tokens from props - filtered to only cKES
+  const supportedStablecoins = useMemo(() => {
+    return Object.keys(tokenInfos).filter(tokenAddress => {
+      const tokenInfo = tokenInfos[tokenAddress];
+      return tokenInfo?.symbol === 'cKES';
+    });
+  }, [tokenInfos]);
 
 
 
