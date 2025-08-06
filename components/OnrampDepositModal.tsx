@@ -225,9 +225,25 @@ export function OnrampDepositModal({
       return;
     }
 
-    // Check amount limits
+    // Check amount limits - special handling for cKES mobile money
     const limits = onrampService.getCountryLimits(form.countryCode);
     const amount = parseFloat(form.amount);
+    
+    // For cKES mobile money, minimum is 100 cKES equivalent
+    if (assetSymbol === "cKES" && form.countryCode === "KES") {
+      const minCKESAmount = 100; // 100 cKES minimum for mobile money
+      const cKESEquivalent = exchangeRate ? amount / exchangeRate : 0;
+      
+      if (cKESEquivalent < minCKESAmount) {
+        toast({
+          title: "Minimum Deposit Required",
+          description: `Minimum deposit is 100 cKES. Please enter at least ${Math.ceil(minCKESAmount * (exchangeRate || 130))} ${form.countryCode}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     if (amount < limits.min || amount > limits.max) {
       toast({
         title: "Amount Out of Range",
@@ -250,7 +266,7 @@ export function OnrampDepositModal({
         chain: chain,
         asset: selectedAsset,
         address: address,
-        callback_url: `${window.location.origin}/api/onramp/callback`,
+        callback_url: "https://minilend.vercel.app/api/onramp/callback",
       };
 
       const result = await onrampService.initiateOnramp(onrampRequest, form.countryCode);
@@ -265,7 +281,7 @@ export function OnrampDepositModal({
 
         toast({
           title: "Deposit Initiated",
-          description: "Please complete the payment on your phone to receive the tokens.",
+          description: `Complete payment on your phone. ${assetSymbol} will be credited to your wallet after successful payment.`,
         });
 
         // Call success callback if provided
@@ -442,7 +458,11 @@ export function OnrampDepositModal({
                   
                   {form.countryCode && (
                     <p className="text-xs text-gray-500">
-                      Limits: {onrampService.getCountryLimits(form.countryCode).min}-{onrampService.getCountryLimits(form.countryCode).max} {form.countryCode}
+                      {assetSymbol === "cKES" && form.countryCode === "KES" ? (
+                        <>Min: 100 cKES (≈{Math.ceil(100 * (exchangeRate || 130))} {form.countryCode})</>
+                      ) : (
+                        <>Limits: {onrampService.getCountryLimits(form.countryCode).min}-{onrampService.getCountryLimits(form.countryCode).max} {form.countryCode}</>
+                      )}
                     </p>
                   )}
                 </div>
@@ -484,8 +504,13 @@ export function OnrampDepositModal({
                   Deposit Initiated!
                 </h3>
                 <p className="text-sm text-gray-600 mb-3">
-                  Complete payment on your phone to receive {assetSymbol}.
+                  Complete payment on your phone. {assetSymbol} will be credited to your wallet after successful payment.
                 </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
+                  <p className="text-xs text-blue-800">
+                    💱 Check your wallet balance before proceeding with loan
+                  </p>
+                </div>
                 {transaction.transactionCode && (
                   <div className="bg-gray-50 rounded-lg p-2 mb-3">
                     <p className="text-xs text-gray-600">Transaction Code:</p>
