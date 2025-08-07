@@ -735,8 +735,8 @@ export default function HomePage() {
                   Connect Your Wallet
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  Connect your wallet to start saving and borrowing money on the
-                  Celo blockchain
+                  Connect your wallet to start saving and borrowing money 
+                  using your local stablecoin
                 </p>
                 {error && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
