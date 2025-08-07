@@ -800,7 +800,7 @@ export default function HomePage() {
                     Dashboard
                   </Button>
                 </Link>
-                <Button
+                {/* <Button
                   variant="outline"
                   className="w-full bg-white/80 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all duration-200 rounded-xl"
                   onClick={() =>
@@ -811,7 +811,7 @@ export default function HomePage() {
                   }
                 >
                   View on CeloScan
-                </Button>
+                </Button> */}
               </div>
             </div>
           </div>
