@@ -804,7 +804,7 @@ export default function HomePage() {
                   className="w-full bg-white/80 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all duration-200 rounded-xl"
                   onClick={() =>
                     window.open(
-                      "https://celoscan.io/address/0x89E356E80De29B466E774A5Eb543118B439EE41E",
+                      "https://celoscan.io/address/0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c",
                       "_blank"
                     )
                   }
