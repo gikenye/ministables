@@ -10,11 +10,17 @@ export const ORACLE_ADDRESS = "0x6c844bF2c73Ab4230a09FaACfe6e6e05765f1031";
 
 // All supported stablecoins from contract
 export const NEW_SUPPORTED_TOKENS = {
-  CELO: {
-    address: "0x471EcE3750Da237f93B8E339c536989b8978a438",
-    symbol: "CELO",
-    name: "Celo",
-    decimals: 18,
+   USDC: {
+    address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+  },
+    USDT: {
+    address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e",
+    symbol: "USDT",
+    name: "Tether USD",
+    decimals: 6,
   },
   cUSD: {
     address: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
@@ -22,72 +28,71 @@ export const NEW_SUPPORTED_TOKENS = {
     name: "Celo Dollar",
     decimals: 18,
   },
-  cEUR: {
-    address: "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73",
-    symbol: "cEUR",
-    name: "Celo Euro",
-    decimals: 18,
-  },
-  cREAL: {
-    address: "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787",
-    symbol: "cREAL",
-    name: "Celo Real",
-    decimals: 18,
-  },
-  eXOF: {
-    address: "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08",
-    symbol: "eXOF",
-    name: "West African CFA Franc",
-    decimals: 18,
-  },
-  cKES: {
+    cKES: {
     address: "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0",
     symbol: "cKES",
     name: "Celo Kenyan Shilling",
     decimals: 18,
   },
-  PUSO: {
-    address: "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B",
-    symbol: "PUSO",
-    name: "Philippine Peso",
-    decimals: 18,
-  },
-  cCOP: {
-    address: "0x8A567e2aE79CA692Bd748aB832081C45de4041eA",
-    symbol: "cCOP",
-    name: "Celo Colombian Peso",
-    decimals: 18,
-  },
-  cGHS: {
-    address: "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313",
-    symbol: "cGHS",
-    name: "Celo Ghanaian Cedi",
-    decimals: 18,
-  },
-  USDT: {
-    address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e",
-    symbol: "USDT",
-    name: "Tether USD",
-    decimals: 6,
-  },
-  USDC: {
-    address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
-    symbol: "USDC",
-    name: "USD Coin",
-    decimals: 6,
-  },
-  USDGLO: {
-    address: "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3",
-    symbol: "USDGLO",
-    name: "Glo Dollar",
-    decimals: 18,
-  },
-  cNGN: {
+    cNGN: {
     address: "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71",
     symbol: "cNGN",
     name: "Celo Nigerian Naira",
     decimals: 18,
   },
+  CELO: {
+    address: "0x471EcE3750Da237f93B8E339c536989b8978a438",
+    symbol: "CELO",
+    name: "Celo",
+    decimals: 18,
+  },
+  
+  // cEUR: {
+  //   address: "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73",
+  //   symbol: "cEUR",
+  //   name: "Celo Euro",
+  //   decimals: 18,
+  // },
+  // cREAL: {
+  //   address: "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787",
+  //   symbol: "cREAL",
+  //   name: "Celo Real",
+  //   decimals: 18,
+  // },
+  // eXOF: {
+  //   address: "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08",
+  //   symbol: "eXOF",
+  //   name: "West African CFA Franc",
+  //   decimals: 18,
+  // },
+
+  // PUSO: {
+  //   address: "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B",
+  //   symbol: "PUSO",
+  //   name: "Philippine Peso",
+  //   decimals: 18,
+  // },
+  // cCOP: {
+  //   address: "0x8A567e2aE79CA692Bd748aB832081C45de4041eA",
+  //   symbol: "cCOP",
+  //   name: "Celo Colombian Peso",
+  //   decimals: 18,
+  // },
+  // cGHS: {
+  //   address: "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313",
+  //   symbol: "cGHS",
+  //   name: "Celo Ghanaian Cedi",
+  //   decimals: 18,
+  // },
+
+ 
+  // USDGLO: {
+  //   address: "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3",
+  //   symbol: "USDGLO",
+  //   name: "Glo Dollar",
+  //   decimals: 18,
+  // },
+
 } as const;
 
 // Oracle fallback rates

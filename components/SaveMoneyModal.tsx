@@ -115,17 +115,10 @@ export function SaveMoneyModal({
 
   // Get supported tokens from props
   const supportedStablecoins = Object.keys(tokenInfos);
-  const defaultLockPeriods = ["61", "604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
+  const defaultLockPeriods = ["604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
 
-  
-
-
-
-
-
-
-  return (
+ return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
