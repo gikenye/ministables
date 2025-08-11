@@ -68,10 +68,11 @@ export function SaveMoneyModal({
 
     // Validate amount doesn't exceed available balance
     if (form.token && userBalances[form.token]) {
-      const maxAmount = parseFloat(formatAmount(
+      const maxAmountFormatted = formatAmount(
         userBalances[form.token],
         tokenInfos[form.token]?.decimals || 18
-      ));
+      );
+      const maxAmount = parseFloat(maxAmountFormatted.replace(/,/g, ''));
       const inputAmount = parseFloat(form.amount);
       if (inputAmount > maxAmount) {
         setError(`Amount exceeds available balance of ${maxAmount} ${tokenInfos[form.token]?.symbol}`);
@@ -117,15 +118,16 @@ export function SaveMoneyModal({
   const supportedStablecoins = Object.keys(tokenInfos);
   const defaultLockPeriods = ["604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
-
- return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
           <DialogHeader className="pb-3">
             <DialogTitle className="text-base font-medium text-gray-900">
               Save Money
             </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600">
+              Deposit your tokens to earn interest
+            </DialogDescription>
           </DialogHeader>
 
           {error && (
@@ -182,10 +184,11 @@ export function SaveMoneyModal({
                   <button
                     type="button"
                     onClick={() => {
-                      const maxAmount = formatAmount(
+                      const maxAmountFormatted = formatAmount(
                         userBalances[form.token],
                         tokenInfos[form.token]?.decimals || 18
                       );
+                      const maxAmount = maxAmountFormatted.replace(/,/g, '');
                       setForm({ ...form, amount: maxAmount });
                     }}
                     className="text-xs text-blue-600 hover:text-blue-800"
@@ -248,9 +251,7 @@ export function SaveMoneyModal({
             </div>
           </div>
         </DialogContent>
-      </Dialog>
-
-      <OnrampDepositModal
+      {isOpen && <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
         selectedAsset={tokenInfos[form.token]?.symbol || ""}
@@ -267,7 +268,7 @@ export function SaveMoneyModal({
             setShowOnrampModal(false);
           }
         }}
-      />
-    </>
+      />}
+    </Dialog>
   );
 }

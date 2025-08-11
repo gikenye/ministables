@@ -76,7 +76,7 @@ export const ASSET_CHAIN_MAPPING = {
 
 // Limits by country
 export const COUNTRY_LIMITS = {
-  KES: { min: 20, max: 250000 },
+  KES: { min: 100, max: 250000 },
   UGX: { min: 500, max: 5000000 },
   CDF: { min: 100, max: 1000000 }, // Estimated limits for Congo
 } as const;

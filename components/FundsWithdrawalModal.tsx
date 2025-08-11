@@ -163,7 +163,9 @@ export function FundsWithdrawalModal({
             <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
             Withdraw Funds
           </DialogTitle>
-          <DialogDescription>Withdraw your available balance</DialogDescription>
+          <DialogDescription className="text-sm text-gray-600">
+            Withdraw your available balance
+          </DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -411,9 +413,8 @@ export function FundsWithdrawalModal({
             </Button>
           </div>
         </div>
-
         {/* Mobile Money Withdrawal Modal */}
-        {form.token && tokenInfos[form.token] && (
+        {isOpen && form.token && tokenInfos[form.token] && (
           <MobileMoneyWithdrawModal
             isOpen={showMobileMoneyModal}
             onClose={() => setShowMobileMoneyModal(false)}

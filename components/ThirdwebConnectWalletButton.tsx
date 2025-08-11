@@ -22,6 +22,11 @@ const wallets = [
 export function ThirdwebConnectWalletButton({ className, size = "md" }: ThirdwebConnectWalletButtonProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     // Check initial theme preference
@@ -130,20 +135,23 @@ export function ThirdwebConnectWalletButton({ className, size = "md" }: Thirdweb
     }
   };
 
+  if (!isClient) {
+    return <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />;
+  }
+
   return (
     <div className={`touch-action-manipulation ${className || ""}`}>
       <ConnectButton
         client={client}
         chain={celo}
         connectButton={{
-          label: isMobile ? "Connect" : "Connect Wallet", // Shorter label for mobile
+          label: isMobile ? "Connect" : "Connect Wallet",
           style: getButtonStyle()
         }}
         connectModal={{
           showThirdwebBranding: false,
-          size: isMobile ? "compact" : "compact",
+          size: "compact",
           title: "Minilend",
-          titleIcon: "https://ministables.vercel.app/minilend-logo.png",
         }}
         theme={getTheme()}
         wallets={wallets}

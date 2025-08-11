@@ -305,9 +305,7 @@ export default function DashboardPage() {
 
   const convertToUSD = (amount: string, decimals: number, tokenAddress: string): number => {
     if (!amount || amount === "0") return 0;
-    const numericAmount = Number(formatAmount(amount, decimals));
-    const exchangeRate = getExchangeRate(tokenAddress);
-    return numericAmount * exchangeRate;
+    return oracleService.convertToUSD(tokenAddress, amount, decimals);
   };
 
   const getTotalSavingsUSD = (): number => {

@@ -3,14 +3,11 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
-import { formatUnits } from "viem";
-
-const CELO_USD_RATE = 0.7;
+import { oracleService } from "@/lib/services/oracleService";
 
 interface TokenRate {
   address: string;
   symbol: string;
-  rate: string;
   usdValue: string;
 }
 
@@ -50,22 +47,19 @@ const DISPLAY_TOKENS = [
   "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
   "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-  "0x471EcE3750Da237f93B8E339c536989b8978a438", // cNGN
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
 ];
 
 export function OracleRatesCard() {
   const [displayedRates, setDisplayedRates] = useState<TokenRate[]>([]);
 
   const createTokenRate = (address: string): TokenRate => {
-    const rate = HARDCODED_RATES[address] || "0";
-    const rateInCelo = Number(formatUnits(BigInt(rate), 18));
-    const usdValue = (rateInCelo * CELO_USD_RATE).toFixed(4);
+    const usdPrice = oracleService.getTokenUSDPrice(address);
     
     return {
       address,
       symbol: TOKEN_INFO[address]?.symbol || "UNKNOWN",
-      rate,
-      usdValue,
+      usdValue: usdPrice.toFixed(4),
     };
   };
 
