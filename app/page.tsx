@@ -156,7 +156,7 @@ export default function HomePage() {
       if (token) fallbackBalances[token] = "1000000000000000000000"; // 1000 tokens
     });
     setWalletBalances(fallbackBalances);
-  }, [address, isConnected, allTokens]);
+  }, [address, isConnected]);
   
   // Use fallback data to avoid multiple RPC calls
   const [userContractData, setUserContractData] = useState({
@@ -177,7 +177,7 @@ export default function HomePage() {
       lockEnds: {} as Record<string, number>,
     };
     
-    allTokens.forEach(token => {
+    ALL_SUPPORTED_TOKENS.forEach(token => {
       if (token) {
         fallbackData.borrows[token] = "0";
         fallbackData.collaterals[token] = "0";
@@ -187,7 +187,7 @@ export default function HomePage() {
     });
     
     setUserContractData(fallbackData);
-  }, [address, allTokens]);
+  }, [address]);
 
   // Use wallet balances for SaveMoneyModal
   const userBalances = walletBalances;

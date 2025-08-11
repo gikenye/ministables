@@ -214,10 +214,6 @@ export function BorrowMoneyModal({
       await onBorrow(form.token, form.amount, form.collateralToken);
       
       setTransactionStatus("Loan completed ✓");
-      toast({
-        title: "Loan Successful",
-        description: `${form.amount} ${tokenInfos[form.token]?.symbol} has been sent to your wallet`,
-      });
       
       setTimeout(() => {
         setForm({ token: "", collateralToken: "", amount: "" });

@@ -163,7 +163,9 @@ export function FundsWithdrawalModal({
             <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
             Withdraw Funds
           </DialogTitle>
-          <DialogDescription>Withdraw your available balance</DialogDescription>
+          <DialogDescription className="text-sm text-gray-600">
+            Withdraw your available balance
+          </DialogDescription>
         </DialogHeader>
 
         {error && (

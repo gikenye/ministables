@@ -187,6 +187,8 @@ export function MobileMoneyWithdrawModal({
     const timer = setTimeout(() => {
       if (form.amount && parseFloat(form.amount) > 0) {
         getWithdrawalQuote();
+      } else {
+        setQuote(null);
       }
     }, 1000);
 

@@ -2,7 +2,6 @@ import { getContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
 import { readContract } from "thirdweb";
-// Removed unused imports that were causing linting errors
 
 // Contract configuration
 export const MINILEND_ADDRESS = "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c";

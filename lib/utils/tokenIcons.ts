@@ -1,6 +1,6 @@
 // Token icon mapping for all supported stablecoins
 export const TOKEN_ICONS: Record<string, string> = {
-  USDC: "/usdc-usd-coin-svgrepo-com.svg",
+  USDC: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
   USDT: "https://s2.coinmarketcap.com/static/img/coins/64x64/825.png",
   cUSD: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6807f9a4185658fa6e759a27_Tokens.avif",
   cEUR: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/68094dba7f0b2df3128d32b9_Tokens-1.avif",
@@ -23,8 +23,6 @@ export const TOKEN_ICONS: Record<string, string> = {
  * @returns Icon URL or fallback emoji
  */
 export const getTokenIcon = (symbol: string): string => {
-  if (symbol === 'USDC') {
-    return "/usdc-usd-coin-svgrepo-com.svg";
-  }
+
   return TOKEN_ICONS[symbol] || "💱";
 };
