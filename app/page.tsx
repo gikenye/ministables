@@ -56,7 +56,7 @@ const ActionCardsGrid = ({ actionCards, onCardClick }: { actionCards: any[], onC
   const renderCard = useCallback((card: any) => {
     const IconComponent = card.icon;
     const handleClick = () => onCardClick(card.id);
-    
+
     return (
       <Card key={card.id} className="group cursor-pointer border-0 shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-white/80 backdrop-blur-sm overflow-hidden" onClick={handleClick}>
         <CardContent className="p-3 sm:p-6 text-center relative">
@@ -110,18 +110,11 @@ export default function HomePage() {
 
   // Supported stablecoins from deployment config
   const ALL_SUPPORTED_TOKENS = [
-      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-      "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-      "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-      "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-      "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-      "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-      "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-      "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+    "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+    "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+    "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
   ];
 
   const FALLBACK_STABLECOINS = ALL_SUPPORTED_TOKENS.slice(0, 4); // Use the first four tokens as fallback stablecoins
@@ -130,9 +123,7 @@ export default function HomePage() {
   const FALLBACK_COLLATERAL = [
     "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
     "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
     "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-    "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
   ];
 
   // Use fallback tokens directly to avoid RPC calls
@@ -146,18 +137,18 @@ export default function HomePage() {
 
   // Use fallback balances to avoid RPC errors
   const [walletBalances, setWalletBalances] = useState<Record<string, string>>({});
-  
+
   useEffect(() => {
     if (!address || !isConnected) return;
-    
+
     // Set fallback balances to avoid RPC calls
     const fallbackBalances: Record<string, string> = {};
     allTokens.forEach(token => {
-      if (token) fallbackBalances[token] = "1000000000000000000000"; // 1000 tokens
+      if (token) fallbackBalances[token] = "";
     });
     setWalletBalances(fallbackBalances);
   }, [address, isConnected]);
-  
+
   // Use fallback data to avoid multiple RPC calls
   const [userContractData, setUserContractData] = useState({
     borrows: {} as Record<string, string>,
@@ -165,18 +156,18 @@ export default function HomePage() {
     deposits: {} as Record<string, string>,
     lockEnds: {} as Record<string, number>,
   });
-  
+
   useEffect(() => {
     if (!address) return;
-    
+
     // Set fallback data
     const fallbackData = {
       borrows: {} as Record<string, string>,
-      collaterals: {} as Record<string, string>, 
+      collaterals: {} as Record<string, string>,
       deposits: {} as Record<string, string>,
       lockEnds: {} as Record<string, number>,
     };
-    
+
     ALL_SUPPORTED_TOKENS.forEach(token => {
       if (token) {
         fallbackData.borrows[token] = "0";
@@ -185,7 +176,7 @@ export default function HomePage() {
         fallbackData.lockEnds[token] = 0;
       }
     });
-    
+
     setUserContractData(fallbackData);
   }, [address]);
 
@@ -201,21 +192,14 @@ export default function HomePage() {
   // Token info mapping
   const tokenInfos = useMemo(() => {
     const tokenMap: Record<string, { symbol: string; decimals: number }> = {
-      "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", decimals: 18 },
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
-      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
-      "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
-      "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", decimals: 18 },
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
+      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 18 },
+
       "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", decimals: 18 },
       "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { symbol: "cNGN", decimals: 18 },
 
-      // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
-      // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
-      // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", decimals: 18 },
-      // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", decimals: 18 },
-      // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", decimals: 18 },
-      // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", decimals: 18 },
-      // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
+      "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", decimals: 18 },
+      "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
     };
     return tokenMap;
   }, []);
@@ -297,12 +281,12 @@ export default function HomePage() {
       if (!isValid) {
         throw new Error("Unable to get current market prices. Please try again in a moment.");
       }
-      
+
       return await transactionFn();
     } catch (error: any) {
       const errorMessage = extractTransactionError(error);
       console.error('Transaction execution error:', error);
-      
+
       if (errorMessage.includes("Oracle") || errorMessage.includes("price")) {
         options.onOracleError(errorMessage);
       } else {
@@ -324,45 +308,45 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
-      
+
       // First approve the token
       const tokenContract = getContract({
         client,
         chain: celo,
         address: token,
       });
-      
+
       const approveTransaction = prepareContractCall({
         contract: tokenContract,
         method: "function approve(address spender, uint256 amount) returns (bool)",
         params: [MINILEND_ADDRESS, amountWei],
       });
-      
+
       const approveResult = await sendTransaction({ transaction: approveTransaction, account });
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
-      
+
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Saving money...', txHash: undefined });
-      
+
       const txHash = await executeWithOracleValidation(
         async () => {
           return await depositFn(contract, token, amountWei, BigInt(lockPeriod));
         },
-        { 
+        {
           tokens: [token],
           onOracleError: (error) => {
             setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
           }
         }
       );
-      
+
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });
-      
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully saved ${amount} ${tokenInfo.symbol}!`, 
-        txHash 
+
+      setTransactionModal({
+        isOpen: true,
+        type: 'success',
+        message: `Successfully saved ${amount} ${tokenInfo.symbol}!`,
+        txHash
       });
     } catch (error: any) {
       const errorMessage = extractTransactionError(error);
@@ -379,20 +363,20 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Borrowing money...', txHash: undefined });
-      
+
       const tokenInfo = getTokenInfo(token);
       const amountWei = parseUnits(amount, tokenInfo.decimals);
       const txHash = await borrowFn(contract, token, amountWei, collateralToken);
-      
+
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });
-      
+
       const borrowTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully borrowed ${amount} ${borrowTokenInfo.symbol}!`, 
-        txHash 
+      setTransactionModal({
+        isOpen: true,
+        type: 'success',
+        message: `Successfully borrowed ${amount} ${borrowTokenInfo.symbol}!`,
+        txHash
       });
     } catch (error: any) {
       const errorMessage = extractTransactionError(error);
@@ -412,36 +396,36 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
-      
+
       // First approve the token
       const tokenContract = getContract({
         client,
         chain: celo,
         address: token,
       });
-      
+
       const approveTransaction = prepareContractCall({
         contract: tokenContract,
         method: "function approve(address spender, uint256 amount) returns (bool)",
         params: [MINILEND_ADDRESS, amountWei],
       });
-      
+
       const approveResult = await sendTransaction({ transaction: approveTransaction, account });
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
-      
+
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Depositing collateral...', txHash: undefined });
-      
+
       const txHash = await depositCollateralFn(contract, token, amountWei);
-      
+
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });
-      
+
       const collateralTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully deposited ${amount} ${collateralTokenInfo.symbol} as collateral!`, 
-        txHash 
+      setTransactionModal({
+        isOpen: true,
+        type: 'success',
+        message: `Successfully deposited ${amount} ${collateralTokenInfo.symbol} as collateral!`,
+        txHash
       });
     } catch (error: any) {
       const errorMessage = extractTransactionError(error);
@@ -461,46 +445,46 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
-      
+
       // First approve the token
       const tokenContract = getContract({
         client,
         chain: celo,
         address: token,
       });
-      
+
       const approveTransaction = prepareContractCall({
         contract: tokenContract,
         method: "function approve(address spender, uint256 amount) returns (bool)",
         params: [MINILEND_ADDRESS, amountWei],
       });
-      
+
       const approveResult = await sendTransaction({ transaction: approveTransaction, account });
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
-      
+
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Paying back loan...', txHash: undefined });
-      
+
       const txHash = await executeWithOracleValidation(
         async () => {
           return await repayFn(contract, token, amountWei);
         },
-        { 
+        {
           tokens: [token],
           onOracleError: (error) => {
             setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
           }
         }
       );
-      
+
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });
-      
+
       const repayTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully repaid ${amount} ${repayTokenInfo.symbol}!`, 
-        txHash 
+      setTransactionModal({
+        isOpen: true,
+        type: 'success',
+        message: `Successfully repaid ${amount} ${repayTokenInfo.symbol}!`,
+        txHash
       });
     } catch (error: any) {
       const errorMessage = extractTransactionError(error);
@@ -517,30 +501,30 @@ export default function HomePage() {
 
     try {
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Withdrawing money...', txHash: undefined });
-      
+
       const txHash = await executeWithOracleValidation(
         async () => {
           const tokenInfo = getTokenInfo(token);
           const amountWei = parseUnits(amount, tokenInfo.decimals);
           return await withdrawFn(contract, token, amountWei);
         },
-        { 
+        {
           tokens: [token],
           onOracleError: (error) => {
             setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
           }
         }
       );
-      
+
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash });
-      
+
       const withdrawTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully withdrew ${amount} ${withdrawTokenInfo.symbol}!`, 
-        txHash 
+      setTransactionModal({
+        isOpen: true,
+        type: 'success',
+        message: `Successfully withdrew ${amount} ${withdrawTokenInfo.symbol}!`,
+        txHash
       });
     } catch (error: any) {
       const errorMessage = extractTransactionError(error);
@@ -685,7 +669,7 @@ export default function HomePage() {
                   Connect Your Wallet
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  Connect your wallet to start saving and borrowing money 
+                  Connect your wallet to start saving and borrowing money
                   using your local stablecoin
                 </p>
                 {error && (
