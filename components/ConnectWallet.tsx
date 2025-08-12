@@ -10,9 +10,9 @@ export default function ConnectWallet() {
       auth={{ loginOptional: true } as any}
       appMetadata={{
         name: "MiniStables",
-        description: "Stablecoin tools on Celo",
+        description: "save stablecoins like USDC and access credit backed by your stables",
         logoUrl: "/public/minilend-logo.png",
-        url: "https://ministables.vercel.app",
+        url: "https://minilend.xyz",
       }}
     />
   );
