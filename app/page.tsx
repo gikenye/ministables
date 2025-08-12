@@ -11,6 +11,7 @@ import {
   WifiOff,
   Shield,
   BarChart3,
+  LucideIcon,
 } from "lucide-react";
 import { useActiveAccount } from "thirdweb/react";
 import { ThirdwebConnectWalletButton } from "@/components/ThirdwebConnectWalletButton";
@@ -25,16 +26,14 @@ import {
   useUserBorrows,
   useUserCollateral,
   useUserDeposits,
-  useGetUserBalance,
 } from "../lib/thirdweb/minilend-contract";
 import { getContract, prepareContractCall, sendTransaction, waitForReceipt, readContract } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
-import { parseUnits, formatUnits } from "viem";
-import { formatAddress } from "@/lib/utils";
+import { parseUnits } from "viem";
 import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
-import { MINILEND_ADDRESS, ORACLE_ADDRESS } from "@/lib/services/thirdwebService";
+import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,9 +50,31 @@ import { PayBackModal } from "@/components/PayBackModal";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
 
 
+// Types
+interface ActionCard {
+  id: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  color: string;
+  iconColor: string;
+}
+
+interface TokenInfo {
+  symbol: string;
+  decimals: number;
+}
+
+interface TransactionModalState {
+  isOpen: boolean;
+  type: "success" | "error" | "pending";
+  message: string;
+  txHash: string | undefined;
+}
+
 // Action Cards Grid Component
-const ActionCardsGrid = ({ actionCards, onCardClick }: { actionCards: any[], onCardClick: (id: string) => void }) => {
-  const renderCard = useCallback((card: any) => {
+const ActionCardsGrid = ({ actionCards, onCardClick }: { actionCards: ActionCard[], onCardClick: (id: string) => void }) => {
+  const renderCard = useCallback((card: ActionCard) => {
     const IconComponent = card.icon;
     const handleClick = () => onCardClick(card.id);
     
@@ -123,16 +144,16 @@ export default function HomePage() {
       "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
   ];
 
-  const FALLBACK_STABLECOINS = ALL_SUPPORTED_TOKENS.slice(0, 4); // Use the first four tokens as fallback stablecoins
+  const FALLBACK_STABLECOINS = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 4), []);
 
   // Valid collateral assets from deployment config
-  const FALLBACK_COLLATERAL = [
+  const FALLBACK_COLLATERAL = useMemo(() => [
     "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
     "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
     "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
     "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
     "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-  ];
+  ], []);
 
   // Read supported tokens from contract (first few indices)
   const stablecoin0 = useSupportedStablecoins(contract, BigInt(0));
@@ -146,13 +167,13 @@ export default function HomePage() {
     const tokens = [stablecoin0.data, stablecoin1.data, stablecoin2.data]
       .filter(token => token && token !== '0x0000000000000000000000000000000000000000');
     return tokens.length > 0 ? tokens : FALLBACK_STABLECOINS;
-  }, [stablecoin0.data, stablecoin1.data, stablecoin2.data]);
+  }, [stablecoin0.data, stablecoin1.data, stablecoin2.data, FALLBACK_STABLECOINS]);
 
   const supportedCollateral = useMemo(() => {
     const tokens = [collateral0.data, collateral1.data]
       .filter(token => token && token !== '0x0000000000000000000000000000000000000000');
     return tokens.length > 0 ? tokens : FALLBACK_COLLATERAL;
-  }, [collateral0.data, collateral1.data]);
+  }, [collateral0.data, collateral1.data, FALLBACK_COLLATERAL]);
 
   // All unique tokens
   const allTokens = useMemo(() => {
@@ -185,7 +206,7 @@ export default function HomePage() {
           });
           
           balances[token] = balance.toString();
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(`Error fetching balance for ${token}:`, error);
           balances[token] = "0";
         }
@@ -195,7 +216,7 @@ export default function HomePage() {
     };
 
     fetchWalletBalances();
-  }, [address, isConnected, allTokens]);
+  }, [address, isConnected, allTokens, client]);
   
   const userBorrow0 = useUserBorrows(contract, address || "", allTokens[0] || "");
   const userBorrow1 = useUserBorrows(contract, address || "", allTokens[1] || "");
@@ -245,8 +266,8 @@ export default function HomePage() {
   }, [userDeposit0.data, userDeposit1.data, userDeposit2.data, allTokens]);
 
   // Token info mapping
-  const tokenInfos = useMemo(() => {
-    const tokenMap: Record<string, { symbol: string; decimals: number }> = {
+  const tokenInfos = useMemo((): Record<string, TokenInfo> => {
+    const tokenMap: Record<string, TokenInfo> = {
       "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
       "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
       "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
@@ -266,17 +287,17 @@ export default function HomePage() {
   }, []);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [transactionModal, setTransactionModal] = useState({
+  const [transactionModal, setTransactionModal] = useState<TransactionModalState>({
     isOpen: false,
-    type: "success" as "success" | "error" | "pending",
+    type: "success",
     message: "",
-    txHash: undefined as string | undefined,
+    txHash: undefined,
   });
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationSkipped, setVerificationSkipped] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [dataSaverEnabled, setDataSaverEnabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
 
   // Check if any critical hooks are loading (only check first few to reduce loading time)
   const loading = useMemo(() => {
@@ -331,7 +352,7 @@ export default function HomePage() {
     enableDataSaver(newState);
   };
 
-  const getTokenInfo = (tokenAddress: string) => {
+  const getTokenInfo = (tokenAddress: string): TokenInfo => {
     return tokenInfos[tokenAddress] || { symbol: "UNKNOWN", decimals: 18 };
   };
 
@@ -350,8 +371,8 @@ export default function HomePage() {
       }
       
       return await transactionFn();
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
+    } catch (error: unknown) {
+      const errorMessage = extractTransactionError(error as Error);
       console.error('Transaction execution error:', error);
       
       if (errorMessage.includes("Oracle") || errorMessage.includes("price")) {
@@ -389,8 +410,8 @@ export default function HomePage() {
         params: [MINILEND_ADDRESS, amountWei],
       });
       
-      const approveResult = await sendTransaction({ transaction: approveTransaction, account });
-      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
+      const approveResult = await sendTransaction({ transaction: approveTransaction, account: account! });
+      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Saving money...', txHash: undefined });
       
@@ -407,7 +428,7 @@ export default function HomePage() {
       );
       
       // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
       
       setTransactionModal({ 
         isOpen: true, 
@@ -415,8 +436,8 @@ export default function HomePage() {
         message: `Successfully saved ${amount} ${tokenInfo.symbol}!`, 
         txHash 
       });
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
+    } catch (error: unknown) {
+      const errorMessage = extractTransactionError(error as Error);
       console.error('Save money error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -436,7 +457,7 @@ export default function HomePage() {
       const txHash = await borrowFn(contract, token, amountWei, collateralToken);
       
       // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
       
       const borrowTokenInfo = getTokenInfo(token);
       setTransactionModal({ 
@@ -445,8 +466,8 @@ export default function HomePage() {
         message: `Successfully borrowed ${amount} ${borrowTokenInfo.symbol}!`, 
         txHash 
       });
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
+    } catch (error: unknown) {
+      const errorMessage = extractTransactionError(error as Error);
       console.error('Borrow money error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -477,15 +498,15 @@ export default function HomePage() {
         params: [MINILEND_ADDRESS, amountWei],
       });
       
-      const approveResult = await sendTransaction({ transaction: approveTransaction, account });
-      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
+      const approveResult = await sendTransaction({ transaction: approveTransaction, account: account! });
+      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Depositing collateral...', txHash: undefined });
       
       const txHash = await depositCollateralFn(contract, token, amountWei);
       
       // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
       
       const collateralTokenInfo = getTokenInfo(token);
       setTransactionModal({ 
@@ -494,8 +515,8 @@ export default function HomePage() {
         message: `Successfully deposited ${amount} ${collateralTokenInfo.symbol} as collateral!`, 
         txHash 
       });
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
+    } catch (error: unknown) {
+      const errorMessage = extractTransactionError(error as Error);
       console.error('Deposit collateral error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -526,8 +547,8 @@ export default function HomePage() {
         params: [MINILEND_ADDRESS, amountWei],
       });
       
-      const approveResult = await sendTransaction({ transaction: approveTransaction, account });
-      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
+      const approveResult = await sendTransaction({ transaction: approveTransaction, account: account! });
+      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Paying back loan...', txHash: undefined });
       
@@ -544,7 +565,7 @@ export default function HomePage() {
       );
       
       // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
       
       const repayTokenInfo = getTokenInfo(token);
       setTransactionModal({ 
@@ -553,8 +574,8 @@ export default function HomePage() {
         message: `Successfully repaid ${amount} ${repayTokenInfo.symbol}!`, 
         txHash 
       });
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
+    } catch (error: unknown) {
+      const errorMessage = extractTransactionError(error as Error);
       console.error('Pay back error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -584,7 +605,7 @@ export default function HomePage() {
       );
       
       // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash });
+      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
       
       const withdrawTokenInfo = getTokenInfo(token);
       setTransactionModal({ 
@@ -593,8 +614,8 @@ export default function HomePage() {
         message: `Successfully withdrew ${amount} ${withdrawTokenInfo.symbol}!`, 
         txHash 
       });
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
+    } catch (error: unknown) {
+      const errorMessage = extractTransactionError(error as Error);
       console.error('Withdraw error:', error);
       setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
     }
@@ -608,7 +629,7 @@ export default function HomePage() {
     }
   }, [router]);
 
-  const actionCards = useMemo(() => [
+  const actionCards = useMemo((): ActionCard[] => [
     {
       id: "save",
       title: "Save Money",
@@ -733,17 +754,13 @@ export default function HomePage() {
                   <Wallet className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2 sm:mb-3">
-                  Connect Your Wallet
+                  Open App
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  Connect your wallet to start saving and borrowing money 
+                  Launch App to start saving in dollars and borrowing money 
                   using your local stablecoin
                 </p>
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
-                    <p className="text-red-600 text-sm">{error}</p>
-                  </div>
-                )}
+
                 <ThirdwebConnectWalletButton size="lg" />
                 {typeof window !== "undefined" && !window.ethereum && (
                   <p className="text-gray-500 text-xs sm:text-sm mt-4">
