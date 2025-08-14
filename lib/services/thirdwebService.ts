@@ -6,7 +6,10 @@ import { readContract } from "thirdweb";
 
 // Contract configuration
 export const MINILEND_ADDRESS = "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c";
-export const ORACLE_ADDRESS = "0x6c844bF2c73Ab4230a09FaACfe6e6e05765f1031";
+// Use env-configured oracle for Celo; default to the provided BackendPriceOracle
+export const ORACLE_ADDRESS =
+  (process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS as string | undefined)?.trim() ||
+  "0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924";
 
 // All supported stablecoins from contract
 export const NEW_SUPPORTED_TOKENS = {

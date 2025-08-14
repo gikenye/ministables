@@ -3,6 +3,7 @@
 import type React from "react";
 import { useEffect } from "react";
 import { ThirdwebProvider } from "thirdweb/react";
+import { client } from "@/lib/thirdweb/client";
 import { Toaster } from "@/components/ui/toaster";
 import {
   registerServiceWorker,
@@ -28,7 +29,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <body className={`${inter.className} pb-safe`}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <ThirdwebProvider>
+            <ThirdwebProvider client={client}>
                 {children}
                 <Toaster />
                 {/* Connection Status Banner */}

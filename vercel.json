@@ -1,0 +1,10 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/push-prices",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
+
+

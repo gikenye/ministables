@@ -130,6 +130,7 @@ export function BorrowMoneyModal({
   });
 
   const [requiredCollateral, setRequiredCollateral] = useState<string | null>(null);
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [transactionStatus, setTransactionStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
@@ -248,40 +249,41 @@ export function BorrowMoneyModal({
 
 
 
-  const calculateRequiredCollateral = () => {
+  useEffect(() => {
+    const run = async () => {
     if (!form.amount || parseFloat(form.amount) <= 0 || !form.token || !form.collateralToken) {
       setRequiredCollateral(null);
       return;
     }
     
-    // Hardcoded prices from oracle contract
-    const prices: Record<string, number> = {
-      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": 0.0077, // cKES
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": 1.00,   // USDC
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a": 1.00,   // cUSD
-      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": 1.10,   // cEUR
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": 1.00,   // USDT
-      "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": 1.00,   // USDGLO
-    };
-    
-    const borrowTokenPrice = prices[form.token] || 1.0;
-    const collateralTokenPrice = prices[form.collateralToken] || 1.0;
-    
-    // Calculate USD value of borrowed amount
+      const ensurePrice = async (address: string) => {
+        if (tokenPrices[address] !== undefined) return tokenPrices[address];
+        try {
+          const price = await oracleService.getTokenPrice(address);
+          setTokenPrices((prev) => ({ ...prev, [address]: price }));
+          return price;
+        } catch {
+          return NaN;
+        }
+      };
+
+      const [borrowTokenPrice, collateralTokenPrice] = await Promise.all([
+        ensurePrice(form.token),
+        ensurePrice(form.collateralToken),
+      ]);
+
+      if (!isFinite(borrowTokenPrice) || !isFinite(collateralTokenPrice) || borrowTokenPrice <= 0 || collateralTokenPrice <= 0) {
+        setRequiredCollateral(null);
+        return;
+      }
+
     const borrowValueUSD = parseFloat(form.amount) * borrowTokenPrice;
-    
-    // Calculate required collateral in USD (150% of borrow value)
     const requiredCollateralUSD = borrowValueUSD * COLLATERALIZATION_RATIO;
-    
-    // Convert to collateral token amount
     const requiredCollateralAmount = requiredCollateralUSD / collateralTokenPrice;
-    
     setRequiredCollateral(requiredCollateralAmount.toFixed(6));
   };
-
-  useEffect(() => {
-    calculateRequiredCollateral();
-  }, [form.amount, form.token, form.collateralToken]);
+    run();
+  }, [form.amount, form.token, form.collateralToken, tokenPrices]);
 
 
 
