@@ -177,7 +177,12 @@ const useDashboardData = (address: string | undefined, contract: any) => {
           collateral[token] = userCollat.toString();
           lockEnds[token] = Number(userDeposit[1]);
           pools[token] = "0";
+          try {
+            const priceUsd = await oracleService.getTokenPrice(token);
+            rates[token] = priceUsd;
+          } catch {
           rates[token] = 1.0;
+          }
         } catch (error: any) {
           const tokenSymbol = TOKEN_INFO[token]?.symbol || 'Unknown';
           console.warn(`Skipping ${tokenSymbol} due to contract error:`, error.code || error.message);
@@ -194,7 +199,7 @@ const useDashboardData = (address: string | undefined, contract: any) => {
           collateral[token] = "0";
           lockEnds[token] = 0;
           pools[token] = "0";
-          rates[token] = 1.0;
+          rates[token] = rates[token] ?? 1.0;
         }
       }
       
@@ -205,7 +210,7 @@ const useDashboardData = (address: string | undefined, contract: any) => {
         collateral[token] = "0";
         lockEnds[token] = 0;
         pools[token] = "0";
-        rates[token] = 1.0;
+        if (rates[token] === undefined) rates[token] = 1.0;
       });
 
       setUserData({ deposits, borrows, collateral, lockEnds });
@@ -411,7 +416,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="px-3 py-3 max-w-lg mx-auto pb-20 space-y-3">
+      <main className="px-3 py-3 max-w-lg mx-auto pb-24 space-y-3">
         <Card className="bg-white border-secondary shadow-sm">
           <CardContent className="p-4">
             <h2 className="text-lg font-semibold text-center text-primary mb-3">
@@ -588,7 +593,15 @@ export default function DashboardPage() {
           </Card>
 
           <div className="bg-white border-secondary shadow-sm rounded-lg">
-            <OracleRatesCard />
+            <OracleRatesCard
+              tokens={[
+                "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0",
+                "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+                "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+                "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71",
+              ]}
+              localTokenAddress={"0x456a3D042C0DbD3db53D5489e98dFb038553B0d0"}
+            />
           </div>
 
           <Card className="bg-white border-secondary shadow-sm col-span-2">

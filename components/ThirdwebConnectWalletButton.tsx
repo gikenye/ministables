@@ -159,6 +159,10 @@ export function ThirdwebConnectWalletButton({ className, size = "md" }: Thirdweb
       <ConnectButton
         client={client}
         chain={celo}
+        accountAbstraction={{
+          chain: celo,
+          sponsorGas: true,
+        }}
         connectButton={{
           label: "Launch App", // Keep consistent label
           style: getButtonStyle()

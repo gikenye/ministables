@@ -13,7 +13,7 @@ import {
   BarChart3,
   LucideIcon,
 } from "lucide-react";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useSendTransaction } from "thirdweb/react";
 import { ThirdwebConnectWalletButton } from "@/components/ThirdwebConnectWalletButton";
 import {
   useBorrow,
@@ -27,7 +27,7 @@ import {
   useUserCollateral,
   useUserDeposits,
 } from "../lib/thirdweb/minilend-contract";
-import { getContract, prepareContractCall, sendTransaction, waitForReceipt, readContract } from "thirdweb";
+import { getContract, prepareContractCall, waitForReceipt, readContract } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { parseUnits } from "viem";
@@ -113,6 +113,7 @@ export default function HomePage() {
   const account = useActiveAccount();
   const address = account?.address;
   const isConnected = !!account;
+  const { mutate: sendTransaction } = useSendTransaction();
 
   // Get contract instance
   const contract = getContract({
@@ -131,16 +132,16 @@ export default function HomePage() {
   // Supported stablecoins from deployment config
   const ALL_SUPPORTED_TOKENS = [
       "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-      "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-      "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-      "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-      "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-      "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
+      // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
+      // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
+      // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
+      // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
+      // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
       "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+      // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
       "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
       "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-      "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+      // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
       "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
   ];
 
@@ -152,7 +153,7 @@ export default function HomePage() {
     "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
     "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
     "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-    "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+    // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
   ], []);
 
   // Read supported tokens from contract (first few indices)
@@ -410,7 +411,12 @@ export default function HomePage() {
         params: [MINILEND_ADDRESS, amountWei],
       });
       
-      const approveResult = await sendTransaction({ transaction: approveTransaction, account: account! });
+      const approveResult: any = await new Promise((resolve, reject) =>
+        sendTransaction(approveTransaction, {
+          onSuccess: resolve,
+          onError: reject,
+        })
+      );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Saving money...', txHash: undefined });
@@ -498,7 +504,12 @@ export default function HomePage() {
         params: [MINILEND_ADDRESS, amountWei],
       });
       
-      const approveResult = await sendTransaction({ transaction: approveTransaction, account: account! });
+      const approveResult: any = await new Promise((resolve, reject) =>
+        sendTransaction(approveTransaction, {
+          onSuccess: resolve,
+          onError: reject,
+        })
+      );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Depositing collateral...', txHash: undefined });
@@ -547,7 +558,12 @@ export default function HomePage() {
         params: [MINILEND_ADDRESS, amountWei],
       });
       
-      const approveResult = await sendTransaction({ transaction: approveTransaction, account: account! });
+      const approveResult: any = await new Promise((resolve, reject) =>
+        sendTransaction(approveTransaction, {
+          onSuccess: resolve,
+          onError: reject,
+        })
+      );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
       
       setTransactionModal({ isOpen: true, type: 'pending', message: 'Paying back loan...', txHash: undefined });
