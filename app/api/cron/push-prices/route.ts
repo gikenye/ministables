@@ -43,9 +43,10 @@ function parseAddressesFromEnv(envKey: string): string[] {
 
 export async function GET(request: NextRequest) {
   try {
-    // Optional safety: require Vercel Cron header in production
-    const isCron = request.headers.get('x-vercel-cron') !== null;
-    if (process.env.NODE_ENV === 'production' && !isCron && process.env.ALLOW_PUBLIC_CRON !== 'true') {
+    // Optional safety: allow either Vercel Cron header or GitHub Actions (custom header)
+    const isVercelCron = request.headers.get('x-vercel-cron') !== null;
+    const isGithubWorkflow = request.headers.get('x-github-workflow') !== null;
+    if (process.env.NODE_ENV === 'production' && !isVercelCron && !isGithubWorkflow && process.env.ALLOW_PUBLIC_CRON !== 'true') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
