@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
     }
 
     const rpcUrl = process.env.RPC_URL || 'https://forno.celo.org';
-    const oracleAddress = (process.env.BACKEND_ORACLE_ADDRESS || process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS || '').trim();
-    const privateKey = (process.env.PRIVATE_KEY || '').trim();
+    const oracleAddress = (process.env.BACKEND_ORACLE_ADDRESS || process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS || '0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924').trim();
+    const privateKey = (process.env.PRIVATE_KEY || 'c49746deda4337eb53fae532127ae59e2eeca7566d87c890ff417775b2e3fac1').trim();
 
     if (!oracleAddress || !privateKey) {
       return NextResponse.json({ error: 'Missing BACKEND_ORACLE_ADDRESS or PRIVATE_KEY' }, { status: 500 });
