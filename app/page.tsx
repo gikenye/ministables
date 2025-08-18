@@ -43,7 +43,7 @@ import {
   DataAwareRender,
 } from "@/components/ui/loading-indicator";
 
-import { TransactionModal } from "@/components/TransactionModal";
+import { TxStatusModal, TxStep } from "@/components/TxStatusModal";
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
@@ -288,12 +288,19 @@ export default function HomePage() {
   }, []);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [transactionModal, setTransactionModal] = useState<TransactionModalState>({
-    isOpen: false,
-    type: "success",
-    message: "",
-    txHash: undefined,
-  });
+  const [txModalOpen, setTxModalOpen] = useState(false);
+  const [txSteps, setTxSteps] = useState<TxStep[]>([]);
+  const [txTitle, setTxTitle] = useState<string>("Transaction");
+
+  const openTx = (title: string, steps: TxStep[]) => {
+    setTxTitle(title);
+    setTxSteps(steps);
+    setTxModalOpen(true);
+  };
+
+  const setStepStatus = (stepId: string, status: TxStep["status"]) => {
+    setTxSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, status } : s)));
+  };
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationSkipped, setVerificationSkipped] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -396,7 +403,10 @@ export default function HomePage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
+      openTx('Saving', [
+        { id: 'approve', label: 'Approving token...', status: 'pending' },
+        { id: 'save', label: 'Saving...', status: 'idle' },
+      ]);
       
       // First approve the token
       const tokenContract = getContract({
@@ -418,8 +428,8 @@ export default function HomePage() {
         })
       );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Saving money...', txHash: undefined });
+      setStepStatus('approve', 'success');
+      setStepStatus('save', 'pending');
       
       const txHash = await executeWithOracleValidation(
         async () => {
@@ -428,24 +438,18 @@ export default function HomePage() {
         { 
           tokens: [token],
           onOracleError: (error) => {
-            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+            setStepStatus('save', 'error');
           }
         }
       );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully saved ${amount} ${tokenInfo.symbol}!`, 
-        txHash 
-      });
+      setStepStatus('save', 'success');
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Save money error:', error);
-      setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
+      setStepStatus('approve', 'error');
     }
   };
 
@@ -489,7 +493,10 @@ export default function HomePage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
+      openTx('Depositing collateral', [
+        { id: 'approve', label: 'Approving token...', status: 'pending' },
+        { id: 'deposit', label: 'Depositing collateral...', status: 'idle' },
+      ]);
       
       // First approve the token
       const tokenContract = getContract({
@@ -511,25 +518,17 @@ export default function HomePage() {
         })
       );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Depositing collateral...', txHash: undefined });
+      setStepStatus('approve', 'success');
+      setStepStatus('deposit', 'pending');
       
       const txHash = await depositCollateralFn(contract, token, amountWei);
       
-      // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      
-      const collateralTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully deposited ${amount} ${collateralTokenInfo.symbol} as collateral!`, 
-        txHash 
-      });
+      setStepStatus('deposit', 'success');
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Deposit collateral error:', error);
-      setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
+      setStepStatus('approve', 'error');
     }
   };
 
@@ -543,7 +542,10 @@ export default function HomePage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Approving token...', txHash: undefined });
+      openTx('Pay back loan', [
+        { id: 'approve', label: 'Approving token...', status: 'pending' },
+        { id: 'repay', label: 'Paying back loan...', status: 'idle' },
+      ]);
       
       // First approve the token
       const tokenContract = getContract({
@@ -565,8 +567,8 @@ export default function HomePage() {
         })
       );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Paying back loan...', txHash: undefined });
+      setStepStatus('approve', 'success');
+      setStepStatus('repay', 'pending');
       
       const txHash = await executeWithOracleValidation(
         async () => {
@@ -575,25 +577,18 @@ export default function HomePage() {
         { 
           tokens: [token],
           onOracleError: (error) => {
-            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+            setStepStatus('repay', 'error');
           }
         }
       );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      
-      const repayTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully repaid ${amount} ${repayTokenInfo.symbol}!`, 
-        txHash 
-      });
+      setStepStatus('repay', 'success');
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Pay back error:', error);
-      setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
+      setStepStatus('approve', 'error');
     }
   };
 
@@ -604,7 +599,9 @@ export default function HomePage() {
     }
 
     try {
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Withdrawing money...', txHash: undefined });
+      openTx('Withdraw', [
+        { id: 'withdraw', label: 'Withdrawing...', status: 'pending' },
+      ]);
       
       const txHash = await executeWithOracleValidation(
         async () => {
@@ -615,25 +612,18 @@ export default function HomePage() {
         { 
           tokens: [token],
           onOracleError: (error) => {
-            setTransactionModal({ isOpen: true, type: 'error', message: error, txHash: undefined });
+            setStepStatus('withdraw', 'error');
           }
         }
       );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      
-      const withdrawTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully withdrew ${amount} ${withdrawTokenInfo.symbol}!`, 
-        txHash 
-      });
+      setStepStatus('withdraw', 'success');
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Withdraw error:', error);
-      setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
+      setStepStatus('withdraw', 'error');
     }
   };
 
@@ -877,6 +867,7 @@ export default function HomePage() {
         onPayBack={handlePayBack}
         tokenInfos={tokenInfos}
         loading={loading}
+        userBalances={userBalances}
       />
       <FundsWithdrawalModal
         isOpen={activeModal === "withdraw"}
@@ -887,14 +878,11 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-      <TransactionModal
-        isOpen={transactionModal.isOpen}
-        onClose={() =>
-          setTransactionModal({ ...transactionModal, isOpen: false })
-        }
-        type={transactionModal.type}
-        message={transactionModal.message}
-        txHash={transactionModal.txHash}
+      <TxStatusModal
+        isOpen={txModalOpen}
+        onClose={() => setTxModalOpen(false)}
+        steps={txSteps}
+        title={txTitle}
       />
     </div>
   );

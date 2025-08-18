@@ -4,10 +4,11 @@
 
 :root {
   /* Original color variables for utility classes */
-  --primary: #0e6037;
+  --primary: #0c7a43;
   --secondary: #008c45;
   --background: #f5f5f5;
-  --card-bg: #ffffff;
+  --card-bg: #AAF901;
+  /* --card-bg: #ffffff; */
   --text: #333333;
   
   /* Theme colors for shadcn components */
