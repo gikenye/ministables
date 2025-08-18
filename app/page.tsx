@@ -27,7 +27,8 @@ import {
   useUserCollateral,
   useUserDeposits,
 } from "../lib/thirdweb/minilend-contract";
-import { getContract, prepareContractCall, waitForReceipt, readContract } from "thirdweb";
+import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
+import { getWalletBalance } from "thirdweb/wallets";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { parseUnits } from "viem";
@@ -43,7 +44,7 @@ import {
   DataAwareRender,
 } from "@/components/ui/loading-indicator";
 
-import { TxStatusModal, TxStep } from "@/components/TxStatusModal";
+// thirdweb handles transaction modals; no custom tx modal
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
@@ -143,6 +144,7 @@ export default function HomePage() {
       "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
       // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
       "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+      "0x471EcE3750Da237f93B8E339c536989b8978a438", // CELO (GoldToken)
   ];
 
   const FALLBACK_STABLECOINS = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 4), []);
@@ -194,19 +196,14 @@ export default function HomePage() {
       for (const token of allTokens) {
         if (!token) continue;
         try {
-          const tokenContract = getContract({
-            client,
-            chain: celo,
-            address: token,
-          });
-          
-          const balance = await readContract({
-            contract: tokenContract,
-            method: "function balanceOf(address) view returns (uint256)",
-            params: [address],
-          });
-          
-          balances[token] = balance.toString();
+          // CELO native balance if token is CELO address; else ERC20 balance
+          if (token.toLowerCase() === "0x471ece3750da237f93b8e339c536989b8978a438") {
+            const native = await getWalletBalance({ client, chain: celo, address });
+            balances[token] = native.value.toString();
+          } else {
+            const erc20 = await getWalletBalance({ client, chain: celo, address, tokenAddress: token });
+            balances[token] = erc20.value.toString();
+          }
         } catch (error: unknown) {
           console.error(`Error fetching balance for ${token}:`, error);
           balances[token] = "0";
@@ -288,19 +285,7 @@ export default function HomePage() {
   }, []);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [txModalOpen, setTxModalOpen] = useState(false);
-  const [txSteps, setTxSteps] = useState<TxStep[]>([]);
-  const [txTitle, setTxTitle] = useState<string>("Transaction");
-
-  const openTx = (title: string, steps: TxStep[]) => {
-    setTxTitle(title);
-    setTxSteps(steps);
-    setTxModalOpen(true);
-  };
-
-  const setStepStatus = (stepId: string, status: TxStep["status"]) => {
-    setTxSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, status } : s)));
-  };
+  // removed custom tx modal state
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationSkipped, setVerificationSkipped] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -372,6 +357,10 @@ export default function HomePage() {
     }
   ): Promise<string> => {
     try {
+      // Optionally bypass oracle validation in dev via env flag
+      if (process.env.NEXT_PUBLIC_DISABLE_ORACLE_VALIDATION === "true") {
+        return await transactionFn();
+      }
       // Validate oracle prices for all tokens
       const isValid = await oracleService.validateMultipleTokens(options.tokens);
       if (!isValid) {
@@ -403,10 +392,7 @@ export default function HomePage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      openTx('Saving', [
-        { id: 'approve', label: 'Approving token...', status: 'pending' },
-        { id: 'save', label: 'Saving...', status: 'idle' },
-      ]);
+      // Let thirdweb in-app wallet handle approval modal
       
       // First approve the token
       const tokenContract = getContract({
@@ -428,8 +414,7 @@ export default function HomePage() {
         })
       );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      setStepStatus('approve', 'success');
-      setStepStatus('save', 'pending');
+      // proceed to deposit
       
       const txHash = await executeWithOracleValidation(
         async () => {
@@ -438,18 +423,18 @@ export default function HomePage() {
         { 
           tokens: [token],
           onOracleError: (error) => {
-            setStepStatus('save', 'error');
+            // handled in catch
           }
         }
       );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      setStepStatus('save', 'success');
+      // success
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Save money error:', error);
-      setStepStatus('approve', 'error');
+      // no custom modal; optionally surface error via toast/UI
     }
   };
 
@@ -493,10 +478,7 @@ export default function HomePage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      openTx('Depositing collateral', [
-        { id: 'approve', label: 'Approving token...', status: 'pending' },
-        { id: 'deposit', label: 'Depositing collateral...', status: 'idle' },
-      ]);
+      // Let thirdweb in-app wallet handle approval modal
       
       // First approve the token
       const tokenContract = getContract({
@@ -518,17 +500,16 @@ export default function HomePage() {
         })
       );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      setStepStatus('approve', 'success');
-      setStepStatus('deposit', 'pending');
+      // proceed to deposit
       
       const txHash = await depositCollateralFn(contract, token, amountWei);
       
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      setStepStatus('deposit', 'success');
+      // success
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Deposit collateral error:', error);
-      setStepStatus('approve', 'error');
+      // optionally surface error
     }
   };
 
@@ -542,10 +523,7 @@ export default function HomePage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      openTx('Pay back loan', [
-        { id: 'approve', label: 'Approving token...', status: 'pending' },
-        { id: 'repay', label: 'Paying back loan...', status: 'idle' },
-      ]);
+      // Let thirdweb in-app wallet handle approval modal
       
       // First approve the token
       const tokenContract = getContract({
@@ -567,8 +545,7 @@ export default function HomePage() {
         })
       );
       await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      setStepStatus('approve', 'success');
-      setStepStatus('repay', 'pending');
+      // proceed to repay
       
       const txHash = await executeWithOracleValidation(
         async () => {
@@ -577,18 +554,18 @@ export default function HomePage() {
         { 
           tokens: [token],
           onOracleError: (error) => {
-            setStepStatus('repay', 'error');
+            // handled in catch
           }
         }
       );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      setStepStatus('repay', 'success');
+      // success
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Pay back error:', error);
-      setStepStatus('approve', 'error');
+      // optionally surface error
     }
   };
 
@@ -599,9 +576,7 @@ export default function HomePage() {
     }
 
     try {
-      openTx('Withdraw', [
-        { id: 'withdraw', label: 'Withdrawing...', status: 'pending' },
-      ]);
+      // Let thirdweb handle wallet UI
       
       const txHash = await executeWithOracleValidation(
         async () => {
@@ -612,18 +587,18 @@ export default function HomePage() {
         { 
           tokens: [token],
           onOracleError: (error) => {
-            setStepStatus('withdraw', 'error');
+            // handled in catch
           }
         }
       );
       
       // Wait for transaction confirmation
       await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      setStepStatus('withdraw', 'success');
+      // success
     } catch (error: unknown) {
       const errorMessage = extractTransactionError(error as Error);
       console.error('Withdraw error:', error);
-      setStepStatus('withdraw', 'error');
+      // optionally surface error
     }
   };
 
@@ -878,12 +853,7 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
       />
-      <TxStatusModal
-        isOpen={txModalOpen}
-        onClose={() => setTxModalOpen(false)}
-        steps={txSteps}
-        title={txTitle}
-      />
+      {/* Removed custom transaction modal */}
     </div>
   );
 }
