@@ -46,6 +46,7 @@ interface PayBackModalProps {
   onPayBack: (token: string, amount: string) => Promise<void>;
   tokenInfos: Record<string, { symbol: string; decimals: number }>;
   loading: boolean;
+  userBalances?: Record<string, string>;
 }
 
 export function PayBackModal({
@@ -54,6 +55,7 @@ export function PayBackModal({
   onPayBack,
   tokenInfos,
   loading,
+  userBalances = {},
 }: PayBackModalProps) {
   const account = useActiveAccount();
   const address = account?.address;
@@ -254,6 +256,50 @@ export function PayBackModal({
                         min="0.01"
                         step="0.01"
                       />
+                      {form.token && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          Wallet balance: {formatAmount(
+                            userBalances[form.token] || '0',
+                            tokenInfos[form.token]?.decimals || 18
+                          )} {tokenInfos[form.token]?.symbol}
+                        </div>
+                      )}
+                      {selectedLoan && (
+                        <div className="mt-2 grid grid-cols-4 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.1).toFixed(6) })}
+                          >
+                            10%
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.2).toFixed(6) })}
+                          >
+                            20%
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.5).toFixed(6) })}
+                          >
+                            50%
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals))).toFixed(6) })}
+                          >
+                            Max
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

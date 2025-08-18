@@ -433,6 +433,25 @@ export function BorrowMoneyModal({
             )}
           </div>
 
+          {form.collateralToken && (
+            <div className="mt-2 grid grid-cols-1 gap-1 text-xs">
+              <div className="text-gray-600">
+                Wallet balance: {formatAmount(
+                  userBalances[form.collateralToken] || "0",
+                  tokenInfos[form.collateralToken]?.decimals || 18
+                )} {tokenInfos[form.collateralToken]?.symbol}
+              </div>
+              {hasCollateral(form.collateralToken) && (
+                <div className="text-gray-600">
+                  Deposited collateral: {formatAmount(
+                    userCollaterals[form.collateralToken] || "0",
+                    tokenInfos[form.collateralToken]?.decimals || 18
+                  )} {tokenInfos[form.collateralToken]?.symbol}
+                </div>
+              )}
+            </div>
+          )}
+
           {requiredCollateral && form.collateralToken && (
             <div className="bg-blue-50 border border-blue-200 rounded p-2">
               <div className="text-xs text-blue-800">

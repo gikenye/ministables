@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,9 @@ import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveAccount } from "thirdweb/react";
+import { getContract, readContract } from "thirdweb";
+import { client } from "@/lib/thirdweb/client";
+import { celo } from "thirdweb/chains";
 import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
 
@@ -117,8 +120,68 @@ export function SaveMoneyModal({
   const supportedStablecoins = Object.keys(tokenInfos);
   const defaultLockPeriods = ["604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
+  // On-chain wallet balance for selected token
+  const selectedTokenDecimals = form.token ? (tokenInfos[form.token]?.decimals || 18) : 18;
+  const selectedTokenContract = useMemo(() => (
+    form.token ? getContract({ client, chain: celo, address: form.token }) : null
+  ), [form.token]);
 
- return (
+  const [onchainBalance, setOnchainBalance] = useState<string | null>(null);
+
+  // Read live on-chain balance when token and account are available
+  React.useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!selectedTokenContract || !account?.address) {
+        setOnchainBalance(null);
+        return;
+      }
+      try {
+        const res = await readContract({
+          contract: selectedTokenContract,
+          method: "function balanceOf(address) view returns (uint256)",
+          params: [account.address],
+        });
+        if (!cancelled) setOnchainBalance(res?.toString?.() ?? null);
+      } catch {
+        if (!cancelled) setOnchainBalance(null);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTokenContract, account?.address]);
+
+  // Prefer live on-chain balance; fall back to parent-provided snapshot
+  const walletBalance = (() => {
+    if (onchainBalance !== null) {
+      try {
+        return parseFloat(formatAmount(onchainBalance, selectedTokenDecimals));
+      } catch {
+        return 0;
+      }
+    }
+    if (form.token && userBalances[form.token]) {
+      return parseFloat(formatAmount(userBalances[form.token], selectedTokenDecimals));
+    }
+    return 0;
+  })();
+
+  const formatDisplayNumber = (value: number, maxDecimals: number): string => {
+    if (!isFinite(value)) return "0";
+    const s = value.toFixed(Math.min(maxDecimals, 6));
+    return s.includes(".") ? s.replace(/0+$/ , "").replace(/\.$/, "") : s;
+  };
+
+  const setAmountByPercent = (ratio: number) => {
+    if (!walletBalance || walletBalance <= 0) return;
+    const raw = walletBalance * ratio;
+    const value = formatDisplayNumber(raw, selectedTokenDecimals);
+    setForm({ ...form, amount: value });
+  };
+
+  return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
@@ -171,6 +234,11 @@ export function SaveMoneyModal({
                   })}
                 </SelectContent>
               </Select>
+              {form.token && (
+                <div className="mt-2 text-xs text-gray-700">
+                  Wallet balance: {formatDisplayNumber(walletBalance, selectedTokenDecimals)} {tokenInfos[form.token]?.symbol || form.token.slice(0, 6) + "..."}
+                </div>
+              )}
             </div>
 
             <div>
@@ -178,14 +246,11 @@ export function SaveMoneyModal({
                 <Label className="text-xs font-medium text-gray-600 mb-1 block">
                   Amount
                 </Label>
-                {form.token && userBalances[form.token] && (
+                {walletBalance > 0 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const maxAmount = formatAmount(
-                        userBalances[form.token],
-                        tokenInfos[form.token]?.decimals || 18
-                      );
+                      const maxAmount = formatDisplayNumber(walletBalance, selectedTokenDecimals);
                       setForm({ ...form, amount: maxAmount });
                     }}
                     className="text-xs text-blue-600 hover:text-blue-800"
@@ -207,6 +272,47 @@ export function SaveMoneyModal({
                 }}
                 className="h-10"
               />
+              {form.token && (
+                <div className="mt-2 text-xs text-gray-600">
+                  Wallet balance: {formatDisplayNumber(walletBalance, selectedTokenDecimals)} {tokenInfos[form.token]?.symbol}
+                </div>
+              )}
+              {walletBalance > 0 && (
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => setAmountByPercent(0.1)}
+                  >
+                    10%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => setAmountByPercent(0.2)}
+                  >
+                    20%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => setAmountByPercent(0.5)}
+                  >
+                    50%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => setAmountByPercent(1)}
+                  >
+                    Max
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div>

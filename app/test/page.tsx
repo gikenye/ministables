@@ -7,6 +7,7 @@ import {
   waitForReceipt,
   readContract,
 } from 'thirdweb';
+import { transfer } from 'thirdweb/extensions/erc20';
 import { celo } from 'thirdweb/chains';
 import {
   useSendTransaction,
@@ -25,6 +26,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { client } from '@/lib/thirdweb/client';
+import { parseUnits } from 'viem';
 
 const CONTRACT_ADDRESS = '0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c';
 const USDC_CONTRACT_ADDRESS = '0xcebA9300f2b948710d2653dD7B07f33A8B32118C';
@@ -113,6 +115,8 @@ const MinilendTestingDashboard = () => {
 
   const activeAccount = useActiveAccount();
   const { mutate: sendTransaction } = useSendTransaction();
+  const [recipient, setRecipient] = useState<string>('');
+  const [usdcAmount, setUsdcAmount] = useState<string>('1');
 
   const TEST_AMOUNTS = {
     USDC_DEPOSIT: '10000', // 0.01 USDC (6 decimals)
@@ -945,6 +949,62 @@ const MinilendTestingDashboard = () => {
               <div className="text-lg font-semibold">{formatAmount(contractData.contractCkesBalance)} cKES</div>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Quick Wallet Actions</h2>
+          {!activeAccount ? (
+            <div className="text-sm text-gray-600">Connect a wallet to send transactions.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-medium mb-2">Send USDC</h3>
+                <div className="space-y-3">
+                  <input
+                    className="w-full border rounded px-3 py-2"
+                    placeholder="Recipient address (0x...)"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                  />
+                  <div className="flex gap-3">
+                    <input
+                      className="flex-1 border rounded px-3 py-2"
+                      placeholder="Amount (e.g. 1.0)"
+                      value={usdcAmount}
+                      onChange={(e) => setUsdcAmount(e.target.value)}
+                    />
+                    <button
+                      className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={!recipient}
+                      onClick={async () => {
+                        try {
+                          const token = getContract({ client, chain: celo, address: USDC_CONTRACT_ADDRESS });
+                          const tx = prepareContractCall({
+                            contract: token,
+                            method: 'function transfer(address to, uint256 amount)',
+                            params: [recipient as `0x${string}`, parseUnits(usdcAmount || '0', 6)],
+                          });
+                          await new Promise<void>((resolve, reject) => {
+                            sendTransaction(tx, {
+                              onSuccess: (res) => {
+                                addTestResult(100, 'Sent USDC', 'SUCCESS', { transactionHash: res.transactionHash });
+                                resolve();
+                              },
+                              onError: (error: any) => reject(error),
+                            });
+                          });
+                        } catch (error: any) {
+                          addTestResult(100, 'Send USDC failed', 'ERROR', error?.message || error);
+                        }
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">

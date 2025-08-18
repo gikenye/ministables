@@ -577,6 +577,43 @@ export function MobileMoneyWithdrawModal({
                   step="0.01"
                   max={availableAmount}
                 />
+                {/* Quick percentage selectors */}
+                {parseFloat(availableAmount) > 0 && (
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount) * 0.1).toFixed(6) }))}
+                    >
+                      10%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount) * 0.2).toFixed(6) }))}
+                    >
+                      20%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount) * 0.5).toFixed(6) }))}
+                    >
+                      50%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount)).toFixed(6) }))}
+                    >
+                      Max
+                    </Button>
+                  </div>
+                )}
                 
                 {/* Enhanced Quote Display */}
                 {loadingQuote && (

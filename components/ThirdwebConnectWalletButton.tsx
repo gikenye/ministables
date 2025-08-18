@@ -21,8 +21,8 @@ const wallets = [
   createWallet("com.coinbase.wallet"),
   createWallet("me.rainbow"),
   createWallet("walletConnect"),
-  // createWallet("io.rabby"),
-  // createWallet("io.zerion.wallet"),
+  createWallet("io.rabby"),
+  createWallet("io.zerion.wallet"),
 ];
 
 export function ThirdwebConnectWalletButton({ className, size = "md" }: ThirdwebConnectWalletButtonProps) {
