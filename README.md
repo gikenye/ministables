@@ -47,8 +47,8 @@ Built with Next.js and React, featuring:
 
 | Contract | Address |
 |----------|---------|
-| Minilend | [0x89E356E80De29B466E774A5Eb543118B439EE41E](https://celoscan.io/address/0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c) |
-| SortedOracles | [0x96D7E17a4Af7af46413A7EAD48f01852C364417A](https://celoscan.io/address/0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924) |
+| Minilend | [0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c](https://celoscan.io/address/0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c) |
+| SortedOracles | [0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924](https://celoscan.io/address/0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924) |
 | PoolAddressProvider | [0x9F7Cf9417D5251C59fE94fB9147feEe1aAd9Cea5](https://celoscan.io/address/0x9F7Cf9417D5251C59fE94fB9147feEe1aAd9Cea5) |
 
 ### Supported Stablecoins
