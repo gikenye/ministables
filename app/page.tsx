@@ -13,29 +13,29 @@ import {
   BarChart3,
   LucideIcon,
 } from "lucide-react";
-import { useActiveAccount, useSendTransaction } from "thirdweb/react";
-import { ThirdwebConnectWalletButton } from "@/components/ThirdwebConnectWalletButton";
 import {
-  useBorrow,
-  useDeposit,
-  useDepositCollateral,
-  useRepay,
-  useWithdraw,
+  useActiveAccount,
+  useSendTransaction,
+} from "thirdweb/react";
+import { ConnectWallet } from "@/components/ConnectWallet";
+import {
   useSupportedStablecoins,
   useSupportedCollateral,
   useUserBorrows,
   useUserCollateral,
   useUserDeposits,
 } from "../lib/thirdweb/minilend-contract";
-import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
+import { getContract, prepareContractCall } from "thirdweb";
+import {
+  allowance,
+  approve,
+} from "thirdweb/extensions/erc20";
 import { getWalletBalance } from "thirdweb/wallets";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { parseUnits } from "viem";
-import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
-import { oracleService } from "@/lib/services/oracleService";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,19 +66,14 @@ interface TokenInfo {
   decimals: number;
 }
 
-interface TransactionModalState {
-  isOpen: boolean;
-  type: "success" | "error" | "pending";
-  message: string;
-  txHash: string | undefined;
-}
+
 
 // Action Cards Grid Component
 const ActionCardsGrid = ({ actionCards, onCardClick }: { actionCards: ActionCard[], onCardClick: (id: string) => void }) => {
   const renderCard = useCallback((card: ActionCard) => {
     const IconComponent = card.icon;
     const handleClick = () => onCardClick(card.id);
-    
+
     return (
       <Card key={card.id} className="group cursor-pointer border-0 shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-white/80 backdrop-blur-sm overflow-hidden" onClick={handleClick}>
         <CardContent className="p-3 sm:p-6 text-center relative">
@@ -114,7 +109,7 @@ export default function HomePage() {
   const account = useActiveAccount();
   const address = account?.address;
   const isConnected = !!account;
-  const { mutate: sendTransaction } = useSendTransaction();
+  const { mutateAsync: sendTransaction } = useSendTransaction();
 
   // Get contract instance
   const contract = getContract({
@@ -123,28 +118,28 @@ export default function HomePage() {
     address: MINILEND_ADDRESS,
   });
 
-  // Contract functions
-  const borrowFn = useBorrow();
-  const depositFn = useDeposit();
-  const depositCollateralFn = useDepositCollateral();
-  const repayFn = useRepay();
-  const withdrawFn = useWithdraw();
+  // Contract functions (no longer needed with direct sendTransaction)
+  // const borrowFn = useBorrow();
+  // const depositFn = useDeposit();
+  // const depositCollateralFn = useDepositCollateral();
+  // const repayFn = useRepay();
+  // const withdrawFn = useWithdraw();
 
   // Supported stablecoins from deployment config
   const ALL_SUPPORTED_TOKENS = [
-      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-      // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-      // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-      // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-      // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-      // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-      // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-      // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-      "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
-      "0x471EcE3750Da237f93B8E339c536989b8978a438", // CELO (GoldToken)
+    "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+    // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
+    // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
+    // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
+    // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
+    // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
+    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+    // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+    "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+    // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+    "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+    "0x471EcE3750Da237f93B8E339c536989b8978a438", // CELO (GoldToken)
   ];
 
   const FALLBACK_STABLECOINS = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 4), []);
@@ -185,14 +180,14 @@ export default function HomePage() {
 
   // Get actual wallet balances from ERC20 contracts
   const [walletBalances, setWalletBalances] = useState<Record<string, string>>({});
-  
-  
+
+
   useEffect(() => {
     const fetchWalletBalances = async () => {
       if (!address || !isConnected) return;
-      
+
       const balances: Record<string, string> = {};
-      
+
       for (const token of allTokens) {
         if (!token) continue;
         try {
@@ -209,21 +204,21 @@ export default function HomePage() {
           balances[token] = "0";
         }
       }
-      
+
       setWalletBalances(balances);
     };
 
     fetchWalletBalances();
   }, [address, isConnected, allTokens, client]);
-  
+
   const userBorrow0 = useUserBorrows(contract, address || "", allTokens[0] || "");
   const userBorrow1 = useUserBorrows(contract, address || "", allTokens[1] || "");
   const userBorrow2 = useUserBorrows(contract, address || "", allTokens[2] || "");
-  
+
   const userCollateral0 = useUserCollateral(contract, address || "", allTokens[0] || "");
   const userCollateral1 = useUserCollateral(contract, address || "", allTokens[1] || "");
   const userCollateral2 = useUserCollateral(contract, address || "", allTokens[2] || "");
-  
+
   const userDeposit0 = useUserDeposits(contract, address || "", allTokens[0] || "", BigInt(0));
   const userDeposit1 = useUserDeposits(contract, address || "", allTokens[1] || "", BigInt(0));
   const userDeposit2 = useUserDeposits(contract, address || "", allTokens[2] || "", BigInt(0));
@@ -349,256 +344,198 @@ export default function HomePage() {
     return tokenInfos[tokenAddress] || { symbol: "UNKNOWN", decimals: 18 };
   };
 
-  const executeWithOracleValidation = async (
-    transactionFn: () => Promise<string>,
-    options: {
-      tokens: string[];
-      onOracleError: (error: string) => void;
-    }
-  ): Promise<string> => {
-    try {
-      // Optionally bypass oracle validation in dev via env flag
-      if (process.env.NEXT_PUBLIC_DISABLE_ORACLE_VALIDATION === "true") {
-        return await transactionFn();
-      }
-      // Validate oracle prices for all tokens
-      const isValid = await oracleService.validateMultipleTokens(options.tokens);
-      if (!isValid) {
-        throw new Error("Unable to get current market prices. Please try again in a moment.");
-      }
-      
-      return await transactionFn();
-    } catch (error: unknown) {
-      const errorMessage = extractTransactionError(error as Error);
-      console.error('Transaction execution error:', error);
-      
-      if (errorMessage.includes("Oracle") || errorMessage.includes("price")) {
-        options.onOracleError(errorMessage);
-      } else {
-        // Handle other types of errors with appropriate user feedback
-        options.onOracleError(errorMessage);
-      }
-      throw error;
-    }
-  };
 
-  const handleSaveMoney = async (token: string, amount: string, lockPeriod: number) => {
-    if (!token || !amount || lockPeriod <= 0) {
-      setTransactionModal({ isOpen: true, type: 'error', message: 'Invalid input parameters', txHash: undefined });
+
+  const handleSaveMoney = async (
+    token: string,
+    amount: string,
+    lockPeriod: number,
+  ) => {
+    if (
+      !token ||
+      !amount ||
+      lockPeriod <= 0 ||
+      !account?.address
+    )
       return;
-    }
 
     const tokenInfo = getTokenInfo(token);
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      // Let thirdweb in-app wallet handle approval modal
-      
-      // First approve the token
+      // 1. Check allowance
       const tokenContract = getContract({
         client,
         chain: celo,
         address: token,
       });
-      
-      const approveTransaction = prepareContractCall({
+      const currentAllowance = await allowance({
         contract: tokenContract,
-        method: "function approve(address spender, uint256 amount) returns (bool)",
-        params: [MINILEND_ADDRESS, amountWei],
+        owner: account.address,
+        spender: MINILEND_ADDRESS,
       });
-      
-      const approveResult: any = await new Promise((resolve, reject) =>
-        sendTransaction(approveTransaction, {
-          onSuccess: resolve,
-          onError: reject,
-        })
-      );
-      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      // proceed to deposit
-      
-      const txHash = await executeWithOracleValidation(
-        async () => {
-          return await depositFn(contract, token, amountWei, BigInt(lockPeriod));
-        },
-        { 
-          tokens: [token],
-          onOracleError: (error) => {
-            // handled in catch
-          }
-        }
-      );
-      
-      // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      // success
-    } catch (error: unknown) {
-      const errorMessage = extractTransactionError(error as Error);
-      console.error('Save money error:', error);
-      // no custom modal; optionally surface error via toast/UI
+
+      // 2. Approve if needed
+      if (currentAllowance < amountWei) {
+        const approveTx = approve({
+          contract: tokenContract,
+          spender: MINILEND_ADDRESS,
+          amount: amountWei.toString(),
+        });
+        await sendTransaction(approveTx);
+      }
+
+      // 3. Deposit
+      const depositTx = prepareContractCall({
+        contract,
+        method:
+          "function deposit(address token, uint256 amount, uint256 lockPeriod)",
+        params: [token, amountWei, BigInt(lockPeriod)],
+      });
+      await sendTransaction(depositTx);
+    } catch (error) {
+      console.error("Save money error:", error);
     }
   };
 
-  const handleBorrowMoney = async (token: string, amount: string, collateralToken: string) => {
-    if (!token || !amount || !collateralToken) {
-      setTransactionModal({ isOpen: true, type: 'error', message: 'Invalid input parameters', txHash: undefined });
+  const handleBorrowMoney = async (
+    token: string,
+    amount: string,
+    collateralToken: string,
+  ) => {
+    if (
+      !token ||
+      !amount ||
+      !collateralToken ||
+      !account?.address
+    )
       return;
-    }
 
     try {
-      setTransactionModal({ isOpen: true, type: 'pending', message: 'Borrowing money...', txHash: undefined });
-      
       const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-      const txHash = await borrowFn(contract, token, amountWei, collateralToken);
-      
-      // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      
-      const borrowTokenInfo = getTokenInfo(token);
-      setTransactionModal({ 
-        isOpen: true, 
-        type: 'success', 
-        message: `Successfully borrowed ${amount} ${borrowTokenInfo.symbol}!`, 
-        txHash 
+      const amountWei = parseUnits(
+        amount,
+        tokenInfo.decimals,
+      );
+
+      const borrowTx = prepareContractCall({
+        contract,
+        method:
+          "function borrow(address token, uint256 amount, address collateralToken)",
+        params: [token, amountWei, collateralToken],
       });
-    } catch (error: unknown) {
-      const errorMessage = extractTransactionError(error as Error);
-      console.error('Borrow money error:', error);
-      setTransactionModal({ isOpen: true, type: 'error', message: errorMessage, txHash: undefined });
+      await sendTransaction(borrowTx);
+    } catch (error) {
+      console.error("Borrow money error:", error);
     }
   };
 
-  const handleDepositCollateral = async (token: string, amount: string) => {
-    if (!token || !amount) {
-      setTransactionModal({ isOpen: true, type: 'error', message: 'Invalid input parameters', txHash: undefined });
-      return;
-    }
+  const handleDepositCollateral = async (
+    token: string,
+    amount: string,
+  ) => {
+    if (!token || !amount || !account?.address) return;
 
     const tokenInfo = getTokenInfo(token);
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      // Let thirdweb in-app wallet handle approval modal
-      
-      // First approve the token
       const tokenContract = getContract({
         client,
         chain: celo,
         address: token,
       });
-      
-      const approveTransaction = prepareContractCall({
+      const currentAllowance = await allowance({
         contract: tokenContract,
-        method: "function approve(address spender, uint256 amount) returns (bool)",
-        params: [MINILEND_ADDRESS, amountWei],
+        owner: account.address,
+        spender: MINILEND_ADDRESS,
       });
-      
-      const approveResult: any = await new Promise((resolve, reject) =>
-        sendTransaction(approveTransaction, {
-          onSuccess: resolve,
-          onError: reject,
-        })
-      );
-      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      // proceed to deposit
-      
-      const txHash = await depositCollateralFn(contract, token, amountWei);
-      
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      // success
-    } catch (error: unknown) {
-      const errorMessage = extractTransactionError(error as Error);
-      console.error('Deposit collateral error:', error);
-      // optionally surface error
+
+      if (currentAllowance < amountWei) {
+        const approveTx = approve({
+          contract: tokenContract,
+          spender: MINILEND_ADDRESS,
+          amount: amountWei.toString(),
+        });
+        await sendTransaction(approveTx);
+      }
+
+      const depositTx = prepareContractCall({
+        contract,
+        method:
+          "function depositCollateral(address token, uint256 amount)",
+        params: [token, amountWei],
+      });
+      await sendTransaction(depositTx);
+    } catch (error) {
+      console.error("Deposit collateral error:", error);
     }
   };
 
-  const handlePayBack = async (token: string, amount: string) => {
-    if (!token || !amount) {
-      setTransactionModal({ isOpen: true, type: 'error', message: 'Invalid input parameters', txHash: undefined });
-      return;
-    }
+  const handlePayBack = async (
+    token: string,
+    amount: string,
+  ) => {
+    if (!token || !amount || !account?.address) return;
 
     const tokenInfo = getTokenInfo(token);
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      // Let thirdweb in-app wallet handle approval modal
-      
-      // First approve the token
       const tokenContract = getContract({
         client,
         chain: celo,
         address: token,
       });
-      
-      const approveTransaction = prepareContractCall({
+      const currentAllowance = await allowance({
         contract: tokenContract,
-        method: "function approve(address spender, uint256 amount) returns (bool)",
-        params: [MINILEND_ADDRESS, amountWei],
+        owner: account.address,
+        spender: MINILEND_ADDRESS,
       });
-      
-      const approveResult: any = await new Promise((resolve, reject) =>
-        sendTransaction(approveTransaction, {
-          onSuccess: resolve,
-          onError: reject,
-        })
-      );
-      await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
-      // proceed to repay
-      
-      const txHash = await executeWithOracleValidation(
-        async () => {
-          return await repayFn(contract, token, amountWei);
-        },
-        { 
-          tokens: [token],
-          onOracleError: (error) => {
-            // handled in catch
-          }
-        }
-      );
-      
-      // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      // success
-    } catch (error: unknown) {
-      const errorMessage = extractTransactionError(error as Error);
-      console.error('Pay back error:', error);
-      // optionally surface error
+
+      if (currentAllowance < amountWei) {
+        const approveTx = approve({
+          contract: tokenContract,
+          spender: MINILEND_ADDRESS,
+          amount: amountWei.toString(),
+        });
+        await sendTransaction(approveTx);
+      }
+
+      const repayTx = prepareContractCall({
+        contract,
+        method:
+          "function repay(address token, uint256 amount)",
+        params: [token, amountWei],
+      });
+      await sendTransaction(repayTx);
+    } catch (error) {
+      console.error("Pay back error:", error);
     }
   };
 
-  const handleWithdraw = async (token: string, amount: string) => {
-    if (!token || !amount) {
-      setTransactionModal({ isOpen: true, type: 'error', message: 'Invalid input parameters', txHash: undefined });
-      return;
-    }
+  const handleWithdraw = async (
+    token: string,
+    amount: string,
+  ) => {
+    if (!token || !amount || !account?.address) return;
 
     try {
-      // Let thirdweb handle wallet UI
-      
-      const txHash = await executeWithOracleValidation(
-        async () => {
-          const tokenInfo = getTokenInfo(token);
-          const amountWei = parseUnits(amount, tokenInfo.decimals);
-          return await withdrawFn(contract, token, amountWei);
-        },
-        { 
-          tokens: [token],
-          onOracleError: (error) => {
-            // handled in catch
-          }
-        }
+      const tokenInfo = getTokenInfo(token);
+      const amountWei = parseUnits(
+        amount,
+        tokenInfo.decimals,
       );
-      
-      // Wait for transaction confirmation
-      await waitForReceipt({ client, chain: celo, transactionHash: txHash as `0x${string}` });
-      // success
-    } catch (error: unknown) {
-      const errorMessage = extractTransactionError(error as Error);
-      console.error('Withdraw error:', error);
-      // optionally surface error
+
+      const withdrawTx = prepareContractCall({
+        contract,
+        method:
+          "function withdraw(address token, uint256 amount)",
+        params: [token, amountWei],
+      });
+      await sendTransaction(withdrawTx);
+    } catch (error) {
+      console.error("Withdraw error:", error);
     }
   };
 
@@ -669,7 +606,7 @@ export default function HomePage() {
           </div>
 
           <div className="flex-shrink-0">
-            <ThirdwebConnectWalletButton size="sm" />
+            <ConnectWallet size="sm" />
           </div>
         </div>
       </header>
@@ -738,11 +675,11 @@ export default function HomePage() {
                   Open App
                 </h2>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  Launch App to start saving in dollars and borrowing money 
+                  Launch App to start saving in dollars and borrowing money
                   using your local stablecoin
                 </p>
 
-                <ThirdwebConnectWalletButton size="lg" />
+                <ConnectWallet size="lg" />
                 {typeof window !== "undefined" && !window.ethereum && (
                   <p className="text-gray-500 text-xs sm:text-sm mt-4">
                     Don&apos;t have a wallet?{" "}

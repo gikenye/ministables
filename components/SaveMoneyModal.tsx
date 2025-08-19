@@ -23,9 +23,8 @@ import { formatAmount } from "@/lib/utils";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
-import { useActiveAccount, useSendTransaction } from "thirdweb/react";
+import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react";
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
-import { getWalletBalance } from "thirdweb/wallets";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
@@ -62,37 +61,36 @@ export function SaveMoneyModal({
   const [showOnrampModal, setShowOnrampModal] = useState(false);
   const { toast } = useToast();
 
+  const { data: walletBalanceData, isLoading: isBalanceLoading } = useWalletBalance({
+    client,
+    chain: celo,
+    address: account?.address,
+    tokenAddress: form.token || undefined,
+  });
+
   const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
-
     if (!account) {
       setError("Please connect your wallet first");
       return;
     }
 
-    if (form.token && userBalances[form.token]) {
-      const maxAmount = parseFloat(formatAmount(
-        userBalances[form.token],
-        tokenInfos[form.token]?.decimals || 18
-      ));
-      const inputAmount = parseFloat(form.amount);
-      if (inputAmount > maxAmount) {
-        setError(`Amount exceeds available balance of ${maxAmount} ${tokenInfos[form.token]?.symbol}`);
-        return;
-      }
+    const maxAmount = parseFloat(walletBalanceData?.displayValue || "0");
+    const inputAmount = parseFloat(form.amount);
+    if (inputAmount > maxAmount) {
+      setError(`Amount exceeds available balance of ${maxAmount} ${walletBalanceData?.symbol || ""}`);
+      return;
     }
 
     setError(null);
     setIsSaving(true);
 
     try {
-      // Parse to wei with correct decimals
       const decimals = tokenInfos[form.token]?.decimals || 18;
       const amountWei = parseUnits(form.amount, decimals);
 
-      // 1) Approve MINILEND to spend tokens
       const tokenContract = getContract({ client, chain: celo, address: form.token });
       const approveTransaction = prepareContractCall({
         contract: tokenContract,
@@ -100,13 +98,11 @@ export function SaveMoneyModal({
         params: [MINILEND_ADDRESS, amountWei],
       });
 
-      const approveResult: any = await sendTransaction({ transaction: approveTransaction });
-
+      const approveResult = await sendTransaction( approveTransaction );
       if (approveResult?.transactionHash) {
-        await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
+        await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
       }
 
-      // 2) Call deposit on MINILEND
       const minilendContract = getContract({ client, chain: celo, address: MINILEND_ADDRESS });
       const depositTransaction = prepareContractCall({
         contract: minilendContract,
@@ -114,21 +110,15 @@ export function SaveMoneyModal({
         params: [form.token, amountWei, BigInt(parseInt(form.lockPeriod))],
       });
 
-      const depositResult: any = await sendTransaction({ transaction: depositTransaction });
-
+      const depositResult = await sendTransaction( depositTransaction );
       if (depositResult?.transactionHash) {
-        await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash as `0x${string}` });
+        await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash });
       }
 
       setForm({ token: "", amount: "", lockPeriod: "2592000" });
       onClose();
     } catch (err: any) {
-      console.error("Error saving money:", err);
-      if (err.message?.includes("ERC20: insufficient allowance") || err.message?.includes("Approve contract first")) {
-        setError("Please approve the contract to spend your tokens first. This should happen automatically.");
-      } else {
-        setError(err.message || "Failed to save money. Please try again.");
-      }
+      setError(err.message || "Failed to save money. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -151,63 +141,8 @@ export function SaveMoneyModal({
   const supportedStablecoins = Object.keys(tokenInfos);
   const defaultLockPeriods = ["604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
-  // On-chain wallet balance for selected token (native CELO vs ERC20)
   const selectedTokenDecimals = form.token ? (tokenInfos[form.token]?.decimals || 18) : 18;
-
-  const [onchainBalance, setOnchainBalance] = useState<string | null>(null);
-
-  // Read live on-chain balance when token and account are available
-  React.useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (!form.token || !account?.address) {
-        setOnchainBalance(null);
-        return;
-      }
-      try {
-        const symbol = tokenInfos[form.token]?.symbol || "";
-        if (symbol === "CELO") {
-          // Native CELO balance via helper
-          const native = await getWalletBalance({
-            client,
-            chain: celo,
-            address: account.address,
-          });
-          if (!cancelled) setOnchainBalance(native.value.toString());
-        } else {
-          // ERC20 balance via helper
-          const erc20 = await getWalletBalance({
-            client,
-            chain: celo,
-            address: account.address,
-            tokenAddress: form.token,
-          });
-          if (!cancelled) setOnchainBalance(erc20.value.toString());
-        }
-      } catch {
-        if (!cancelled) setOnchainBalance(null);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [form.token, account?.address]);
-
-  // Prefer live on-chain balance; fall back to parent-provided snapshot
-  const walletBalance = (() => {
-    if (onchainBalance !== null) {
-      try {
-        return parseFloat(formatAmount(onchainBalance, selectedTokenDecimals));
-      } catch {
-        return 0;
-      }
-    }
-    if (form.token && userBalances[form.token]) {
-      return parseFloat(formatAmount(userBalances[form.token], selectedTokenDecimals));
-    }
-    return 0;
-  })();
+  const walletBalance = parseFloat(walletBalanceData?.displayValue || "0");
 
   const formatDisplayNumber = (value: number, maxDecimals: number): string => {
     if (!isFinite(value)) return "0";
@@ -280,7 +215,7 @@ export function SaveMoneyModal({
               </Select>
               {form.token && (
                 <div className="mt-2 text-xs text-gray-700">
-                  Wallet balance: {formatDisplayNumber(walletBalance, selectedTokenDecimals)} {tokenInfos[form.token]?.symbol || form.token.slice(0, 6) + "..."}
+                  Wallet balance: {walletBalanceData?.displayValue || "0"} {walletBalanceData?.symbol || tokenInfos[form.token]?.symbol}
                 </div>
               )}
             </div>
