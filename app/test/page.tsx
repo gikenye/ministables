@@ -14,7 +14,7 @@ import {
   useReadContract,
   useActiveAccount,
 } from 'thirdweb/react';
-import { ThirdwebConnectWalletButton } from '@/components/ThirdwebConnectWalletButton';
+import { ConnectWallet } from '@/components/ConnectWallet';
 import {
   AlertCircle,
   TrendingUp,
@@ -93,7 +93,7 @@ interface UserBalances {
 
 const MinilendTestingDashboard = () => {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [runningTests, setRunningTests] = useState<{[key: string]: boolean}>({});
+  const [runningTests, setRunningTests] = useState<{ [key: string]: boolean }>({});
   const [contractData, setContractData] = useState<ContractData>({
     liquidationThreshold: '0',
     totalSupplyUSDC: '0',
@@ -294,7 +294,7 @@ const MinilendTestingDashboard = () => {
       addTestResult(step, `${description} updated`, 'SUCCESS');
       return;
     }
-    
+
     for (let attempts = 0; attempts < MAX_POLL_ATTEMPTS; attempts++) {
       await fetchData();
       if (checkCondition()) {
@@ -822,7 +822,7 @@ const MinilendTestingDashboard = () => {
             </div>
           </div>
           <div className="w-full sm:w-auto sm:text-right">
-            <ThirdwebConnectWalletButton />
+            <ConnectWallet />
           </div>
           <p className="text-gray-600">
             Production testing suite for Minilend protocol on Celo Mainnet
