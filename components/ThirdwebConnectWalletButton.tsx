@@ -2,7 +2,7 @@
 import { ConnectButton } from "thirdweb/react";
 import { lightTheme, darkTheme } from "thirdweb/react";
 import { inAppWallet, createWallet } from "thirdweb/wallets";
-import { celo } from "thirdweb/chains";
+import { base, celo, scroll } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { useEffect, useState } from "react";
 
@@ -14,8 +14,12 @@ interface ThirdwebConnectWalletButtonProps {
 const wallets = [
   inAppWallet({
     auth: {
-      options: ["google", "phone", "email","apple"],
+      options: ["google", "phone", "email", "apple"],
     },
+    // accountAbstraction: {
+    //   chain: celo,
+    //   sponsorGas: true, // or false, as needed 
+    // },
   }),
   createWallet("io.metamask"),
   createWallet("com.coinbase.wallet"),
@@ -158,20 +162,21 @@ export function ThirdwebConnectWalletButton({ className, size = "md" }: Thirdweb
     }}>
       <ConnectButton
         client={client}
-        chain={celo}
-        accountAbstraction={{
-          chain: celo,
-          sponsorGas: true,
-        }}
+        chains={[celo, scroll]}
+        // accountAbstraction={{
+        //   chain: celo,
+        //   sponsorGas: false,
+        // }}
         connectButton={{
-          label: "Launch App", // Keep consistent label
-          style: getButtonStyle()
+          label: "Launch App",
+          style: getButtonStyle(),
         }}
         connectModal={{
           showThirdwebBranding: false,
-          size: "compact", // Always use compact for better mobile experience
-          title: "Minilend",
-          titleIcon: "https://ministables.vercel.app/minilend-logo.png",
+          size: "compact",
+          title: "Minilend :)",
+          titleIcon:
+            "https://ministables.vercel.app/minilend-logo.png",
         }}
         theme={getTheme()}
         wallets={wallets}

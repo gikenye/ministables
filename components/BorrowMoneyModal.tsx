@@ -27,12 +27,11 @@ import { onrampService } from "@/lib/services/onrampService";
 import { oracleService } from "@/lib/services/oracleService";
 import { NEW_SUPPORTED_TOKENS, MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
-import { getContract } from "thirdweb";
+import { getContract, prepareContractCall } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 
-import { useActiveAccount } from "thirdweb/react";
-import { useReadContract } from "thirdweb/react";
+import { useActiveAccount, useSendTransaction, useReadContract } from "thirdweb/react";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -177,10 +176,11 @@ export function BorrowMoneyModal({
     return formatAmount(totalSupply.toString(), decimals);
   }, [form.token, totalSupply, tokenInfos, checkingLiquidity]);
 
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+
   const handleBorrowWithCollateral = async () => {
     if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return;
 
-    // Check if there's liquidity for the selected token
     if (selectedTokenLiquidity === "0") {
       toast({
         title: "No Liquidity Available",
@@ -194,7 +194,6 @@ export function BorrowMoneyModal({
     setTransactionStatus("Processing loan request...");
 
     try {
-      // Always check and deposit collateral if needed
       if (!hasSufficientCollateral(form.collateralToken, requiredCollateral)) {
         setTransactionStatus("Depositing collateral...");
         const walletBalance = parseFloat(formatAmount(
@@ -212,7 +211,6 @@ export function BorrowMoneyModal({
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Step 2: Execute borrow
       setTransactionStatus("Processing loan...");
       await onBorrow(form.token, form.amount, form.collateralToken);
       
@@ -230,7 +228,6 @@ export function BorrowMoneyModal({
     } catch (error: any) {
       setTransactionStatus("Transaction failed ✗");
       
-      // Don't show success message if transaction failed
       if (error.message?.includes("insufficient reserves") || error.message?.includes("E5")) {
         toast({
           title: "Insufficient Contract Reserves",
@@ -508,6 +505,7 @@ export function BorrowMoneyModal({
               onClick={handleBorrowWithCollateral}
               disabled={
                 isProcessing ||
+                isTransactionPending ||
                 !form.token ||
                 !form.collateralToken ||
                 !form.amount ||
@@ -517,7 +515,7 @@ export function BorrowMoneyModal({
               }
               className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
             >
-              {isProcessing ? "Processing..." : "Borrow"}
+              {isProcessing || isTransactionPending ? "Processing..." : "Borrow"}
             </Button>
           </div>
         </div>

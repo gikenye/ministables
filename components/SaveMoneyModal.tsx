@@ -23,12 +23,14 @@ import { formatAmount } from "@/lib/utils";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
-import { useActiveAccount } from "thirdweb/react";
-import { getContract, readContract } from "thirdweb";
+import { useActiveAccount, useSendTransaction } from "thirdweb/react";
+import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
+import { getWalletBalance } from "thirdweb/wallets";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
-import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
+import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+import { parseUnits } from "viem";
 
 interface SaveMoneyModalProps {
   isOpen: boolean;
@@ -60,16 +62,16 @@ export function SaveMoneyModal({
   const [showOnrampModal, setShowOnrampModal] = useState(false);
   const { toast } = useToast();
 
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
 
-    // Check if wallet is connected
     if (!account) {
       setError("Please connect your wallet first");
       return;
     }
 
-    // Validate amount doesn't exceed available balance
     if (form.token && userBalances[form.token]) {
       const maxAmount = parseFloat(formatAmount(
         userBalances[form.token],
@@ -86,9 +88,38 @@ export function SaveMoneyModal({
     setIsSaving(true);
 
     try {
-      // Note: The parent component's onSave function should handle token approval
-      // before attempting to deposit tokens to the contract
-      await onSave(form.token, form.amount, Number.parseInt(form.lockPeriod));
+      // Parse to wei with correct decimals
+      const decimals = tokenInfos[form.token]?.decimals || 18;
+      const amountWei = parseUnits(form.amount, decimals);
+
+      // 1) Approve MINILEND to spend tokens
+      const tokenContract = getContract({ client, chain: celo, address: form.token });
+      const approveTransaction = prepareContractCall({
+        contract: tokenContract,
+        method: "function approve(address spender, uint256 amount) returns (bool)",
+        params: [MINILEND_ADDRESS, amountWei],
+      });
+
+      const approveResult: any = await sendTransaction({ transaction: approveTransaction });
+
+      if (approveResult?.transactionHash) {
+        await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash as `0x${string}` });
+      }
+
+      // 2) Call deposit on MINILEND
+      const minilendContract = getContract({ client, chain: celo, address: MINILEND_ADDRESS });
+      const depositTransaction = prepareContractCall({
+        contract: minilendContract,
+        method: "function deposit(address token, uint256 amount, uint256 lockPeriod)",
+        params: [form.token, amountWei, BigInt(parseInt(form.lockPeriod))],
+      });
+
+      const depositResult: any = await sendTransaction({ transaction: depositTransaction });
+
+      if (depositResult?.transactionHash) {
+        await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash as `0x${string}` });
+      }
+
       setForm({ token: "", amount: "", lockPeriod: "2592000" });
       onClose();
     } catch (err: any) {
@@ -120,11 +151,8 @@ export function SaveMoneyModal({
   const supportedStablecoins = Object.keys(tokenInfos);
   const defaultLockPeriods = ["604800", "2592000", "7776000", "15552000"]; // 61 seconds, 7 days, 30, 90, 180 days
 
-  // On-chain wallet balance for selected token
+  // On-chain wallet balance for selected token (native CELO vs ERC20)
   const selectedTokenDecimals = form.token ? (tokenInfos[form.token]?.decimals || 18) : 18;
-  const selectedTokenContract = useMemo(() => (
-    form.token ? getContract({ client, chain: celo, address: form.token }) : null
-  ), [form.token]);
 
   const [onchainBalance, setOnchainBalance] = useState<string | null>(null);
 
@@ -132,17 +160,30 @@ export function SaveMoneyModal({
   React.useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      if (!selectedTokenContract || !account?.address) {
+      if (!form.token || !account?.address) {
         setOnchainBalance(null);
         return;
       }
       try {
-        const res = await readContract({
-          contract: selectedTokenContract,
-          method: "function balanceOf(address) view returns (uint256)",
-          params: [account.address],
-        });
-        if (!cancelled) setOnchainBalance(res?.toString?.() ?? null);
+        const symbol = tokenInfos[form.token]?.symbol || "";
+        if (symbol === "CELO") {
+          // Native CELO balance via helper
+          const native = await getWalletBalance({
+            client,
+            chain: celo,
+            address: account.address,
+          });
+          if (!cancelled) setOnchainBalance(native.value.toString());
+        } else {
+          // ERC20 balance via helper
+          const erc20 = await getWalletBalance({
+            client,
+            chain: celo,
+            address: account.address,
+            tokenAddress: form.token,
+          });
+          if (!cancelled) setOnchainBalance(erc20.value.toString());
+        }
       } catch {
         if (!cancelled) setOnchainBalance(null);
       }
@@ -151,7 +192,7 @@ export function SaveMoneyModal({
     return () => {
       cancelled = true;
     };
-  }, [selectedTokenContract, account?.address]);
+  }, [form.token, account?.address]);
 
   // Prefer live on-chain balance; fall back to parent-provided snapshot
   const walletBalance = (() => {
@@ -189,6 +230,9 @@ export function SaveMoneyModal({
             <DialogTitle className="text-base font-medium text-gray-900">
               Save Money
             </DialogTitle>
+            <DialogDescription className="text-xs text-gray-600">
+              Choose a token and amount to save. Your wallet will prompt for approval and the transaction.
+            </DialogDescription>
           </DialogHeader>
 
           {error && (
@@ -346,10 +390,10 @@ export function SaveMoneyModal({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={loading || isSaving || !form.token || !form.amount || !account}
+                disabled={loading || isSaving || isTransactionPending || !form.token || !form.amount || !account}
                 className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
               >
-                {loading || isSaving ? "Saving..." : "Save"}
+                {loading || isSaving || isTransactionPending ? "Saving..." : "Save"}
               </Button>
             </div>
           </div>

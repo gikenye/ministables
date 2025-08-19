@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +20,12 @@ import {
 } from "@/components/ui/select";
 import { ArrowUpRight, DollarSign, CreditCard } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useSendTransaction } from "thirdweb/react";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { oracleService } from "@/lib/services/oracleService";
-import { getContract } from "thirdweb";
+import { getContract, prepareContractCall } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
@@ -93,11 +94,12 @@ export function PayBackModal({
     });
   };
 
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+
   const handlePayBack = async () => {
     if (!form.token || !form.amount) return;
 
     try {
-      // Validate Oracle price before repayment
       const isOracleValid = await oracleService.validatePriceData(form.token);
       if (!isOracleValid) {
         toast({
@@ -108,8 +110,6 @@ export function PayBackModal({
         return;
       }
 
-      // Note: The parent component's onPayBack function should handle token approval
-      // before attempting to repay the loan with user tokens
       await onPayBack(form.token, form.amount);
       setForm({ token: "", amount: "" });
       setSelectedLoan(null);
@@ -148,6 +148,9 @@ export function PayBackModal({
             <DialogTitle className="text-base font-medium text-gray-900">
               Pay Back Loans
             </DialogTitle>
+            <DialogDescription className="text-xs text-gray-600">
+              Select a loan and amount to repay. Your wallet will handle approvals and the transaction.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -316,13 +319,14 @@ export function PayBackModal({
                     onClick={handlePayBack}
                     disabled={
                       loading ||
+                      isTransactionPending ||
                       !form.token ||
                       !form.amount ||
                       Number(form.amount) <= 0
                     }
                     className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
                   >
-                    {loading ? "Processing..." : "Pay Back"}
+                    {loading || isTransactionPending ? "Processing..." : "Pay Back"}
                   </Button>
                 </div>
               </>

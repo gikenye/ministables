@@ -24,7 +24,7 @@ import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { offrampService } from "@/lib/services/offrampService";
 import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
-import { useActiveAccount, useSendTransaction } from "thirdweb/react";
+import { useActiveAccount, TransactionButton } from "thirdweb/react";
 import { getContract, prepareContractCall } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
@@ -63,7 +63,6 @@ export function FundsWithdrawalModal({
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false);
   const account = useActiveAccount();
-  const { mutate: sendTransaction } = useSendTransaction();
   const [recipient, setRecipient] = useState("");
   const [quickSendAmount, setQuickSendAmount] = useState("");
 
@@ -172,7 +171,7 @@ export function FundsWithdrawalModal({
             <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
             Withdraw Funds
           </DialogTitle>
-          <DialogDescription>Withdraw your available balance</DialogDescription>
+          <DialogDescription>Withdraw your available balance. Your wallet will prompt for the transaction.</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -414,32 +413,27 @@ export function FundsWithdrawalModal({
                     value={quickSendAmount}
                     onChange={(e) => setQuickSendAmount(e.target.value)}
                   />
-                  <Button
+                  <TransactionButton
                     disabled={!recipient || !quickSendAmount}
-                    onClick={async () => {
-                      try {
-                        const decimals = tokenInfos[form.token]?.decimals || 18;
-                        const tokenContract = getContract({ client, chain: celo, address: form.token });
-                        const tx = prepareContractCall({
-                          contract: tokenContract,
-                          method: "function transfer(address to, uint256 amount)",
-                          params: [recipient as `0x${string}`, parseUnits(quickSendAmount || "0", decimals)],
-                        });
-                        await new Promise<void>((resolve, reject) => {
-                          sendTransaction(tx, {
-                            onSuccess: () => resolve(),
-                            onError: (err: any) => reject(err),
-                          });
-                        });
-                        setQuickSendAmount("");
-                        setRecipient("");
-                      } catch (err) {
-                        console.error("Quick send failed:", err);
-                      }
+                    transaction={() => {
+                      const decimals = tokenInfos[form.token]?.decimals || 18;
+                      const tokenContract = getContract({ client, chain: celo, address: form.token });
+                      return prepareContractCall({
+                        contract: tokenContract,
+                        method: "function transfer(address to, uint256 amount)",
+                        params: [recipient as `0x${string}`, parseUnits(quickSendAmount || "0", decimals)],
+                      });
+                    }}
+                    onError={(err) => {
+                      console.error("Quick send failed:", err);
+                    }}
+                    onSuccess={() => {
+                      setQuickSendAmount("");
+                      setRecipient("");
                     }}
                   >
                     Send
-                  </Button>
+                  </TransactionButton>
                 </div>
               </div>
             </div>

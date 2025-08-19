@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useSendTransaction } from "thirdweb/react";
+import { prepareContractCall } from "thirdweb";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +59,8 @@ export function FundsWithdrawalModal({
   const [error, setError] = useState<string | null>(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false);
+  
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
 
   const handleWithdraw = async () => {
     if (!form.token || !form.amount) return;
@@ -400,6 +404,7 @@ export function FundsWithdrawalModal({
               disabled={
                 loading ||
                 isWithdrawing ||
+                isTransactionPending ||
                 !form.token ||
                 !form.amount ||
                 getWithdrawableAmount(form.token) === "0" ||
@@ -407,7 +412,7 @@ export function FundsWithdrawalModal({
               }
               className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
             >
-              {loading || isWithdrawing ? "Processing..." : "Withdraw"}
+              {loading || isWithdrawing || isTransactionPending ? "Processing..." : "Withdraw"}
             </Button>
           </div>
         </div>
