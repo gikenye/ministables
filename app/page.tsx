@@ -25,7 +25,7 @@ import {
   useUserCollateral,
   useUserDeposits,
 } from "../lib/thirdweb/minilend-contract";
-import { getContract, prepareContractCall } from "thirdweb";
+import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import {
   allowance,
   approve,
@@ -109,7 +109,7 @@ export default function HomePage() {
   const account = useActiveAccount();
   const address = account?.address;
   const isConnected = !!account;
-  const { mutateAsync: sendTransaction } = useSendTransaction();
+  const { mutateAsync: sendTransaction } = useSendTransaction({ payModal: false });
 
   // Get contract instance
   const contract = getContract({
@@ -398,6 +398,8 @@ export default function HomePage() {
     }
   };
 
+
+
   const handleBorrowMoney = async (
     token: string,
     amount: string,
@@ -630,7 +632,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {needsVerification && isConnected && (
+        {/* {needsVerification && isConnected && (
           <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -660,7 +662,7 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        )}
+        )} */}
 
         {loading && isConnected ? (
           <LoadingIndicator size="md" text="Loading account..." delay={100} />

@@ -20,12 +20,13 @@ import {
 } from "@/components/ui/select";
 import { ArrowUpRight, DollarSign, CreditCard } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
-import { useActiveAccount, useSendTransaction } from "thirdweb/react";
+import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { oracleService } from "@/lib/services/oracleService";
-import { getContract, prepareContractCall } from "thirdweb";
+import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
+import { parseUnits } from "viem";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
@@ -94,7 +95,20 @@ export function PayBackModal({
     });
   };
 
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction({ payModal: false });
+
+  // Balances for auto-wrap support when paying back with CELO
+  const { data: repayTokenBalance } = useWalletBalance({
+    client,
+    chain: celo,
+    address,
+    tokenAddress: form.token || undefined,
+  });
+  const { data: nativeBalanceData } = useWalletBalance({
+    client,
+    chain: celo,
+    address,
+  });
 
   const handlePayBack = async () => {
     if (!form.token || !form.amount) return;
@@ -108,6 +122,26 @@ export function PayBackModal({
           variant: "destructive",
         });
         return;
+      }
+
+      // Auto-wrap CELO if needed before repay
+      const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438";
+      const erc20Balance = parseFloat(repayTokenBalance?.displayValue || "0");
+      const nativeBalance = parseFloat(nativeBalanceData?.displayValue || "0");
+      const inputAmount = parseFloat(form.amount);
+      if (form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= (inputAmount - erc20Balance)) {
+        const amountToWrap = inputAmount - erc20Balance;
+        const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 });
+        const wrapTx = prepareContractCall({
+          contract: celoContract,
+          method: "function deposit()",
+          params: [],
+          value: parseUnits(amountToWrap.toString(), 18),
+        });
+        const wrapResult = await sendTransaction(wrapTx);
+        if (wrapResult?.transactionHash) {
+          await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash });
+        }
       }
 
       await onPayBack(form.token, form.amount);
@@ -335,6 +369,7 @@ export function PayBackModal({
         </DialogContent>
       </Dialog>
 
+      {showOnrampModal && (
       <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
@@ -348,6 +383,7 @@ export function PayBackModal({
           setShowOnrampModal(false);
         }}
       />
+      )}
     </>
   );
 }

@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRight } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink } from "lucide-react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { FundsWithdrawalModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
-import { MINILEND_ADDRESS, ORACLE_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
+import { MINILEND_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
 interface UserData {
   deposits: Record<string, string>;
@@ -22,8 +22,7 @@ interface UserData {
 
 import { useActiveAccount } from "thirdweb/react";
 import {
-  useWithdraw as useWithdrawContract,
-  useTotalSupply
+  useWithdraw as useWithdrawContract
 } from '@/lib/thirdweb/minilend-contract';
 import { getContract, readContract } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
@@ -237,10 +236,14 @@ const useDashboardData = (address: string | undefined, contract: any) => {
 
 export default function DashboardPage() {
   const account = useActiveAccount();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const address = account?.address;
   const isConnected = !!address;
+  
+  // Verification state
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationSkipped, setVerificationSkipped] = useState(false);
   
   const contract = getContract({
     client,
@@ -250,6 +253,7 @@ export default function DashboardPage() {
 
   const withdrawFn = useWithdrawContract();
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  
   const { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning } = useDashboardData(address, contract);
 
   useEffect(() => {
@@ -261,6 +265,29 @@ export default function DashboardPage() {
       return () => clearTimeout(timer);
     }
   }, [isConnected, address]);
+
+  useEffect(() => {
+    if (isConnected && address && !session?.user?.address) {
+      signIn("self-protocol", {
+        address,
+        verificationData: "",
+        redirect: false,
+      });
+    }
+  }, [isConnected, address, session]);
+
+  // Check localStorage for verification skip state
+  useEffect(() => {
+    const skipped = localStorage.getItem('verification-skipped') === 'true';
+    setVerificationSkipped(skipped);
+  }, []);
+
+  // Remove forced verification - make it optional
+  useEffect(() => {
+    if (sessionStatus === "loading") return;
+    // Don't show verification if user has skipped it or is already verified
+    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped);
+  }, [isConnected, session, sessionStatus, verificationSkipped]);
 
 
 
@@ -417,6 +444,37 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-3 py-3 max-w-lg mx-auto pb-24 space-y-3">
+        {needsVerification && isConnected && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Shield className="w-4 h-4 mr-2" />
+                <p>Verify you're human for enhanced security (optional)</p>
+              </div>
+              <div className="flex gap-2 ml-4">
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/self")}
+                  className="bg-primary hover:bg-primary/90 text-white text-xs px-3 py-1 h-7"
+                >
+                  Verify
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    localStorage.setItem('verification-skipped', 'true');
+                    setVerificationSkipped(true);
+                    setNeedsVerification(false);
+                  }}
+                  className="text-gray-600 hover:text-gray-800 text-xs px-3 py-1 h-7"
+                >
+                  Skip
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <Card className="bg-white border-secondary shadow-sm">
           <CardContent className="p-4">
             <h2 className="text-lg font-semibold text-center text-primary mb-3">
@@ -454,23 +512,7 @@ export default function DashboardPage() {
                 History
               </Button>
             </div>
-            {!session?.user?.verified && (
-              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Shield className="w-4 h-4 mr-2 text-blue-600" />
-                    <span className="text-sm text-blue-800">Verify your humanity for enhanced security</span>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => router.push("/self")}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
-                  >
-                    Verify
-                  </Button>
-                </div>
-              </div>
-            )}
+
           </CardContent>
         </Card>
 
