@@ -1,32 +1,18 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
-import { MINILEND_ADDRESS, ORACLE_ADDRESS, ALL_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
-interface UserData {
-  deposits: Record<string, string>;
-  borrows: Record<string, string>;
-  collateral: Record<string, string>;
-  lockEnds: Record<string, number>;
-}
-
 import { useActiveAccount } from "thirdweb/react";
-import {
-  useWithdraw as useWithdrawContract
-} from '@/lib/thirdweb/minilend-contract';
-import { getContract, readContract } from "thirdweb";
-import { celo } from "thirdweb/chains";
-import { client } from "@/lib/thirdweb/client";
-import { Imprima } from "next/font/google";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import { useWithdraw } from "@/hooks/useWithdraw";
 
-// Supported tokens - from README
 const SUPPORTED_STABLECOINS = [
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
   "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
@@ -49,104 +35,14 @@ const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
 };
 
-const useDashboardData = (address: string | undefined, contract: any) => {
-  const [userData, setUserData] = useState<UserData>({
-    deposits: {},
-    borrows: {},
-    collateral: {},
-    lockEnds: {},
-  });
-  const [poolData, setPoolData] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
-
-  const loadDashboardData = async () => {
-    if (!address) return;
-    setLoading(true);
-    try {
-      const deposits: Record<string, string> = {};
-      const borrows: Record<string, string> = {};
-      const collateral: Record<string, string> = {};
-      const lockEnds: Record<string, number> = {};
-      const pools: Record<string, string> = {};
-      const rates: Record<string, number> = {};
-
-      for (const token of SUPPORTED_STABLECOINS) {
-        try {
-          const userDeposit = await readContract({
-            contract,
-            method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
-            params: [address, token, BigInt(0)],
-          });
-          
-          const userBorrow = await readContract({
-            contract,
-            method: "function userBorrows(address, address) view returns (uint256)",
-            params: [address, token],
-          });
-          
-          const userCollat = await readContract({
-            contract,
-            method: "function userCollateral(address, address) view returns (uint256)",
-            params: [address, token],
-          });
-          
-          const totalSupply = await readContract({
-            contract,
-            method: "function totalSupply(address) view returns (uint256)",
-            params: [token],
-          });
-          
-          deposits[token] = userDeposit[0].toString();
-          borrows[token] = userBorrow.toString();
-          collateral[token] = userCollat.toString();
-          lockEnds[token] = Number(userDeposit[1]);
-          pools[token] = totalSupply.toString();
-          rates[token] = 1.0;
-        } catch (error) {
-          console.error(`Error loading data for token ${token}:`, error);
-          deposits[token] = "0";
-          borrows[token] = "0";
-          collateral[token] = "0";
-          lockEnds[token] = 0;
-          pools[token] = "0";
-          rates[token] = 1.0;
-        }
-      }
-
-      setUserData({ deposits, borrows, collateral, lockEnds });
-      setPoolData(pools);
-      setExchangeRates(rates);
-    } catch (error) {
-      console.error("Error loading dashboard data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return { userData, poolData, loading, exchangeRates, loadDashboardData };
-};
-
 export default function DashboardPage() {
   const account = useActiveAccount();
   const isConnected = !!account;
   const address = account?.address;
   
-  const contract = getContract({
-    client,
-    chain: celo,
-    address: MINILEND_ADDRESS,
-    });
-
-  const withdrawFn = useWithdrawContract();
   const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const { userData, poolData, loading, exchangeRates, loadDashboardData } = useDashboardData(address, contract);
-
-  useEffect(() => {
-    if (isConnected && address) {
-      loadDashboardData();
-    }
-  }, [isConnected, address, loadDashboardData]);
+  const { deposits, borrows, collateral, lockEnds, poolData, loading } = useDashboardData(address);
+  const { withdraw, isLoading: withdrawLoading } = useWithdraw();
 
 
 
@@ -158,11 +54,7 @@ export default function DashboardPage() {
         throw new Error("Unable to get current market prices. Please try again in a moment.");
       }
       
-      const tokenInfo = TOKEN_INFO[token];
-      if (!tokenInfo) throw new Error("Token not supported");
-      const amountWei = BigInt(parseFloat(amount) * Math.pow(10, tokenInfo.decimals));
-      await withdrawFn(contract, token, amountWei);
-      await loadDashboardData();
+      await withdraw(token, amount);
     } catch (error) {
       console.error("Error withdrawing:", error);
       throw error;
@@ -173,69 +65,28 @@ export default function DashboardPage() {
     window.open(`https://celoscan.io/address/${address}`, "_blank");
   };
 
-  const getExchangeRate = (tokenAddress: string): number => {
-    return exchangeRates[tokenAddress] || 1.0;
-  };
-
-  const convertToUSD = (amount: string, decimals: number, tokenAddress: string): number => {
+  const convertToUSD = (amount: string, decimals: number): number => {
     if (!amount || amount === "0") return 0;
-    const numericAmount = Number(formatAmount(amount, decimals));
-    const exchangeRate = getExchangeRate(tokenAddress);
-    return numericAmount * exchangeRate;
+    return Number(formatAmount(amount, decimals));
   };
 
   const getTotalSavingsUSD = (): number => {
-    return Object.entries(userData.deposits).reduce((acc, [token, amount]) => {
+    return Object.entries(deposits).reduce((acc, [token, amount]) => {
       if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
       const info = TOKEN_INFO[token];
-      return acc + convertToUSD(amount, info.decimals, token);
+      return acc + convertToUSD(amount, info.decimals);
     }, 0);
   };
 
   const getTotalBorrowsUSD = (): number => {
-    return Object.entries(userData.borrows).reduce((acc, [token, amount]) => {
+    return Object.entries(borrows).reduce((acc, [token, amount]) => {
       if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
       const info = TOKEN_INFO[token];
-      return acc + convertToUSD(amount, info.decimals, token);
+      return acc + convertToUSD(amount, info.decimals);
     }, 0);
   };
 
-  const TokenList = ({ tokens, data, type, emptyMessage, convertToUSD }: {
-    tokens: string[];
-    data: Record<string, string>;
-    type: string;
-    emptyMessage: string;
-    convertToUSD: (amount: string, decimals: number, token: string) => number;
-  }) => {
-    const colorClass = type === "borrows" ? "text-red-600" : "text-primary";
-    return (
-      <div className="space-y-1.5">
-        {tokens
-          .filter((token) => data[token] && data[token] !== "0" && TOKEN_INFO[token])
-          .slice(0, 3)
-          .map((token) => {
-            const info = TOKEN_INFO[token];
-            const amount = data[token];
-            return (
-              <div key={token} className="flex justify-between items-center">
-                <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                <span className={`${colorClass} font-semibold text-xs`}>
-                  {formatAmount(amount, info.decimals)}
-                  <span className="text-gray-500 ml-1">
-                    (${convertToUSD(amount, info.decimals, token).toFixed(2)})
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        {Object.values(data).every((d) => !d || d === "0") && (
-          <p className="text-gray-500 text-center py-3 text-xs">
-            {emptyMessage}
-          </p>
-        )}
-      </div>
-    );
-  };
+
 
   if (!isConnected) {
     return (
@@ -333,26 +184,26 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {SUPPORTED_STABLECOINS
                   .filter((token) => {
-                    const deposit = userData.deposits[token];
+                    const deposit = deposits[token];
                     return deposit && deposit !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
                     const info = TOKEN_INFO[token];
-                    const deposit = userData.deposits[token];
+                    const deposit = deposits[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
                         <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
                         <span className="text-primary font-semibold text-xs">
                           {formatAmount(deposit, info.decimals)}
                           <span className="text-gray-500 ml-1">
-                            (${convertToUSD(deposit, info.decimals, token).toFixed(2)})
+                            (${convertToUSD(deposit, info.decimals).toFixed(2)})
                           </span>
                         </span>
                       </div>
                     );
                   })}
-                {Object.values(userData.deposits).every((d) => !d || d === "0") && (
+                {Object.values(deposits).every((d) => !d || d === "0") && (
                   <p className="text-gray-500 text-center py-3 text-xs">
                     No savings yet
                   </p>
@@ -372,26 +223,26 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {SUPPORTED_STABLECOINS
                   .filter((token) => {
-                    const borrow = userData.borrows[token];
+                    const borrow = borrows[token];
                     return borrow && borrow !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
                     const info = TOKEN_INFO[token];
-                    const borrow = userData.borrows[token];
+                    const borrow = borrows[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
                         <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
                         <span className="text-red-600 font-semibold text-xs">
                           {formatAmount(borrow, info.decimals)}
                           <span className="text-gray-500 ml-1">
-                            (${convertToUSD(borrow, info.decimals, token).toFixed(2)})
+                            (${convertToUSD(borrow, info.decimals).toFixed(2)})
                           </span>
                         </span>
                       </div>
                     );
                   })}
-                {Object.values(userData.borrows).every((b) => !b || b === "0") && (
+                {Object.values(borrows).every((b) => !b || b === "0") && (
                   <p className="text-gray-500 text-center py-3 text-xs">
                     No active loans
                   </p>
@@ -411,26 +262,26 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {SUPPORTED_COLLATERAL
                   .filter((token) => {
-                    const collat = userData.collateral[token];
+                    const collat = collateral[token];
                     return collat && collat !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
                     const info = TOKEN_INFO[token];
-                    const collat = userData.collateral[token];
+                    const collat = collateral[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
                         <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
                         <span className="text-primary font-semibold text-xs">
                           {formatAmount(collat, info.decimals)}
                           <span className="text-gray-500 ml-1">
-                            (${convertToUSD(collat, info.decimals, token).toFixed(2)})
+                            (${convertToUSD(collat, info.decimals).toFixed(2)})
                           </span>
                         </span>
                       </div>
                     );
                   })}
-                {Object.values(userData.collateral).every((c) => !c || c === "0") && (
+                {Object.values(collateral).every((c) => !c || c === "0") && (
                   <p className="text-gray-500 text-center py-3 text-xs">
                     No collateral
                   </p>
@@ -462,10 +313,10 @@ export default function DashboardPage() {
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={handleWithdraw}
-        userDeposits={userData.deposits}
-        depositLockEnds={userData.lockEnds}
+        userDeposits={deposits}
+        depositLockEnds={lockEnds}
         tokenInfos={TOKEN_INFO}
-        loading={loading}
+        loading={loading || withdrawLoading}
       />
     </div>
   );
