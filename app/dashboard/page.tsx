@@ -21,6 +21,13 @@ import { getContract, readContract } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 
+// Define UserData interface
+interface UserData {
+  deposits: Record<string, string>;
+  borrows: Record<string, string>;
+  collateral: Record<string, string>;
+  lockEnds: Record<string, number>;
+}
 
 // Supported stablecoins from deployment config
 const SUPPORTED_STABLECOINS = [
@@ -248,6 +255,9 @@ export default function DashboardPage() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   
   const { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning } = useDashboardData(address, contract);
+  
+  // Destructure userData for easier access
+  const { deposits, borrows, collateral, lockEnds } = userData;
 
   useEffect(() => {
     if (isConnected && address) {

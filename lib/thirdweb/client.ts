@@ -13,7 +13,7 @@ export const client = createThirdwebClient({
   clientId: clientID,
 });
 
-export const contract = getContract({ 
+export const Contract = getContract({ 
   client,
   chain: celo,
   address: MINILEND_ADDRESS,
