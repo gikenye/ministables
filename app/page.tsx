@@ -375,14 +375,17 @@ export default function HomePage() {
         spender: MINILEND_ADDRESS,
       });
 
-      // 2. Approve if needed
+      // 2. Approve if needed and wait for receipt per v5 docs
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
           spender: MINILEND_ADDRESS,
           amount: amountWei.toString(),
         });
-        await sendTransaction(approveTx);
+        const result = await sendTransaction(approveTx);
+        if (result?.transactionHash) {
+          await waitForReceipt({ client, chain: celo, transactionHash: result.transactionHash });
+        }
       }
 
       // 3. Deposit
@@ -664,9 +667,7 @@ export default function HomePage() {
           </div>
         )} */}
 
-        {loading && isConnected ? (
-          <LoadingIndicator size="md" text="Loading account..." delay={100} />
-        ) : !isConnected ? (
+        {!isConnected ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-xl sm:shadow-2xl max-w-md w-full mx-3">
               <CardContent className="p-5 sm:p-8 text-center">

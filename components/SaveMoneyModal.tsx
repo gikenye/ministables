@@ -38,8 +38,8 @@ export const minilendABI = [
     "type": "function"
   }
 ] as const;
-import { getContract, prepareContractCall } from "thirdweb";
-import { allowance } from "thirdweb/extensions/erc20";
+import { getContract, prepareContractCall, PreparedTransaction, waitForReceipt } from "thirdweb";
+import { getApprovalForTransaction } from "thirdweb/extensions/erc20";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
@@ -128,79 +128,16 @@ export function SaveMoneyModal({
         amountWei: amountWei.toString()
       });
 
-      // Create token contract instance
-      console.log("[SaveMoneyModal] Creating token contract instance for", form.token);
-      const tokenContract = getContract({
-        client,
-        chain: celo,
-        address: form.token
-      });
-      
-      // 1. Check current allowance first
-      const currentAllowance = await allowance({
-        contract: tokenContract,
-        owner: account.address,
-        spender: MINILEND_ADDRESS,
-      });
-      
-      console.log("[SaveMoneyModal] Current allowance:", currentAllowance.toString());
-      
-      // 2. If allowance is insufficient, approve
-      if (currentAllowance < amountWei) {
-        console.log("[SaveMoneyModal] Insufficient allowance, sending approve transaction");
-        const approveTx = prepareContractCall({
-          contract: tokenContract,
-          method: "function approve(address spender, uint256 amount) returns (bool)",
-          params: [MINILEND_ADDRESS, amountWei],
-        });
-
-        console.log("[SaveMoneyModal] Sending approve transaction");
-        const approveResult = await sendTransaction(approveTx);
-        console.log("[SaveMoneyModal] Approve transaction submitted:", approveResult?.transactionHash);
-        
-        // 3. Poll for allowance to be updated
-        console.log("[SaveMoneyModal] Polling for allowance update...");
-        let allowanceUpdated = false;
-        
-        for (let i = 0; i < 15; i++) {
-          console.log(`[SaveMoneyModal] Allowance check attempt ${i+1}/15...`);
-          // Wait 4 seconds between checks
-          await new Promise(resolve => setTimeout(resolve, 4000));
-          
-          const newAllowance = await allowance({
-            contract: tokenContract,
-            owner: account.address,
-            spender: MINILEND_ADDRESS,
-          });
-          
-          console.log("[SaveMoneyModal] Updated allowance:", newAllowance.toString());
-          
-          if (newAllowance >= amountWei) {
-            console.log("[SaveMoneyModal] Sufficient allowance confirmed!");
-            allowanceUpdated = true;
-            break;
-          }
-        }
-        
-        if (!allowanceUpdated) {
-          console.log("[SaveMoneyModal] Allowance not updated after polling period");
-          setError("Approval not confirmed on-chain. Please try again in a few moments.");
-          setIsSaving(false);
-          return;
-        }
-      } else {
-        console.log("[SaveMoneyModal] Existing allowance is sufficient, proceeding with deposit");
-      }
-
-      // 2. Deposit
+      // Create Minilend contract instance
       console.log("[SaveMoneyModal] Creating Minilend contract instance with address:", MINILEND_ADDRESS);
       const minilendContract = getContract({
         client,
         chain: celo,
         address: MINILEND_ADDRESS,
-        abi: minilendABI // Add explicit ABI
+        abi: minilendABI
       });
       
+      // Prepare deposit transaction
       console.log("[SaveMoneyModal] Preparing deposit transaction with params:", {
         token: form.token,
         amount: amountWei.toString(),
@@ -215,8 +152,39 @@ export function SaveMoneyModal({
           amountWei,
           BigInt(parseInt(form.lockPeriod)),
         ],
+        erc20Value: {
+          tokenAddress: form.token,
+          amountWei,
+        },
       });
       
+      // Check if approval is needed and handle it
+      console.log("[SaveMoneyModal] Checking if approval is needed for deposit transaction");
+      const approveTx = await getApprovalForTransaction({
+        transaction: depositTx as PreparedTransaction,
+        account,
+      });
+      
+      if (approveTx) {
+        console.log("[SaveMoneyModal] Approval required, sending approval transaction");
+        const approveResult = await sendTransaction(approveTx);
+        console.log("[SaveMoneyModal] Approval transaction submitted:", approveResult?.transactionHash);
+        
+        console.log("[SaveMoneyModal]", approveResult?.transactionHash);
+        if (approveResult?.transactionHash) {
+          console.log("[SaveMoneyModal] Waiting for approval confirmation...");
+          await waitForReceipt({
+            client,
+            chain: celo,
+            transactionHash: approveResult.transactionHash,
+          });
+        }
+      } else {
+        
+        console.log("[SaveMoneyModal] No approval needed, proceeding with deposit");
+      }
+      
+      // Execute deposit transaction
       console.log("[SaveMoneyModal] Sending deposit transaction");
       const depositResult = await sendTransaction(depositTx);
       console.log("[SaveMoneyModal] Deposit result:", depositResult);
