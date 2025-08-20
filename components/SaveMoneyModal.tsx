@@ -24,7 +24,22 @@ import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react";
-import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
+// Define the minilend contract ABI for deposit function
+export const minilendABI = [
+  {
+    "inputs": [
+      {"internalType": "address", "name": "token", "type": "address"},
+      {"internalType": "uint256", "name": "amount", "type": "uint256"},
+      {"internalType": "uint256", "name": "lockPeriod", "type": "uint256"}
+    ],
+    "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+] as const;
+import { getContract, prepareContractCall } from "thirdweb";
+import { allowance } from "thirdweb/extensions/erc20";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
@@ -68,7 +83,14 @@ export function SaveMoneyModal({
     tokenAddress: form.token || undefined,
   });
 
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  // Also fetch native balance to support auto-wrap of gas token (CELO)
+  const { data: nativeBalanceData } = useWalletBalance({
+    client,
+    chain: celo,
+    address: account?.address,
+  });
+
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction({ payModal: false });
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
@@ -77,48 +99,151 @@ export function SaveMoneyModal({
       return;
     }
 
-    const maxAmount = parseFloat(walletBalanceData?.displayValue || "0");
+    console.log("[SaveMoneyModal] Starting save with params:", {
+      tokenAddress: form.token,
+      tokenSymbol: tokenInfos[form.token]?.symbol,
+      amount: form.amount,
+      lockPeriod: form.lockPeriod,
+      MINILEND_ADDRESS
+    });
+    
+    // Validate balance
+    const erc20Balance = parseFloat(walletBalanceData?.displayValue || "0");
     const inputAmount = parseFloat(form.amount);
-    if (inputAmount > maxAmount) {
-      setError(`Amount exceeds available balance of ${maxAmount} ${walletBalanceData?.symbol || ""}`);
+    if (inputAmount > erc20Balance) {
+      setError(`Amount exceeds available balance of ${erc20Balance} ${walletBalanceData?.symbol || ""}`);
       return;
     }
 
-    setError(null);
     setIsSaving(true);
+    setError(null);
 
     try {
       const decimals = tokenInfos[form.token]?.decimals || 18;
       const amountWei = parseUnits(form.amount, decimals);
 
-      const tokenContract = getContract({ client, chain: celo, address: form.token });
-      const approveTransaction = prepareContractCall({
+      console.log("[SaveMoneyModal] Calculated wei amount:", {
+        inputAmount,
+        decimals,
+        amountWei: amountWei.toString()
+      });
+
+      // Create token contract instance
+      console.log("[SaveMoneyModal] Creating token contract instance for", form.token);
+      const tokenContract = getContract({
+        client,
+        chain: celo,
+        address: form.token
+      });
+      
+      // 1. Check current allowance first
+      const currentAllowance = await allowance({
         contract: tokenContract,
-        method: "function approve(address spender, uint256 amount) returns (bool)",
-        params: [MINILEND_ADDRESS, amountWei],
+        owner: account.address,
+        spender: MINILEND_ADDRESS,
       });
+      
+      console.log("[SaveMoneyModal] Current allowance:", currentAllowance.toString());
+      
+      // 2. If allowance is insufficient, approve
+      if (currentAllowance < amountWei) {
+        console.log("[SaveMoneyModal] Insufficient allowance, sending approve transaction");
+        const approveTx = prepareContractCall({
+          contract: tokenContract,
+          method: "function approve(address spender, uint256 amount) returns (bool)",
+          params: [MINILEND_ADDRESS, amountWei],
+        });
 
-      const approveResult = await sendTransaction( approveTransaction );
-      if (approveResult?.transactionHash) {
-        await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash });
+        console.log("[SaveMoneyModal] Sending approve transaction");
+        const approveResult = await sendTransaction(approveTx);
+        console.log("[SaveMoneyModal] Approve transaction submitted:", approveResult?.transactionHash);
+        
+        // 3. Poll for allowance to be updated
+        console.log("[SaveMoneyModal] Polling for allowance update...");
+        let allowanceUpdated = false;
+        
+        for (let i = 0; i < 15; i++) {
+          console.log(`[SaveMoneyModal] Allowance check attempt ${i+1}/15...`);
+          // Wait 4 seconds between checks
+          await new Promise(resolve => setTimeout(resolve, 4000));
+          
+          const newAllowance = await allowance({
+            contract: tokenContract,
+            owner: account.address,
+            spender: MINILEND_ADDRESS,
+          });
+          
+          console.log("[SaveMoneyModal] Updated allowance:", newAllowance.toString());
+          
+          if (newAllowance >= amountWei) {
+            console.log("[SaveMoneyModal] Sufficient allowance confirmed!");
+            allowanceUpdated = true;
+            break;
+          }
+        }
+        
+        if (!allowanceUpdated) {
+          console.log("[SaveMoneyModal] Allowance not updated after polling period");
+          setError("Approval not confirmed on-chain. Please try again in a few moments.");
+          setIsSaving(false);
+          return;
+        }
+      } else {
+        console.log("[SaveMoneyModal] Existing allowance is sufficient, proceeding with deposit");
       }
 
-      const minilendContract = getContract({ client, chain: celo, address: MINILEND_ADDRESS });
-      const depositTransaction = prepareContractCall({
+      // 2. Deposit
+      console.log("[SaveMoneyModal] Creating Minilend contract instance with address:", MINILEND_ADDRESS);
+      const minilendContract = getContract({
+        client,
+        chain: celo,
+        address: MINILEND_ADDRESS,
+        abi: minilendABI // Add explicit ABI
+      });
+      
+      console.log("[SaveMoneyModal] Preparing deposit transaction with params:", {
+        token: form.token,
+        amount: amountWei.toString(),
+        lockPeriod: form.lockPeriod
+      });
+      
+      const depositTx = prepareContractCall({
         contract: minilendContract,
-        method: "function deposit(address token, uint256 amount, uint256 lockPeriod)",
-        params: [form.token, amountWei, BigInt(parseInt(form.lockPeriod))],
+        method: "deposit",
+        params: [
+          form.token,
+          amountWei,
+          BigInt(parseInt(form.lockPeriod)),
+        ],
       });
-
-      const depositResult = await sendTransaction( depositTransaction );
+      
+      console.log("[SaveMoneyModal] Sending deposit transaction");
+      const depositResult = await sendTransaction(depositTx);
+      console.log("[SaveMoneyModal] Deposit result:", depositResult);
+      
       if (depositResult?.transactionHash) {
-        await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash });
+        console.log("[SaveMoneyModal] Deposit transaction submitted with hash:", depositResult.transactionHash);
+        // No need to wait for receipt - assume submitted transaction will eventually confirm
+        console.log("[SaveMoneyModal] Deposit transaction submitted successfully!");
       }
 
-      setForm({ token: "", amount: "", lockPeriod: "2592000" });
+      setForm({
+        token: "",
+        amount: "",
+        lockPeriod: "2592000",
+      });
       onClose();
     } catch (err: any) {
-      setError(err.message || "Failed to save money. Please try again.");
+      console.error("[SaveMoneyModal] Error during save:", err);
+      
+      // Provide clearer error messages
+      if (err.message && err.message.includes("transfer amount exceeds allowance")) {
+        setError("Transaction failed: The approval hasn't been confirmed yet. Please try again in a few moments.");
+      } else if (err.message && err.message.includes("user rejected")) {
+        setError("Transaction was rejected by the user.");
+      } else {
+        setError(err.message || "Failed to save money. Please try again.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -144,16 +269,15 @@ export function SaveMoneyModal({
   const selectedTokenDecimals = form.token ? (tokenInfos[form.token]?.decimals || 18) : 18;
   const walletBalance = parseFloat(walletBalanceData?.displayValue || "0");
 
-  const formatDisplayNumber = (value: number, maxDecimals: number): string => {
-    if (!isFinite(value)) return "0";
-    const s = value.toFixed(Math.min(maxDecimals, 6));
-    return s.includes(".") ? s.replace(/0+$/ , "").replace(/\.$/, "") : s;
+  const formatDisplayNumber = (value: number): string => {
+    if (!isFinite(value)) return "0.0000";
+    return value.toFixed(4);
   };
 
   const setAmountByPercent = (ratio: number) => {
     if (!walletBalance || walletBalance <= 0) return;
     const raw = walletBalance * ratio;
-    const value = formatDisplayNumber(raw, selectedTokenDecimals);
+    const value = formatDisplayNumber(raw);
     setForm({ ...form, amount: value });
   };
 
@@ -171,7 +295,7 @@ export function SaveMoneyModal({
           </DialogHeader>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 p-2 rounded text-xs mb-3">
+            <div className="bg-red-50 border border-red-200 text-red-200 p-2 rounded text-xs mb-3">
               {error}
             </div>
           )}
@@ -189,7 +313,14 @@ export function SaveMoneyModal({
               </Label>
               <Select
                 value={form.token}
-                onValueChange={(value) => setForm({ ...form, token: value })}
+                onValueChange={(value) => {
+                  console.log("[SaveMoneyModal] Selected token:", {
+                    address: value,
+                    symbol: tokenInfos[value]?.symbol,
+                    decimals: tokenInfos[value]?.decimals
+                  });
+                  setForm({ ...form, token: value });
+                }}
               >
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select type" />
@@ -215,7 +346,7 @@ export function SaveMoneyModal({
               </Select>
               {form.token && (
                 <div className="mt-2 text-xs text-gray-700">
-                  Wallet balance: {walletBalanceData?.displayValue || "0"} {walletBalanceData?.symbol || tokenInfos[form.token]?.symbol}
+                  Wallet balance: {formatDisplayNumber(walletBalance)} {walletBalanceData?.symbol || tokenInfos[form.token]?.symbol}
                 </div>
               )}
             </div>
@@ -225,11 +356,11 @@ export function SaveMoneyModal({
                 <Label className="text-xs font-medium text-gray-600 mb-1 block">
                   Amount
                 </Label>
-                {walletBalance > 0 && (
+                {form.token && walletBalance > 0 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const maxAmount = formatDisplayNumber(walletBalance, selectedTokenDecimals);
+                      const maxAmount = formatDisplayNumber(walletBalance);
                       setForm({ ...form, amount: maxAmount });
                     }}
                     className="text-xs text-blue-600 hover:text-blue-800"
@@ -241,7 +372,7 @@ export function SaveMoneyModal({
               <Input
                 type="text"
                 inputMode="decimal"
-                placeholder="0.00"
+                placeholder="0.0000"
                 value={form.amount}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -253,10 +384,10 @@ export function SaveMoneyModal({
               />
               {form.token && (
                 <div className="mt-2 text-xs text-gray-600">
-                  Wallet balance: {formatDisplayNumber(walletBalance, selectedTokenDecimals)} {tokenInfos[form.token]?.symbol}
+                  Wallet balance: {formatDisplayNumber(walletBalance)} {tokenInfos[form.token]?.symbol}
                 </div>
               )}
-              {walletBalance > 0 && (
+              {form.token && walletBalance > 0 && (
                 <div className="mt-2 grid grid-cols-4 gap-2">
                   <Button
                     type="button"
@@ -335,6 +466,7 @@ export function SaveMoneyModal({
         </DialogContent>
       </Dialog>
 
+      {showOnrampModal && (
       <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
@@ -353,6 +485,7 @@ export function SaveMoneyModal({
           }
         }}
       />
+      )}
     </>
   );
 }

@@ -29,7 +29,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <body className={`${inter.className} pb-safe`}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <ThirdwebProvider client={client}>
+            <ThirdwebProvider>
                 {children}
                 <Toaster />
                 {/* Connection Status Banner */}
