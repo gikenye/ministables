@@ -667,9 +667,7 @@ export default function HomePage() {
           </div>
         )} */}
 
-        {loading && isConnected ? (
-          <LoadingIndicator size="md" text="Loading account..." delay={100} />
-        ) : !isConnected ? (
+        {!isConnected ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-xl sm:shadow-2xl max-w-md w-full mx-3">
               <CardContent className="p-5 sm:p-8 text-center">
