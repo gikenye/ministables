@@ -13,23 +13,21 @@ interface ConnectWalletButtonProps {
 
 const wallets = [
   inAppWallet({
-    auth: {
-      options: ["google", "telegram", "farcaster", "x", "phone"],
-    },
-    // accountAbstraction: {
-    //   chain: celo,
-    //   sponsorGas: true, // or false, as needed
-    // },
-  }),
-  createWallet("com.valoraapp"),
-  createWallet("com.opera"),
-  createWallet("io.metamask"),
-  createWallet("com.coinbase.wallet"),
-  createWallet("io.rabby"),
+      auth: {
+        options: ["google", "facebook", "farcaster", "x", "phone"],
+      },
+      // accountAbstraction: {
+      //   chain: celo,
+      //   sponsorGas: true, // or false, as needed
+      // },
+    }),
+    createWallet("com.valoraapp"),
+    createWallet("io.metamask"),
+    createWallet("com.coinbase.wallet"),
+    createWallet("com.trustwallet.app"),
+    createWallet("walletConnect")
+  ];
 
-  createWallet("com.trustwallet.app"),
-  createWallet("walletConnect")
-];
 
 export function ConnectWallet({
   className,
