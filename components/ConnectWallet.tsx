@@ -169,7 +169,7 @@ export function ConnectWallet({
       <ConnectButton
         accountAbstraction={{
           chain: celo,
-          sponsorGas: true,
+          sponsorGas: false,
         }}
         client={client}
         connectButton={{ label: "Launch App" }}
