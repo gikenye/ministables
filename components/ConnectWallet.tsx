@@ -18,7 +18,7 @@ const wallets = [
     },
     // accountAbstraction: {
     //   chain: celo,
-    //   sponsorGas: true, // or false, as needed 
+    //   sponsorGas: true, // or false, as needed
     // },
   }),
   createWallet("io.metamask"),
@@ -29,17 +29,20 @@ const wallets = [
   createWallet("io.zerion.wallet"),
 ];
 
-export function ConnectWallet({ className, size = "md" }: ConnectWalletButtonProps) {
+export function ConnectWallet({
+  className,
+  size = "md",
+}: ConnectWalletButtonProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     // Check initial theme preference
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     setIsDarkMode(mediaQuery.matches);
 
     // Check if mobile - increased threshold for better mobile detection
-    const mobileQuery = window.matchMedia('(max-width: 768px)');
+    const mobileQuery = window.matchMedia("(max-width: 768px)");
     setIsMobile(mobileQuery.matches);
 
     // Listen for theme changes
@@ -52,13 +55,13 @@ export function ConnectWallet({ className, size = "md" }: ConnectWalletButtonPro
       setIsMobile(e.matches);
     };
 
-    mediaQuery.addEventListener('change', handleThemeChange);
-    mobileQuery.addEventListener('change', handleMobileChange);
+    mediaQuery.addEventListener("change", handleThemeChange);
+    mobileQuery.addEventListener("change", handleMobileChange);
 
     // Cleanup listeners on component unmount
     return () => {
-      mediaQuery.removeEventListener('change', handleThemeChange);
-      mobileQuery.removeEventListener('change', handleMobileChange);
+      mediaQuery.removeEventListener("change", handleThemeChange);
+      mobileQuery.removeEventListener("change", handleMobileChange);
     };
   }, []);
 
@@ -128,8 +131,8 @@ export function ConnectWallet({ className, size = "md" }: ConnectWalletButtonPro
       return darkTheme({
         colors: {
           ...commonColors,
-          modalBg: "hsl(150, 19%, 15%)", // Darker for better mobile contrast
-          accentText: "hsl(173, 100%, 55%)", // Slightly less bright for mobile
+          modalBg: "#1f2e26", // Darker for better mobile contrast
+          accentText: "#1affe4", // Slightly less bright for mobile
           borderColor: "#374151",
           secondaryText: "#9ca3af",
           primaryText: "#ffffff",
@@ -150,35 +153,41 @@ export function ConnectWallet({ className, size = "md" }: ConnectWalletButtonPro
   };
 
   return (
-    <div className={`touch-action-manipulation ${className || ""}`} style={{
-      // Mobile-specific container optimizations
-      ...(isMobile && {
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        maxWidth: "100%",
-        padding: "0 4px", // Minimal side padding
-      })
-    }}>
+    <div
+      className={`touch-action-manipulation ${className || ""}`}
+      style={{
+        // Mobile-specific container optimizations
+        ...(isMobile && {
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          maxWidth: "100%",
+          padding: "0 4px", // Minimal side padding
+        }),
+      }}
+    >
       <ConnectButton
-        client={client}
-        chains={[celo, scroll]}
-        // accountAbstraction={{
-        //   chain: celo,
-        //   sponsorGas: false,
-        // }}
-        connectButton={{
-          label: "Launch App",
-          style: getButtonStyle(),
+        accountAbstraction={{
+          chain: celo,
+          sponsorGas: true,
         }}
+        client={client}
+        connectButton={{ label: "Launch App" }}
         connectModal={{
           showThirdwebBranding: false,
           size: "compact",
           title: "Minilend :)",
-          titleIcon:
-            "https://ministables.vercel.app/minilend-logo.png",
+          titleIcon: "https://ministables.vercel.app/minilend-logo.png",
         }}
-        theme={getTheme()}
+        theme={darkTheme({
+          colors: {
+            modalBg: "hsl(148, 19%, 15%)",
+            borderColor: "hsl(217, 19%, 27%)",
+            accentText: "hsl(193, 100%, 55%)",
+            primaryButtonBg: "hsl(150, 75%, 22%)",
+            primaryButtonText: "hsl(0, 0%, 100%)",
+          },
+        })}
         wallets={wallets}
       />
     </div>
