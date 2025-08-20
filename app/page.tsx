@@ -375,14 +375,17 @@ export default function HomePage() {
         spender: MINILEND_ADDRESS,
       });
 
-      // 2. Approve if needed
+      // 2. Approve if needed and wait for receipt per v5 docs
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
           spender: MINILEND_ADDRESS,
           amount: amountWei.toString(),
         });
-        await sendTransaction(approveTx);
+        const result = await sendTransaction(approveTx);
+        if (result?.transactionHash) {
+          await waitForReceipt({ client, chain: celo, transactionHash: result.transactionHash });
+        }
       }
 
       // 3. Deposit
