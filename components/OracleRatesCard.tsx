@@ -1,172 +1,142 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { RefreshCw, TrendingUp, Clock } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { formatUnits } from "viem";
 import { oracleService } from "@/lib/services/oracleService";
-import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 
-// CELO to USD conversion rate - should be updated with real-time data
-const CELO_USD_RATE = 0.7;
-
-interface OracleRate {
-  token: string;
+interface TokenRate {
+  address: string;
   symbol: string;
   rate: string;
-  timestamp: number;
   usdValue: string;
+  localValue?: string;
 }
 
-export function OracleRatesCard() {
-  const [rates, setRates] = useState<OracleRate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+// No hardcoded rates; fetch from on-chain backend oracle
 
-  // Get first 6 tokens from the new supported tokens
-  const displayTokens = useMemo(() => Object.values(NEW_SUPPORTED_TOKENS).slice(0, 6), []);
+const TOKEN_INFO: Record<string, { symbol: string; flag: string }> = {
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", flag: "🇰🇪" },
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", flag: "🇺🇸" },
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", flag: "🇺🇸" },
+  "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", flag: "🇳🇬" },
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", flag: "🇺🇸" },
 
-  const loadOracleRates = useCallback(async () => {
-    setLoading(true);
-    try {
-      const ratePromises = displayTokens.map(async (tokenInfo) => {
-        try {
-          const { rate, timestamp } = await oracleService.getMedianRate(tokenInfo.address);
+  // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", flag: "🇪🇺" },
+  // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", flag: "🇧🇷" },
+  // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", flag: "🌍" },
+  // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", flag: "🇵🇭" },
+  // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", flag: "🇨🇴" },
+  // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", flag: "🇬🇭" },
+  // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", flag: "🌍" },
+};
 
-          // Convert rate to USD value (assuming CELO rate as base)
-          const rateInCelo = Number(formatUnits(BigInt(rate), 18));
-          const usdValue = (rateInCelo * CELO_USD_RATE).toFixed(4);
+const DEFAULT_DISPLAY_TOKENS = [
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+];
 
-          return {
-            token: tokenInfo.address,
-            symbol: tokenInfo.symbol,
-            rate: rate.toString(),
-            timestamp: Number(timestamp),
-            usdValue,
-          };
-        } catch (error) {
-          if (process.env.NODE_ENV === 'development') {
-            console.error(`Failed to get rate for ${tokenInfo.symbol.replace(/[\r\n]/g, '')}:`, error);
-          }
-          return {
-            token: tokenInfo.address,
-            symbol: tokenInfo.symbol,
-            rate: "0",
-            timestamp: Math.floor(Date.now() / 1000),
-            usdValue: "0.0000",
-          };
-        }
-      });
+const LOCAL_META: Record<string, { code: string; symbol: string }> = {
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { code: "KES", symbol: "KSh" },
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { code: "NGN", symbol: "₦" },
+};
 
-      const rateResults = await Promise.allSettled(ratePromises);
-      const resolvedRates = rateResults
-        .filter((result): result is PromiseFulfilledResult<OracleRate> => 
-          result.status === 'fulfilled'
-        )
-        .map(result => result.value);
-      
-      setRates(resolvedRates);
-      setLastUpdate(new Date());
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error("Error loading oracle rates:", error);
-      }
-      setRates([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [displayTokens, setRates, setLastUpdate, setLoading]);
+export interface OracleRatesCardProps {
+  tokens?: string[];
+  localTokenAddress?: string; // token pegged to user local fiat (e.g., cKES, cNGN)
+}
+
+export function OracleRatesCard({ tokens, localTokenAddress }: OracleRatesCardProps) {
+  const [displayedRates, setDisplayedRates] = useState<TokenRate[]>([]);
+  const displayTokens = useMemo(() => (tokens && tokens.length > 0 ? tokens : DEFAULT_DISPLAY_TOKENS), [tokens]);
 
   useEffect(() => {
-    loadOracleRates();
-  }, [loadOracleRates]);
+    let cancelled = false;
+    const run = async () => {
+      try {
+        // Fetch USD prices for all tokens to display
+        const results = await Promise.all(
+          displayTokens.map(async (addr) => {
+            try {
+              const { rate } = await oracleService.getMedianRate(addr);
+              const usdValue = Number(formatUnits(rate, 18));
+              const base: TokenRate = {
+                address: addr,
+                symbol: TOKEN_INFO[addr]?.symbol || "UNKNOWN",
+                rate: rate.toString(),
+                usdValue: usdValue.toFixed(6),
+              };
+              return base;
+            } catch {
+              return {
+                address: addr,
+                symbol: TOKEN_INFO[addr]?.symbol || "UNKNOWN",
+                rate: "0",
+                usdValue: "0.000000",
+              } as TokenRate;
+            }
+          })
+        );
+        if (cancelled) return;
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleTimeString();
-  };
+        // If a local-token is provided, compute local values using oracle ratio
+        if (localTokenAddress) {
+          try {
+            const { rate: localUsdRate } = await oracleService.getMedianRate(localTokenAddress);
+            const localUsd = Number(formatUnits(localUsdRate, 18));
+            const localMeta = LOCAL_META[localTokenAddress];
+            if (localUsd > 0 && localMeta) {
+              const withLocal = results.map((r) => {
+                if (r.address.toLowerCase() === localTokenAddress.toLowerCase()) {
+                  return { ...r, localValue: `1.000000 ${localMeta.symbol}` };
+                }
+                const usdPerToken = Number(r.usdValue);
+                const localPerToken = usdPerToken / localUsd; // price in local fiat
+                return { ...r, localValue: `${localPerToken.toFixed(2)} ${localMeta.symbol}` };
+              });
+              if (!cancelled) setDisplayedRates(withLocal);
+              return;
+            }
+          } catch {}
+        }
 
-  const getTokenFlag = (symbol: string) => {
-    const flags: Record<string, string> = {
-      CELO: "🟡",
-      cUSD: "🇺🇸",
-      cEUR: "🇪🇺",
-      cREAL: "🇧🇷",
-      eXOF: "🌍",
-      cKES: "🇰🇪",
-      PUSO: "🇵🇭",
-      cCOP: "🇨🇴",
-      cGHS: "🇬🇭",
-      USDT: "🇺🇸",
-      USDC: "🇺🇸",
-      USDGLO: "🌍",
+        setDisplayedRates(results);
+      } catch {
+        // ignore
+      }
     };
-    return flags[symbol] || "💱";
-  };
+    run();
+    return () => { cancelled = true; };
+  }, [displayTokens, localTokenAddress]);
 
   return (
     <Card className="bg-white border-secondary">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center text-primary">
-            <TrendingUp className="w-5 h-5 mr-2" />
-            Live Exchange Rates
-          </CardTitle>
-          <Button
-            onClick={loadOracleRates}
-            disabled={loading}
-            variant="outline"
-            size="sm"
-            className="bg-transparent"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-        {lastUpdate && (
-          <div className="flex items-center text-xs text-gray-500">
-            <Clock className="w-3 h-3 mr-1" />
-            Last updated: {lastUpdate.toLocaleTimeString()}
-          </div>
-        )}
+        <CardTitle className="flex items-center text-primary">
+          <TrendingUp className="w-5 h-5 mr-2" />
+          Rates
+        </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {loading ? (
-          <div className="text-center py-4">
-            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
-            <p className="text-sm text-gray-600 mt-2">Loading rates...</p>
+      <CardContent className="space-y-2">
+        {displayedRates.map((rate) => (
+          <div
+            key={rate.address}
+            className="flex items-center justify-between py-1"
+          >
+            <span className="font-medium text-gray-900 text-sm">
+              {rate.symbol}
+            </span>
+            <span className="font-semibold text-primary text-sm">
+              ${rate.usdValue}
+            </span>
+            {rate.localValue && (
+              <span className="text-gray-500 text-xs ml-2">{rate.localValue}</span>
+            )}
           </div>
-        ) : rates.length > 0 ? (
-          rates.map((rate) => (
-            <div
-              key={rate.token}
-              className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
-            >
-              <div className="flex items-center">
-                <span className="text-lg mr-2">
-                  {getTokenFlag(rate.symbol)}
-                </span>
-                <div>
-                  <span className="font-medium text-gray-900">
-                    {rate.symbol}
-                  </span>
-                  <div className="text-xs text-gray-500">
-                    Updated: {formatTimestamp(rate.timestamp)}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-semibold text-primary">
-                  ≈ ${rate.usdValue}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {Number(formatUnits(BigInt(rate.rate), 18)).toFixed(4)} CELO
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-500 text-center py-4">No rates available</p>
-        )}
+        ))}
       </CardContent>
     </Card>
   );

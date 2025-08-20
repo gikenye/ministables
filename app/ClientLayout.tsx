@@ -3,6 +3,7 @@
 import type React from "react";
 import { useEffect } from "react";
 import { ThirdwebProvider } from "thirdweb/react";
+import { client } from "@/lib/thirdweb/client";
 import { Toaster } from "@/components/ui/toaster";
 import {
   registerServiceWorker,

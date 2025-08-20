@@ -2,7 +2,11 @@ import { getContract, readContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
 
-export const ORACLE_ADDRESS = "0x6c844bF2c73Ab4230a09FaACfe6e6e05765f1031";
+// Resolve oracle address from env for multi-chain readiness (client-safe)
+// NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS should be set for the active chain (Celo)
+export const ORACLE_ADDRESS =
+  (process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS as string | undefined)?.trim() ||
+  "0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924";
 
 // Price validation constants
 const ONE_HOUR_IN_SECONDS = 3600;
@@ -26,25 +30,21 @@ class OracleService {
 
   async getMedianRate(tokenAddress: string): Promise<OracleRate> {
     try {
+      // Prefer canonical getter to also retrieve timestamp
       const result = await readContract({
         contract: this.contract,
-        method: "function getMedianRate(address token) view returns (uint256 rate, uint256 timestamp)",
+        method: "function getMedianRate(address) view returns (uint256 rate, uint256 timestamp)",
         params: [tokenAddress],
       });
-      
-      // Debug logging only in development
-      if (process.env.NODE_ENV === 'development') {
-        console.debug(`Oracle data for ${tokenAddress.replace(/[\r\n]/g, '')}:`, {
-          rate: result[0].toString(),
-          timestamp: result[1].toString(),
-          currentTime: Math.floor(Date.now() / 1000)
-        });
+
+      const rate = (result as any)[0] as bigint;
+      const timestamp = (result as any)[1] as bigint;
+
+      if (!rate || rate === BigInt(0)) {
+        throw new Error(`No price feed for token ${tokenAddress}`);
       }
-      
-      return {
-        rate: result[0],
-        timestamp: result[1],
-      };
+
+      return { rate, timestamp: timestamp ?? BigInt(0) };
     } catch (error) {
       console.error(`Failed to get oracle rate for ${tokenAddress.replace(/[\r\n]/g, '')}:`, error);
       throw new Error(`Oracle price feed unavailable for token ${tokenAddress.replace(/[\r\n]/g, '')}`);
@@ -53,16 +53,15 @@ class OracleService {
 
   async getMultipleRates(tokenAddresses: string[]): Promise<{ rates: bigint[]; timestamp: bigint }> {
     try {
-      const result = await readContract({
-        contract: this.contract,
-        method: "function getMultipleRates(address[] tokens) view returns (uint256[] rates_array, uint256 timestamp)",
-        params: [tokenAddresses],
-      });
-      
-      return {
-        rates: [...result[0]],
-        timestamp: result[1],
-      };
+      const results = await Promise.all(
+        tokenAddresses.map((addr) => this.getMedianRate(addr))
+      );
+
+      const rates = results.map((r) => r.rate);
+      // Use the oldest timestamp among the set for conservatism
+      const timestamp = results.reduce<bigint>((minTs, r) => (minTs === BigInt(0) || r.timestamp < minTs ? r.timestamp : minTs), BigInt(0));
+
+      return { rates, timestamp };
     } catch (error) {
       console.error(`Failed to get multiple oracle rates:`, error);
       throw new Error(`Oracle price feed unavailable for multiple tokens`);
@@ -92,6 +91,17 @@ class OracleService {
     } catch (error) {
       console.error('Failed to validate multiple tokens:', error);
       return false;
+    }
+  }
+
+  async getTokenPrice(tokenAddress: string): Promise<number> {
+    try {
+      const { rate } = await this.getMedianRate(tokenAddress);
+      // Convert from wei (1e18) to decimal
+      return Number(rate) / 1e18;
+    } catch (error) {
+      console.error(`Failed to get token price for ${tokenAddress}:`, error);
+      throw error;
     }
   }
 }

@@ -1,5 +1,13 @@
 import { prepareContractCall, prepareEvent } from "thirdweb";
 import { useSendTransaction, useReadContract, useContractEvents } from "thirdweb/react";
+import { oracleService } from "../services/oracleService";
+
+async function ensureOracleDataIsValidForTokens(tokenAddresses: string[]): Promise<void> {
+  const valid = await oracleService.validateMultipleTokens(tokenAddresses);
+  if (!valid) {
+    throw new Error("Oracle price feed unavailable or stale for one or more tokens");
+  }
+}
 
 // ================================= WRITE FUNCTIONS =================================
 
@@ -8,15 +16,19 @@ export const useBorrow = () => {
   
   return (contract: any, token: string, amount: bigint, collateralToken: string) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function borrow(address token, uint256 amount, address collateralToken)",
-        params: [token, amount, collateralToken],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token, collateralToken])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function borrow(address token, uint256 amount, address collateralToken)",
+            params: [token, amount, collateralToken],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };
@@ -26,15 +38,19 @@ export const useDeposit = () => {
   
   return (contract: any, token: string, amount: bigint, lockPeriod: bigint) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function deposit(address token, uint256 amount, uint256 lockPeriod)",
-        params: [token, amount, lockPeriod],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function deposit(address token, uint256 amount, uint256 lockPeriod)",
+            params: [token, amount, lockPeriod],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };
@@ -44,15 +60,19 @@ export const useDepositCollateral = () => {
   
   return (contract: any, token: string, amount: bigint) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function depositCollateral(address token, uint256 amount)",
-        params: [token, amount],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function depositCollateral(address token, uint256 amount)",
+            params: [token, amount],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };
@@ -80,15 +100,19 @@ export const useLiquidate = () => {
   
   return (contract: any, user: string, token: string, collateralToken: string) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function liquidate(address user, address token, address collateralToken)",
-        params: [user, token, collateralToken],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token, collateralToken])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function liquidate(address user, address token, address collateralToken)",
+            params: [user, token, collateralToken],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };
@@ -98,15 +122,19 @@ export const useRepay = () => {
   
   return (contract: any, token: string, amount: bigint) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function repay(address token, uint256 amount)",
-        params: [token, amount],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function repay(address token, uint256 amount)",
+            params: [token, amount],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };
@@ -116,15 +144,19 @@ export const useSupply = () => {
   
   return (contract: any, token: string, amount: bigint, lockPeriod: bigint) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function supply(address token, uint256 amount, uint256 lockPeriod)",
-        params: [token, amount, lockPeriod],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function supply(address token, uint256 amount, uint256 lockPeriod)",
+            params: [token, amount, lockPeriod],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };
@@ -134,15 +166,19 @@ export const useWithdraw = () => {
   
   return (contract: any, token: string, amount: bigint) => {
     return new Promise<string>((resolve, reject) => {
-      const transaction = prepareContractCall({
-        contract,
-        method: "function withdraw(address token, uint256 amount)",
-        params: [token, amount],
-      });
-      sendTransaction(transaction, {
-        onSuccess: (result) => resolve(result.transactionHash),
-        onError: (error) => reject(error)
-      });
+      ensureOracleDataIsValidForTokens([token])
+        .then(() => {
+          const transaction = prepareContractCall({
+            contract,
+            method: "function withdraw(address token, uint256 amount)",
+            params: [token, amount],
+          });
+          sendTransaction(transaction, {
+            onSuccess: (result) => resolve(result.transactionHash),
+            onError: (error) => reject(error)
+          });
+        })
+        .catch(reject);
     });
   };
 };

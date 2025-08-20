@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSendTransaction } from "thirdweb/react";
-import { prepareContractCall } from "thirdweb";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +24,11 @@ import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
 import { offrampService } from "@/lib/services/offrampService";
 import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
+import { useActiveAccount, TransactionButton } from "thirdweb/react";
+import { getContract, prepareContractCall } from "thirdweb";
+import { client } from "@/lib/thirdweb/client";
+import { celo } from "thirdweb/chains";
+import { parseUnits } from "viem";
 
 interface FundsWithdrawalModalProps {
   isOpen: boolean;
@@ -59,8 +62,9 @@ export function FundsWithdrawalModal({
   const [error, setError] = useState<string | null>(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false);
-  
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  const account = useActiveAccount();
+  const [recipient, setRecipient] = useState("");
+  const [quickSendAmount, setQuickSendAmount] = useState("");
 
   const handleWithdraw = async () => {
     if (!form.token || !form.amount) return;
@@ -167,7 +171,7 @@ export function FundsWithdrawalModal({
             <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
             Withdraw Funds
           </DialogTitle>
-          <DialogDescription>Withdraw your available balance</DialogDescription>
+          <DialogDescription>Withdraw your available balance. Your wallet will prompt for the transaction.</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -391,6 +395,50 @@ export function FundsWithdrawalModal({
             </div>
           )}
 
+          {/* Quick send to address using connected wallet */}
+          {account && form.token && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="text-sm font-medium text-gray-800 mb-2">
+                Quick Send {tokenInfos[form.token]?.symbol}
+              </div>
+              <div className="space-y-2">
+                <Input
+                  placeholder="Recipient address (0x...)"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Amount"
+                    value={quickSendAmount}
+                    onChange={(e) => setQuickSendAmount(e.target.value)}
+                  />
+                  <TransactionButton
+                    disabled={!recipient || !quickSendAmount}
+                    transaction={() => {
+                      const decimals = tokenInfos[form.token]?.decimals || 18;
+                      const tokenContract = getContract({ client, chain: celo, address: form.token });
+                      return prepareContractCall({
+                        contract: tokenContract,
+                        method: "function transfer(address to, uint256 amount)",
+                        params: [recipient as `0x${string}`, parseUnits(quickSendAmount || "0", decimals)],
+                      });
+                    }}
+                    onError={(err) => {
+                      console.error("Quick send failed:", err);
+                    }}
+                    onSuccess={() => {
+                      setQuickSendAmount("");
+                      setRecipient("");
+                    }}
+                  >
+                    Send
+                  </TransactionButton>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
             <Button
               onClick={onClose}
@@ -404,7 +452,6 @@ export function FundsWithdrawalModal({
               disabled={
                 loading ||
                 isWithdrawing ||
-                isTransactionPending ||
                 !form.token ||
                 !form.amount ||
                 getWithdrawableAmount(form.token) === "0" ||
@@ -412,7 +459,7 @@ export function FundsWithdrawalModal({
               }
               className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
             >
-              {loading || isWithdrawing || isTransactionPending ? "Processing..." : "Withdraw"}
+              {loading || isWithdrawing ? "Processing..." : "Withdraw"}
             </Button>
           </div>
         </div>

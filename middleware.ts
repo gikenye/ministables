@@ -4,7 +4,6 @@ import { getToken } from "next-auth/jwt";
 
 // List of routes that require verification
 const PROTECTED_ROUTES = [
-  "/dashboard",
   "/withdraw",
   "/borrow",
   "/save",

@@ -7,13 +7,14 @@ import {
   waitForReceipt,
   readContract,
 } from 'thirdweb';
+import { transfer } from 'thirdweb/extensions/erc20';
 import { celo } from 'thirdweb/chains';
 import {
   useSendTransaction,
   useReadContract,
   useActiveAccount,
 } from 'thirdweb/react';
-import { ThirdwebConnectWalletButton } from '@/components/ThirdwebConnectWalletButton';
+import { ConnectWallet } from '@/components/ConnectWallet';
 import {
   AlertCircle,
   TrendingUp,
@@ -25,11 +26,12 @@ import {
   Clock,
 } from 'lucide-react';
 import { client } from '@/lib/thirdweb/client';
+import { parseUnits } from 'viem';
 
 const CONTRACT_ADDRESS = '0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c';
 const USDC_CONTRACT_ADDRESS = '0xcebA9300f2b948710d2653dD7B07f33A8B32118C';
 const CKES_CONTRACT_ADDRESS = '0x456a3D042C0DbD3db53D5489e98dFb038553B0d0';
-const ORACLE_CONTRACT_ADDRESS = '0x96D7E17a4Af7af46413A7EAD48f01852C364417A';
+const ORACLE_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS as string) || '0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924';
 
 const contract = getContract({
   client,
@@ -91,7 +93,7 @@ interface UserBalances {
 
 const MinilendTestingDashboard = () => {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [runningTests, setRunningTests] = useState<{[key: string]: boolean}>({});
+  const [runningTests, setRunningTests] = useState<{ [key: string]: boolean }>({});
   const [contractData, setContractData] = useState<ContractData>({
     liquidationThreshold: '0',
     totalSupplyUSDC: '0',
@@ -113,6 +115,8 @@ const MinilendTestingDashboard = () => {
 
   const activeAccount = useActiveAccount();
   const { mutate: sendTransaction } = useSendTransaction();
+  const [recipient, setRecipient] = useState<string>('');
+  const [usdcAmount, setUsdcAmount] = useState<string>('1');
 
   const TEST_AMOUNTS = {
     USDC_DEPOSIT: '10000', // 0.01 USDC (6 decimals)
@@ -290,7 +294,7 @@ const MinilendTestingDashboard = () => {
       addTestResult(step, `${description} updated`, 'SUCCESS');
       return;
     }
-    
+
     for (let attempts = 0; attempts < MAX_POLL_ATTEMPTS; attempts++) {
       await fetchData();
       if (checkCondition()) {
@@ -818,7 +822,7 @@ const MinilendTestingDashboard = () => {
             </div>
           </div>
           <div className="w-full sm:w-auto sm:text-right">
-            <ThirdwebConnectWalletButton />
+            <ConnectWallet />
           </div>
           <p className="text-gray-600">
             Production testing suite for Minilend protocol on Celo Mainnet
@@ -945,6 +949,62 @@ const MinilendTestingDashboard = () => {
               <div className="text-lg font-semibold">{formatAmount(contractData.contractCkesBalance)} cKES</div>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Quick Wallet Actions</h2>
+          {!activeAccount ? (
+            <div className="text-sm text-gray-600">Connect a wallet to send transactions.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-medium mb-2">Send USDC</h3>
+                <div className="space-y-3">
+                  <input
+                    className="w-full border rounded px-3 py-2"
+                    placeholder="Recipient address (0x...)"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                  />
+                  <div className="flex gap-3">
+                    <input
+                      className="flex-1 border rounded px-3 py-2"
+                      placeholder="Amount (e.g. 1.0)"
+                      value={usdcAmount}
+                      onChange={(e) => setUsdcAmount(e.target.value)}
+                    />
+                    <button
+                      className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={!recipient}
+                      onClick={async () => {
+                        try {
+                          const token = getContract({ client, chain: celo, address: USDC_CONTRACT_ADDRESS });
+                          const tx = prepareContractCall({
+                            contract: token,
+                            method: 'function transfer(address to, uint256 amount)',
+                            params: [recipient as `0x${string}`, parseUnits(usdcAmount || '0', 6)],
+                          });
+                          await new Promise<void>((resolve, reject) => {
+                            sendTransaction(tx, {
+                              onSuccess: (res) => {
+                                addTestResult(100, 'Sent USDC', 'SUCCESS', { transactionHash: res.transactionHash });
+                                resolve();
+                              },
+                              onError: (error: any) => reject(error),
+                            });
+                          });
+                        } catch (error: any) {
+                          addTestResult(100, 'Send USDC failed', 'ERROR', error?.message || error);
+                        }
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">

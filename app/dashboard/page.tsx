@@ -1,50 +1,301 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink } from "lucide-react";
+import { useSession, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
-import { WithdrawModal } from "@/components/WithdrawModal";
+import { extractTransactionError } from "@/lib/utils/errorMapping";
+import { FundsWithdrawalModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
+import { MINILEND_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
 import { useActiveAccount } from "thirdweb/react";
-import { useDashboardData } from "@/hooks/useDashboardData";
-import { useWithdraw } from "@/hooks/useWithdraw";
+import {
+  useWithdraw as useWithdrawContract
+} from '@/lib/thirdweb/minilend-contract';
+import { getContract, readContract } from "thirdweb";
+import { client } from "@/lib/thirdweb/client";
+import { celo } from "thirdweb/chains";
 
+
+// Supported stablecoins from deployment config
 const SUPPORTED_STABLECOINS = [
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
+  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
+  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
+  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
+  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+];
+
+// Valid collateral assets from deployment config
+const SUPPORTED_COLLATERAL = [
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
   "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
   "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
   "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
 ];
 
-const SUPPORTED_COLLATERAL = SUPPORTED_STABLECOINS;
-
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
+  "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", decimals: 18 },
   "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
   "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
   "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
+  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", decimals: 18 },
   "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", decimals: 18 },
+  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", decimals: 18 },
+  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", decimals: 18 },
+  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", decimals: 18 },
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { symbol: "cNGN", decimals: 18 },
+};
+
+
+
+import TVLCard from "@/components/TVLCard";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { NetworkStatus, RateLimitWarning } from "@/components/NetworkStatus";
+
+// Rate limiting utility
+const createRateLimiter = (maxRequests: number, windowMs: number) => {
+  const requests: number[] = [];
+  
+  return {
+    canMakeRequest: () => {
+      const now = Date.now();
+      const windowStart = now - windowMs;
+      
+      // Remove old requests
+      while (requests.length > 0 && requests[0] < windowStart) {
+        requests.shift();
+      }
+      
+      return requests.length < maxRequests;
+    },
+    recordRequest: () => {
+      requests.push(Date.now());
+    },
+    getWaitTime: () => {
+      if (requests.length === 0) return 0;
+      const oldestRequest = requests[0];
+      const windowStart = Date.now() - windowMs;
+      return Math.max(0, oldestRequest - windowStart + 100); // Add 100ms buffer
+    }
+  };
+};
+
+const rateLimiter = createRateLimiter(5, 1000); // 5 requests per second
+
+const useDashboardData = (address: string | undefined, contract: any) => {
+  const [userData, setUserData] = useState<UserData>({
+    deposits: {},
+    borrows: {},
+    collateral: {},
+    lockEnds: {},
+  });
+  const [poolData, setPoolData] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  const [showRateLimitWarning, setShowRateLimitWarning] = useState(false);
+
+  const makeRateLimitedRequest = async <T>(requestFn: () => Promise<T>): Promise<T> => {
+    while (!rateLimiter.canMakeRequest()) {
+      const waitTime = rateLimiter.getWaitTime();
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    rateLimiter.recordRequest();
+    return await requestFn();
+  };
+
+  const loadDashboardData = async () => {
+    if (!address) return;
+    setLoading(true);
+    try {
+      const deposits: Record<string, string> = {};
+      const borrows: Record<string, string> = {};
+      const collateral: Record<string, string> = {};
+      const lockEnds: Record<string, number> = {};
+      const pools: Record<string, string> = {};
+      const rates: Record<string, number> = {};
+
+      // Process only first 3 tokens to reduce requests
+      const tokensToProcess = SUPPORTED_STABLECOINS.slice(0, 3);
+      
+      for (const token of tokensToProcess) {
+        try {
+          // Add delay between token processing
+          if (tokensToProcess.indexOf(token) > 0) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+          
+          const contractCalls = await Promise.allSettled([
+            makeRateLimitedRequest(() => readContract({
+              contract,
+              method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
+              params: [address, token, BigInt(0)],
+            })),
+            makeRateLimitedRequest(() => readContract({
+              contract,
+              method: "function userBorrows(address, address) view returns (uint256)",
+              params: [address, token],
+            })),
+            makeRateLimitedRequest(() => readContract({
+              contract,
+              method: "function userCollateral(address, address) view returns (uint256)",
+              params: [address, token],
+            }))
+          ]);
+          
+          const userDeposit = contractCalls[0].status === 'fulfilled' ? contractCalls[0].value : [BigInt(0), BigInt(0)];
+          const userBorrow = contractCalls[1].status === 'fulfilled' ? contractCalls[1].value : BigInt(0);
+          const userCollat = contractCalls[2].status === 'fulfilled' ? contractCalls[2].value : BigInt(0);
+          
+          deposits[token] = userDeposit[0].toString();
+          borrows[token] = userBorrow.toString();
+          collateral[token] = userCollat.toString();
+          lockEnds[token] = Number(userDeposit[1]);
+          pools[token] = "0";
+          try {
+            const priceUsd = await oracleService.getTokenPrice(token);
+            rates[token] = priceUsd;
+          } catch {
+          rates[token] = 1.0;
+          }
+        } catch (error: any) {
+          const tokenSymbol = TOKEN_INFO[token]?.symbol || 'Unknown';
+          console.warn(`Skipping ${tokenSymbol} due to contract error:`, error.code || error.message);
+          
+          if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
+            setShowRateLimitWarning(true);
+            setTimeout(() => setShowRateLimitWarning(false), 5000);
+            // Wait longer on rate limit
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+          
+          deposits[token] = "0";
+          borrows[token] = "0";
+          collateral[token] = "0";
+          lockEnds[token] = 0;
+          pools[token] = "0";
+          rates[token] = rates[token] ?? 1.0;
+        }
+      }
+      
+      // Set default values for remaining tokens
+      SUPPORTED_STABLECOINS.slice(3).forEach(token => {
+        deposits[token] = "0";
+        borrows[token] = "0";
+        collateral[token] = "0";
+        lockEnds[token] = 0;
+        pools[token] = "0";
+        if (rates[token] === undefined) rates[token] = 1.0;
+      });
+
+      setUserData({ deposits, borrows, collateral, lockEnds });
+      setPoolData(pools);
+      setExchangeRates(rates);
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+      // Set empty data on error to prevent UI crashes
+      setUserData({
+        deposits: {},
+        borrows: {},
+        collateral: {},
+        lockEnds: {},
+      });
+      setPoolData({});
+      setExchangeRates({});
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning };
 };
 
 export default function DashboardPage() {
   const account = useActiveAccount();
-  const isConnected = !!account;
+  const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
   const address = account?.address;
+  const isConnected = !!address;
   
+  // Verification state
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationSkipped, setVerificationSkipped] = useState(false);
+  
+  const contract = getContract({
+    client,
+    chain: celo,
+    address: MINILEND_ADDRESS,
+  });
+
+  const withdrawFn = useWithdrawContract();
   const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const { deposits, borrows, collateral, lockEnds, poolData, loading } = useDashboardData(address);
-  const { withdraw, isLoading: withdrawLoading } = useWithdraw();
+  
+  const { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning } = useDashboardData(address, contract);
+
+  useEffect(() => {
+    if (isConnected && address) {
+      // Add delay before loading to prevent immediate rate limiting
+      const timer = setTimeout(() => {
+        loadDashboardData();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected, address]);
+
+  useEffect(() => {
+    if (isConnected && address && !session?.user?.address) {
+      signIn("self-protocol", {
+        address,
+        verificationData: "",
+        redirect: false,
+      });
+    }
+  }, [isConnected, address, session]);
+
+  // Check localStorage for verification skip state
+  useEffect(() => {
+    const skipped = localStorage.getItem('verification-skipped') === 'true';
+    setVerificationSkipped(skipped);
+  }, []);
+
+  // Remove forced verification - make it optional
+  useEffect(() => {
+    if (sessionStatus === "loading") return;
+    // Don't show verification if user has skipped it or is already verified
+    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped);
+  }, [isConnected, session, sessionStatus, verificationSkipped]);
 
 
+
+  const getActualWithdrawableAmount = async (token: string): Promise<string> => {
+    if (!address) return "0";
+    
+    try {
+      // Use thirdweb getUserBalance function
+      const balance = await thirdwebService.getUserBalance(address, token);
+      return balance;
+    } catch (error) {
+      console.error(`Error getting user balance:`, error);
+      return "0";
+    }
+  };
 
   const handleWithdraw = async (token: string, amount: string): Promise<void> => {
     try {
@@ -54,10 +305,18 @@ export default function DashboardPage() {
         throw new Error("Unable to get current market prices. Please try again in a moment.");
       }
       
-      await withdraw(token, amount);
-    } catch (error) {
+      const tokenInfo = TOKEN_INFO[token];
+      if (!tokenInfo) throw new Error("Token not supported");
+      const amountWei = BigInt(parseFloat(amount) * Math.pow(10, tokenInfo.decimals));
+      
+      // The contract's withdraw function will automatically calculate withdrawable amount
+      // based on unlocked deposits and validate the request
+      await withdrawFn(contract, token, amountWei);
+      await loadDashboardData();
+    } catch (error: any) {
+      const errorMessage = extractTransactionError(error);
       console.error("Error withdrawing:", error);
-      throw error;
+      throw new Error(errorMessage);
     }
   };
 
@@ -112,6 +371,11 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <NetworkStatus />
+      <RateLimitWarning 
+        show={showRateLimitWarning} 
+        onDismiss={() => setShowRateLimitWarning(false)} 
+      />
       <header className="bg-white border-b border-gray-200 px-3 py-2">
         <div className="flex items-center max-w-lg mx-auto">
           <Link href="/">
@@ -131,7 +395,38 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="px-3 py-3 max-w-lg mx-auto pb-20 space-y-3">
+      <main className="px-3 py-3 max-w-lg mx-auto pb-24 space-y-3">
+        {needsVerification && isConnected && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Shield className="w-4 h-4 mr-2" />
+                <p>Verify you're human for enhanced security (optional)</p>
+              </div>
+              <div className="flex gap-2 ml-4">
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/self")}
+                  className="bg-primary hover:bg-primary/90 text-white text-xs px-3 py-1 h-7"
+                >
+                  Verify
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    localStorage.setItem('verification-skipped', 'true');
+                    setVerificationSkipped(true);
+                    setNeedsVerification(false);
+                  }}
+                  className="text-gray-600 hover:text-gray-800 text-xs px-3 py-1 h-7"
+                >
+                  Skip
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <Card className="bg-white border-secondary shadow-sm">
           <CardContent className="p-4">
             <h2 className="text-lg font-semibold text-center text-primary mb-3">
@@ -169,6 +464,7 @@ export default function DashboardPage() {
                 History
               </Button>
             </div>
+
           </CardContent>
         </Card>
 
@@ -291,8 +587,28 @@ export default function DashboardPage() {
           </Card>
 
           <div className="bg-white border-secondary shadow-sm rounded-lg">
-            <OracleRatesCard />
+            <OracleRatesCard
+              tokens={[
+                "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0",
+                "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+                "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+                "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71",
+              ]}
+              localTokenAddress={"0x456a3D042C0DbD3db53D5489e98dFb038553B0d0"}
+            />
           </div>
+
+          <Card className="bg-white border-secondary shadow-sm col-span-2">
+            <CardContent className="p-4">
+              <ErrorBoundary>
+                <TVLCard 
+                  contract={contract} 
+                  supportedTokens={SUPPORTED_STABLECOINS}
+                  tokenInfo={TOKEN_INFO}
+                />
+              </ErrorBoundary>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
@@ -309,14 +625,16 @@ export default function DashboardPage() {
         </div>
       </footer>
 
-      <WithdrawModal
+      <FundsWithdrawalModal
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={handleWithdraw}
         userDeposits={deposits}
         depositLockEnds={lockEnds}
         tokenInfos={TOKEN_INFO}
-        loading={loading || withdrawLoading}
+        loading={loading}
+        userAddress={address}
+        getWithdrawableAmount={getActualWithdrawableAmount}
       />
     </div>
   );

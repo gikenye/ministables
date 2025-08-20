@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@/lib/wallet";
 import { useContract } from "@/lib/contract";
 import { useSession } from "next-auth/react";
-import { ThirdwebConnectWalletButton } from "@/components/ThirdwebConnectWalletButton";
+import { ConnectWallet } from "@/components/ConnectWallet";
 import { TransactionModal } from "@/components/TransactionModal";
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
@@ -525,7 +525,7 @@ export default function HomePage() {
           </div>
           {!isConnected ? (
             <div className="w-full sm:w-auto">
-              <ThirdwebConnectWalletButton className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl min-h-[48px] shadow-lg hover:shadow-xl transition-all duration-200" />
+              <ConnectWallet className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 py-2 rounded-xl min-h-[48px] shadow-lg hover:shadow-xl transition-all duration-200" />
               {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
             </div>
           ) : (
@@ -609,7 +609,7 @@ export default function HomePage() {
                     <p className="text-red-600 text-sm">{error}</p>
                   </div>
                 )}
-                <ThirdwebConnectWalletButton className="bg-primary hover:bg-secondary text-white w-full min-h-[48px] rounded-xl shadow-lg hover:shadow-xl transition-all duration-200" />
+                <ConnectWallet className="bg-primary hover:bg-secondary text-white w-full min-h-[48px] rounded-xl shadow-lg hover:shadow-xl transition-all duration-200" />
                 {typeof window !== "undefined" && !window.ethereum && (
                   <p className="text-gray-500 text-xs sm:text-sm mt-4">
                     Don't have a wallet?{" "}
