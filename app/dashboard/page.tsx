@@ -1,34 +1,33 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, ArrowUpRight } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink } from "lucide-react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAmount, formatAddress } from "@/lib/utils";
 import { extractTransactionError } from "@/lib/utils/errorMapping";
 import { FundsWithdrawalModal } from "@/components/WithdrawModal";
 import { OracleRatesCard } from "@/components/OracleRatesCard";
-import { MINILEND_ADDRESS, ORACLE_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
+import { MINILEND_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
 import { oracleService } from "@/lib/services/oracleService";
+import { useActiveAccount } from "thirdweb/react";
+import {
+  useWithdraw as useWithdrawContract
+} from '@/lib/thirdweb/minilend-contract';
+import { getContract, readContract } from "thirdweb";
+import { client } from "@/lib/thirdweb/client";
+import { celo } from "thirdweb/chains";
+
+// Define UserData interface
 interface UserData {
   deposits: Record<string, string>;
   borrows: Record<string, string>;
   collateral: Record<string, string>;
   lockEnds: Record<string, number>;
 }
-
-import { useActiveAccount } from "thirdweb/react";
-import {
-  useWithdraw as useWithdrawContract,
-  useTotalSupply
-} from '@/lib/thirdweb/minilend-contract';
-import { getContract, readContract } from "thirdweb";
-import { client } from "@/lib/thirdweb/client";
-import { celo } from "thirdweb/chains";
-
 
 // Supported stablecoins from deployment config
 const SUPPORTED_STABLECOINS = [
@@ -237,10 +236,14 @@ const useDashboardData = (address: string | undefined, contract: any) => {
 
 export default function DashboardPage() {
   const account = useActiveAccount();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const address = account?.address;
   const isConnected = !!address;
+  
+  // Verification state
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationSkipped, setVerificationSkipped] = useState(false);
   
   const contract = getContract({
     client,
@@ -250,7 +253,11 @@ export default function DashboardPage() {
 
   const withdrawFn = useWithdrawContract();
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  
   const { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning } = useDashboardData(address, contract);
+  
+  // Destructure userData for easier access
+  const { deposits, borrows, collateral, lockEnds } = userData;
 
   useEffect(() => {
     if (isConnected && address) {
@@ -261,6 +268,29 @@ export default function DashboardPage() {
       return () => clearTimeout(timer);
     }
   }, [isConnected, address]);
+
+  useEffect(() => {
+    if (isConnected && address && !session?.user?.address) {
+      signIn("self-protocol", {
+        address,
+        verificationData: "",
+        redirect: false,
+      });
+    }
+  }, [isConnected, address, session]);
+
+  // Check localStorage for verification skip state
+  useEffect(() => {
+    const skipped = localStorage.getItem('verification-skipped') === 'true';
+    setVerificationSkipped(skipped);
+  }, []);
+
+  // Remove forced verification - make it optional
+  useEffect(() => {
+    if (sessionStatus === "loading") return;
+    // Don't show verification if user has skipped it or is already verified
+    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped);
+  }, [isConnected, session, sessionStatus, verificationSkipped]);
 
 
 
@@ -304,69 +334,28 @@ export default function DashboardPage() {
     window.open(`https://celoscan.io/address/${address}`, "_blank");
   };
 
-  const getExchangeRate = (tokenAddress: string): number => {
-    return exchangeRates[tokenAddress] || 1.0;
-  };
-
-  const convertToUSD = (amount: string, decimals: number, tokenAddress: string): number => {
+  const convertToUSD = (amount: string, decimals: number): number => {
     if (!amount || amount === "0") return 0;
-    const numericAmount = Number(formatAmount(amount, decimals));
-    const exchangeRate = getExchangeRate(tokenAddress);
-    return numericAmount * exchangeRate;
+    return Number(formatAmount(amount, decimals));
   };
 
   const getTotalSavingsUSD = (): number => {
-    return Object.entries(userData.deposits).reduce((acc, [token, amount]) => {
+    return Object.entries(deposits).reduce((acc, [token, amount]) => {
       if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
       const info = TOKEN_INFO[token];
-      return acc + convertToUSD(amount, info.decimals, token);
+      return acc + convertToUSD(amount, info.decimals);
     }, 0);
   };
 
   const getTotalBorrowsUSD = (): number => {
-    return Object.entries(userData.borrows).reduce((acc, [token, amount]) => {
+    return Object.entries(borrows).reduce((acc, [token, amount]) => {
       if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
       const info = TOKEN_INFO[token];
-      return acc + convertToUSD(amount, info.decimals, token);
+      return acc + convertToUSD(amount, info.decimals);
     }, 0);
   };
 
-  const TokenList = ({ tokens, data, type, emptyMessage, convertToUSD }: {
-    tokens: string[];
-    data: Record<string, string>;
-    type: string;
-    emptyMessage: string;
-    convertToUSD: (amount: string, decimals: number, token: string) => number;
-  }) => {
-    const colorClass = type === "borrows" ? "text-red-600" : "text-primary";
-    return (
-      <div className="space-y-1.5">
-        {tokens
-          .filter((token) => data[token] && data[token] !== "0" && TOKEN_INFO[token])
-          .slice(0, 3)
-          .map((token) => {
-            const info = TOKEN_INFO[token];
-            const amount = data[token];
-            return (
-              <div key={token} className="flex justify-between items-center">
-                <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                <span className={`${colorClass} font-semibold text-xs`}>
-                  {formatAmount(amount, info.decimals)}
-                  <span className="text-gray-500 ml-1">
-                    (${convertToUSD(amount, info.decimals, token).toFixed(2)})
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        {Object.values(data).every((d) => !d || d === "0") && (
-          <p className="text-gray-500 text-center py-3 text-xs">
-            {emptyMessage}
-          </p>
-        )}
-      </div>
-    );
-  };
+
 
   if (!isConnected) {
     return (
@@ -417,6 +406,37 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-3 py-3 max-w-lg mx-auto pb-24 space-y-3">
+        {needsVerification && isConnected && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Shield className="w-4 h-4 mr-2" />
+                <p>Verify you're human for enhanced security (optional)</p>
+              </div>
+              <div className="flex gap-2 ml-4">
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/self")}
+                  className="bg-primary hover:bg-primary/90 text-white text-xs px-3 py-1 h-7"
+                >
+                  Verify
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    localStorage.setItem('verification-skipped', 'true');
+                    setVerificationSkipped(true);
+                    setNeedsVerification(false);
+                  }}
+                  className="text-gray-600 hover:text-gray-800 text-xs px-3 py-1 h-7"
+                >
+                  Skip
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <Card className="bg-white border-secondary shadow-sm">
           <CardContent className="p-4">
             <h2 className="text-lg font-semibold text-center text-primary mb-3">
@@ -454,23 +474,7 @@ export default function DashboardPage() {
                 History
               </Button>
             </div>
-            {!session?.user?.verified && (
-              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Shield className="w-4 h-4 mr-2 text-blue-600" />
-                    <span className="text-sm text-blue-800">Verify your humanity for enhanced security</span>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => router.push("/self")}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
-                  >
-                    Verify
-                  </Button>
-                </div>
-              </div>
-            )}
+
           </CardContent>
         </Card>
 
@@ -486,26 +490,26 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {SUPPORTED_STABLECOINS
                   .filter((token) => {
-                    const deposit = userData.deposits[token];
+                    const deposit = deposits[token];
                     return deposit && deposit !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
                     const info = TOKEN_INFO[token];
-                    const deposit = userData.deposits[token];
+                    const deposit = deposits[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
                         <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
                         <span className="text-primary font-semibold text-xs">
                           {formatAmount(deposit, info.decimals)}
                           <span className="text-gray-500 ml-1">
-                            (${convertToUSD(deposit, info.decimals, token).toFixed(2)})
+                            (${convertToUSD(deposit, info.decimals).toFixed(2)})
                           </span>
                         </span>
                       </div>
                     );
                   })}
-                {Object.values(userData.deposits).every((d) => !d || d === "0") && (
+                {Object.values(deposits).every((d) => !d || d === "0") && (
                   <p className="text-gray-500 text-center py-3 text-xs">
                     No savings yet
                   </p>
@@ -525,26 +529,26 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {SUPPORTED_STABLECOINS
                   .filter((token) => {
-                    const borrow = userData.borrows[token];
+                    const borrow = borrows[token];
                     return borrow && borrow !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
                     const info = TOKEN_INFO[token];
-                    const borrow = userData.borrows[token];
+                    const borrow = borrows[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
                         <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
                         <span className="text-red-600 font-semibold text-xs">
                           {formatAmount(borrow, info.decimals)}
                           <span className="text-gray-500 ml-1">
-                            (${convertToUSD(borrow, info.decimals, token).toFixed(2)})
+                            (${convertToUSD(borrow, info.decimals).toFixed(2)})
                           </span>
                         </span>
                       </div>
                     );
                   })}
-                {Object.values(userData.borrows).every((b) => !b || b === "0") && (
+                {Object.values(borrows).every((b) => !b || b === "0") && (
                   <p className="text-gray-500 text-center py-3 text-xs">
                     No active loans
                   </p>
@@ -564,26 +568,26 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {SUPPORTED_COLLATERAL
                   .filter((token) => {
-                    const collat = userData.collateral[token];
+                    const collat = collateral[token];
                     return collat && collat !== "0" && TOKEN_INFO[token];
                   })
                   .slice(0, 3)
                   .map((token) => {
                     const info = TOKEN_INFO[token];
-                    const collat = userData.collateral[token];
+                    const collat = collateral[token];
                     return (
                       <div key={token} className="flex justify-between items-center">
                         <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
                         <span className="text-primary font-semibold text-xs">
                           {formatAmount(collat, info.decimals)}
                           <span className="text-gray-500 ml-1">
-                            (${convertToUSD(collat, info.decimals, token).toFixed(2)})
+                            (${convertToUSD(collat, info.decimals).toFixed(2)})
                           </span>
                         </span>
                       </div>
                     );
                   })}
-                {Object.values(userData.collateral).every((c) => !c || c === "0") && (
+                {Object.values(collateral).every((c) => !c || c === "0") && (
                   <p className="text-gray-500 text-center py-3 text-xs">
                     No collateral
                   </p>
@@ -635,8 +639,8 @@ export default function DashboardPage() {
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={handleWithdraw}
-        userDeposits={userData.deposits}
-        depositLockEnds={userData.lockEnds}
+        userDeposits={deposits}
+        depositLockEnds={lockEnds}
         tokenInfos={TOKEN_INFO}
         loading={loading}
         userAddress={address}

@@ -27,11 +27,11 @@ import { onrampService } from "@/lib/services/onrampService";
 import { oracleService } from "@/lib/services/oracleService";
 import { NEW_SUPPORTED_TOKENS, MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getTokenIcon } from "@/lib/utils/tokenIcons";
-import { getContract, prepareContractCall } from "thirdweb";
+import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 
-import { useActiveAccount, useSendTransaction, useReadContract } from "thirdweb/react";
+import { useActiveAccount, useSendTransaction, useReadContract, useWalletBalance } from "thirdweb/react";
 
 interface BorrowMoneyModalProps {
   isOpen: boolean;
@@ -117,10 +117,6 @@ export function BorrowMoneyModal({
     //   !["0xcebA9300f2b948710d2653dD7B07f33A8B32118C", "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3"].includes(token)
     // );
   }, []);
-  
-
-  
-
 
   const [form, setForm] = useState({
     token: "",
@@ -158,13 +154,7 @@ export function BorrowMoneyModal({
     params: [form.token || "0x0000000000000000000000000000000000000000"],
     queryOptions: {
       enabled: !!form.token,
-      retry: (failureCount, error) => {
-        if (error?.message?.includes('429')) {
-          return failureCount < 2;
-        }
-        return false;
-      },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      retry: 2,
     },
   });
 
@@ -176,7 +166,20 @@ export function BorrowMoneyModal({
     return formatAmount(totalSupply.toString(), decimals);
   }, [form.token, totalSupply, tokenInfos, checkingLiquidity]);
 
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction({ payModal: false });
+
+  // Balances for auto-wrap support when depositing collateral in CELO
+  const { data: collateralTokenBalance } = useWalletBalance({
+    client,
+    chain: celo,
+    address: account?.address,
+    tokenAddress: form.collateralToken || undefined,
+  });
+  const { data: nativeBalanceData } = useWalletBalance({
+    client,
+    chain: celo,
+    address: account?.address,
+  });
 
   const handleBorrowWithCollateral = async () => {
     if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return;
@@ -196,13 +199,40 @@ export function BorrowMoneyModal({
     try {
       if (!hasSufficientCollateral(form.collateralToken, requiredCollateral)) {
         setTransactionStatus("Depositing collateral...");
+        const decimals = tokenInfos[form.collateralToken]?.decimals || 18;
         const walletBalance = parseFloat(formatAmount(
           userBalances[form.collateralToken] || "0",
-          tokenInfos[form.collateralToken]?.decimals || 18
+          decimals
         ));
-        
-        if (walletBalance < parseFloat(requiredCollateral)) {
-          throw new Error(`Insufficient ${tokenInfos[form.collateralToken]?.symbol} in wallet. You need ${requiredCollateral} but only have ${walletBalance.toFixed(4)}.`);
+        const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438";
+        const required = parseFloat(requiredCollateral);
+
+        // Auto-wrap native CELO to ERC-20 if collateral is CELO and ERC-20 balance is short
+        if (form.collateralToken === CELO_ERC20 && walletBalance < required) {
+          const nativeBal = parseFloat(nativeBalanceData?.displayValue || "0");
+          const amountToWrap = Math.min(required - walletBalance, nativeBal);
+          if (amountToWrap > 0) {
+            const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 });
+            const wrapTx = prepareContractCall({
+              contract: celoContract,
+              method: "function deposit()",
+              params: [],
+              value: parseUnits(amountToWrap.toString(), 18),
+            });
+            const wrapResult = await sendTransaction(wrapTx);
+            if (wrapResult?.transactionHash) {
+              await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash });
+            }
+          }
+        }
+
+        // Re-check balance after potential wrap
+        const updatedBalance = parseFloat(formatAmount(
+          userBalances[form.collateralToken] || "0",
+          decimals
+        ));
+        if (updatedBalance < required) {
+          throw new Error(`Insufficient ${tokenInfos[form.collateralToken]?.symbol} in wallet. You need ${requiredCollateral} but only have ${updatedBalance.toFixed(4)}.`);
         }
 
         setTransactionStatus("Depositing collateral...");
@@ -244,8 +274,6 @@ export function BorrowMoneyModal({
     }
   };
 
-
-
   useEffect(() => {
     const run = async () => {
     if (!form.amount || parseFloat(form.amount) <= 0 || !form.token || !form.collateralToken) {
@@ -281,8 +309,6 @@ export function BorrowMoneyModal({
   };
     run();
   }, [form.amount, form.token, form.collateralToken, tokenPrices]);
-
-
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -490,8 +516,6 @@ export function BorrowMoneyModal({
             </div>
           )}
 
-
-
           <div className="flex gap-2 pt-3">
             <Button
               onClick={onClose}
@@ -521,6 +545,7 @@ export function BorrowMoneyModal({
         </div>
       </DialogContent>
 
+      {showOnrampModal && (
       <OnrampDepositModal
         isOpen={showOnrampModal}
         onClose={() => setShowOnrampModal(false)}
@@ -534,6 +559,7 @@ export function BorrowMoneyModal({
           setShowOnrampModal(false);
         }}
       />
+      )}
     </Dialog>
   );
 }
