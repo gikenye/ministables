@@ -1,42 +1,27 @@
-"use client";
+"use client"
 
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSendTransaction } from "thirdweb/react";
-import { prepareContractCall } from "thirdweb";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowUpRight, Smartphone } from "lucide-react";
-import { formatAmount } from "@/lib/utils";
-import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal";
-import { offrampService } from "@/lib/services/offrampService";
-import { NEW_SUPPORTED_TOKENS } from "@/lib/services/thirdwebService";
-import { getTokenIcon } from "@/lib/utils/tokenIcons";
+import { useState, useMemo, useCallback, useEffect } from "react"
+import { useSendTransaction } from "thirdweb/react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { ArrowLeft, Smartphone, AlertCircle } from "lucide-react"
+import { formatAmount } from "@/lib/utils"
+import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal"
+import { offrampService } from "@/lib/services/offrampService"
+import { getTokenIcon } from "@/lib/utils/tokenIcons"
 
 interface FundsWithdrawalModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onWithdraw: (token: string, amount: string) => Promise<void>;
-  userDeposits: Record<string, string>;
-  depositLockEnds: Record<string, number>;
-  tokenInfos: Record<string, { symbol: string; decimals: number }>;
-  loading: boolean;
-  userAddress?: string;
-  getWithdrawableAmount?: (token: string) => Promise<string>;
+  isOpen: boolean
+  onClose: () => void
+  onWithdraw: (token: string, amount: string) => Promise<void>
+  userDeposits: Record<string, string>
+  depositLockEnds: Record<string, number>
+  tokenInfos: Record<string, { symbol: string; decimals: number }>
+  loading: boolean
+  userAddress?: string
+  getWithdrawableAmount?: (token: string) => Promise<string>
 }
 
 export function FundsWithdrawalModal({
@@ -50,371 +35,387 @@ export function FundsWithdrawalModal({
   userAddress,
   getWithdrawableAmount: getActualWithdrawableAmount,
 }: FundsWithdrawalModalProps) {
-
+  const [currentStep, setCurrentStep] = useState(1)
   const [form, setForm] = useState({
     token: "",
     amount: "",
-  });
+  })
 
-  const [error, setError] = useState<string | null>(null);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false);
-  
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  const [error, setError] = useState<string | null>(null)
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false)
+
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction()
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1)
+      setForm({ token: "", amount: "" })
+      setError(null)
+    }
+  }, [isOpen])
 
   const handleWithdraw = async () => {
-    if (!form.token || !form.amount) return;
+    if (!form.token || !form.amount) return
 
-    const withdrawableAmount = getWithdrawableAmount(form.token);
-    const maxWithdrawable = parseFloat(formatAmount(withdrawableAmount, tokenInfos[form.token]?.decimals || 18));
-    const requestedAmount = parseFloat(form.amount);
+    const withdrawableAmount = getWithdrawableAmount(form.token)
+    const maxWithdrawable = Number.parseFloat(formatAmount(withdrawableAmount, tokenInfos[form.token]?.decimals || 18))
+    const requestedAmount = Number.parseFloat(form.amount)
 
     if (requestedAmount > maxWithdrawable) {
-      setError(`Cannot withdraw ${form.amount} ${tokenInfos[form.token]?.symbol}. Maximum withdrawable: ${maxWithdrawable.toFixed(6)}`);
-      return;
+      setError(
+        `Cannot withdraw ${form.amount} ${tokenInfos[form.token]?.symbol}. Maximum available: ${maxWithdrawable.toFixed(6)}`,
+      )
+      return
     }
 
     if (withdrawableAmount === "0") {
-      setError("No funds available to withdraw. Your deposits may still be locked or you may have mixed lock periods.");
-      return;
+      setError("No funds available. Your deposits may still be locked.")
+      return
     }
 
-    setError(null);
-    setIsWithdrawing(true);
+    setError(null)
+    setIsWithdrawing(true)
 
     try {
-      await onWithdraw(form.token, form.amount);
-      setForm({ token: "", amount: "" });
-      onClose();
+      await onWithdraw(form.token, form.amount)
+      setForm({ token: "", amount: "" })
+      onClose()
     } catch (err: any) {
-      console.error("Withdrawal error:", err);
-      
-      let errorMessage = "Transaction failed. Please try again.";
-      
-      // Handle wallet connection errors
+      console.error("Withdrawal error:", err)
+
+      let errorMessage = "Transaction failed. Please try again."
+
       if (err.message?.includes("MetaMask") || err.message?.includes("extension not found")) {
-        errorMessage = "Wallet connection failed. Please ensure your wallet is installed and unlocked.";
-      }
-      // Handle network errors
-      else if (err.message?.includes("network") || err.message?.includes("RPC")) {
-        errorMessage = "Network error. Please check your connection and try again.";
-      }
-      // Handle contract-specific errors
-      else if (err.message?.includes("E4") || err.message?.includes("Insufficient matured deposit balance")) {
-        errorMessage = `Insufficient unlocked deposits. Some ${tokenInfos[form.token]?.symbol} deposits may still be locked.`;
+        errorMessage = "Wallet connection failed. Please ensure your wallet is installed and unlocked."
+      } else if (err.message?.includes("network") || err.message?.includes("RPC")) {
+        errorMessage = "Network error. Please check your connection and try again."
+      } else if (err.message?.includes("E4") || err.message?.includes("Insufficient matured deposit balance")) {
+        errorMessage = `Some ${tokenInfos[form.token]?.symbol} deposits may still be locked.`
       } else if (err.message?.includes("E2") || err.message?.includes("Repay loans")) {
-        errorMessage = "Please repay outstanding loans before withdrawing.";
+        errorMessage = "Please repay outstanding loans before withdrawing."
       } else if (err.message?.includes("E5") || err.message?.includes("Insufficient contract reserve")) {
-        errorMessage = "Insufficient liquidity. Please try again later.";
-      }
-      // Handle user rejection
-      else if (err.message?.includes("rejected") || err.message?.includes("denied")) {
-        errorMessage = "Transaction cancelled by user.";
+        errorMessage = "Insufficient liquidity. Please try again later."
+      } else if (err.message?.includes("rejected") || err.message?.includes("denied")) {
+        errorMessage = "Transaction cancelled by user."
       }
 
-      setError(errorMessage);
+      setError(errorMessage)
     } finally {
-      setIsWithdrawing(false);
+      setIsWithdrawing(false)
     }
-  };
+  }
 
   const isLocked = (timestamp: number) => {
-    return timestamp > 0 && timestamp > Date.now() / 1000;
-  };
+    return timestamp > 0 && timestamp > Date.now() / 1000
+  }
 
   const formatDate = (timestamp: number) => {
-    if (timestamp === 0) return "No lock";
-    return new Date(timestamp * 1000).toLocaleDateString();
-  };
+    if (timestamp === 0) return "No lock"
+    return new Date(timestamp * 1000).toLocaleDateString()
+  }
 
-  // Memoize supported tokens to prevent re-renders
-  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos]);
+  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos])
 
-  const getWithdrawableAmount = useCallback((tokenAddress: string) => {
-    const deposit = userDeposits[tokenAddress] || "0";
-    const lockEnd = depositLockEnds[tokenAddress] || 0;
+  const getWithdrawableAmount = useCallback(
+    (tokenAddress: string) => {
+      const deposit = userDeposits[tokenAddress] || "0"
+      const lockEnd = depositLockEnds[tokenAddress] || 0
 
-    if (deposit === "0") return "0";
-    if (isLocked(lockEnd)) return "0";
+      if (deposit === "0") return "0"
+      if (isLocked(lockEnd)) return "0"
 
-    return deposit;
-  }, [userDeposits, depositLockEnds]);
+      return deposit
+    },
+    [userDeposits, depositLockEnds],
+  )
 
-  // Memoize mixed locks check
-  const hasPotentialMixedLocks = useCallback((tokenAddress: string) => {
-    const deposit = userDeposits[tokenAddress] || "0";
-    const lockEnd = depositLockEnds[tokenAddress] || 0;
+  const hasPotentialMixedLocks = useCallback(
+    (tokenAddress: string) => {
+      const deposit = userDeposits[tokenAddress] || "0"
+      const lockEnd = depositLockEnds[tokenAddress] || 0
+      return deposit !== "0" && lockEnd > 0
+    },
+    [userDeposits, depositLockEnds],
+  )
 
-    // If there's a deposit and a lock end time, there might be mixed locks
-    // This is a heuristic since we can't know the actual deposit history
-    return deposit !== "0" && lockEnd > 0;
-  }, [userDeposits, depositLockEnds]);
+  const availableTokens = useMemo(
+    () => supportedStablecoins.filter((token) => userDeposits[token] && userDeposits[token] !== "0"),
+    [supportedStablecoins, userDeposits],
+  )
 
-  // Memoize available tokens filter
-  const availableTokens = useMemo(() => 
-    supportedStablecoins.filter(
-      (token) => userDeposits[token] && userDeposits[token] !== "0"
-    ), [supportedStablecoins, userDeposits]
-  );
+  const goToNextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1)
+      setError(null)
+    }
+  }
 
+  const goToPreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+      setError(null)
+    }
+  }
 
+  const canProceedToStep2 = form.token && getWithdrawableAmount(form.token) !== "0"
+  const canProceedToStep3 = canProceedToStep2 && form.amount && Number.parseFloat(form.amount) > 0
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-sm mx-auto bg-white border-0 shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center text-gray-900 text-lg font-semibold">
-            <ArrowUpRight className="w-5 h-5 mr-2 text-primary" />
-            Withdraw Funds
-          </DialogTitle>
-          <DialogDescription>Withdraw your available balance</DialogDescription>
+      <DialogContent className="w-[95vw] max-w-sm mx-auto bg-[#162013] border-0 shadow-2xl">
+        <DialogHeader className="space-y-3">
+          <div className="flex items-center justify-between">
+            {currentStep > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={goToPreviousStep}
+                className="text-[#a2c398] hover:text-white hover:bg-[#21301c] p-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            )}
+            <div className="flex-1 text-center">
+              <DialogTitle className="text-white text-xl font-semibold">Cash Out</DialogTitle>
+              <DialogDescription className="text-[#a2c398] text-sm">
+                {currentStep === 1 && "Choose what to withdraw"}
+                {currentStep === 2 && "Enter withdrawal amount"}
+                {currentStep === 3 && "Confirm your withdrawal"}
+              </DialogDescription>
+            </div>
+            <div className="w-8" /> {/* Spacer for centering */}
+          </div>
+
+          <div className="flex justify-center space-x-2">
+            {[1, 2, 3].map((step) => (
+              <div
+                key={step}
+                className={`w-2 h-2 rounded-full transition-colors ${
+                  step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"
+                }`}
+              />
+            ))}
+          </div>
         </DialogHeader>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm mb-4">
-            {error}
+          <div className="bg-red-900/20 border border-red-500/30 text-red-400 p-3 rounded-xl text-sm">
+            <div className="flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+              {error}
+            </div>
           </div>
         )}
 
-        <div className="space-y-4">
-          {/* Available balances summary */}
-          {availableTokens.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="font-medium text-primary mb-2 text-sm">
-                💰 Available Balance:
-              </p>
-              <div className="space-y-1">
-                {availableTokens.slice(0, 4).map((token) => {
-                  const withdrawable = getWithdrawableAmount(token);
-                  const isTokenLocked = isLocked(depositLockEnds[token]);
-                  
-                  return (
-                    <div key={token} className="flex justify-between items-center text-sm">
-                      <span className="font-medium">{tokenInfos[token]?.symbol}</span>
-                      <span className={isTokenLocked ? "text-red-600" : "text-green-600"}>
-                        {isTokenLocked ? (
-                          <span>
-                            🔒 Locked ({formatAmount(userDeposits[token], tokenInfos[token]?.decimals || 18)})
-                          </span>
-                        ) : (
-                          <span>
-                            {formatAmount(withdrawable, tokenInfos[token]?.decimals || 18)}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-                {availableTokens.length > 4 && (
-                  <p className="text-xs text-gray-500 text-center mt-1">
-                    + {availableTokens.length - 4} more tokens
-                  </p>
-                )}
+        <div className="space-y-6">
+          {/* Step 1: Select Token */}
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="text-white text-lg font-medium mb-2">Select Asset</h3>
+                <p className="text-[#a2c398] text-sm">Choose which asset you want to withdraw</p>
               </div>
 
+              {availableTokens.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-[#a2c398] text-sm">No funds available to withdraw</div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {availableTokens.map((token) => {
+                    const tokenInfo = tokenInfos[token]
+                    const withdrawable = getWithdrawableAmount(token)
+                    const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18)
+                    const iconUrl = getTokenIcon(tokenInfo?.symbol || "")
+                    const isTokenLocked = isLocked(depositLockEnds[token])
+
+                    return (
+                      <button
+                        key={token}
+                        onClick={() => {
+                          setForm({ ...form, token })
+                          if (!isTokenLocked && withdrawable !== "0") {
+                            goToNextStep()
+                          }
+                        }}
+                        disabled={isTokenLocked || withdrawable === "0"}
+                        className={`w-full p-4 rounded-xl border transition-all ${
+                          form.token === token
+                            ? "border-[#54d22d] bg-[#54d22d]/10"
+                            : isTokenLocked || withdrawable === "0"
+                              ? "border-[#426039] bg-[#21301c]/50 opacity-50 cursor-not-allowed"
+                              : "border-[#426039] bg-[#21301c] hover:border-[#54d22d] hover:bg-[#2e4328]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            {iconUrl.startsWith("http") ? (
+                              <img
+                                src={iconUrl || "/placeholder.svg"}
+                                alt={tokenInfo?.symbol}
+                                className="w-8 h-8 mr-3"
+                              />
+                            ) : (
+                              <span className="text-2xl mr-3">{iconUrl}</span>
+                            )}
+                            <div className="text-left">
+                              <div className="text-white font-medium">{tokenInfo?.symbol}</div>
+                              <div className="text-[#a2c398] text-sm">{isTokenLocked ? "Locked" : "Available"}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-white font-semibold">{formattedWithdrawable}</div>
+                            {isTokenLocked && (
+                              <div className="text-red-400 text-xs">Until {formatDate(depositLockEnds[token])}</div>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
+          {/* Step 2: Enter Amount */}
+          {currentStep === 2 && form.token && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="text-white text-lg font-medium mb-2">Enter Amount</h3>
+                <p className="text-[#a2c398] text-sm">
+                  How much {tokenInfos[form.token]?.symbol} do you want to withdraw?
+                </p>
+              </div>
 
-
-          <div>
-            <Label
-              htmlFor="withdraw-token"
-              className="text-sm font-medium text-gray-700"
-            >
-              Asset
-            </Label>
-            <Select
-              value={form.token}
-              onValueChange={(value) => setForm({ ...form, token: value })}
-            >
-              <SelectTrigger className="mt-1 min-h-[48px]">
-                <SelectValue placeholder="Select asset" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {availableTokens.length === 0 ? (
-                  <div className="px-2 py-3 text-sm text-gray-500 text-center">
-                    No balance available
-                  </div>
-                ) : (
-                  availableTokens.map((token) => {
-                    const tokenInfo = tokenInfos[token];
-                    const withdrawable = getWithdrawableAmount(token);
-                    const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18);
-                    const iconUrl = getTokenIcon(tokenInfo?.symbol || "");
-                    return (
-                      <SelectItem key={token} value={token}>
-                        <div className="flex items-center justify-between w-full min-w-0">
-                          <div className="flex items-center min-w-0 flex-1">
-                            {iconUrl.startsWith('http') ? (
-                              <img src={iconUrl} alt={tokenInfo?.symbol} className="w-4 h-4 mr-2 flex-shrink-0" />
-                            ) : (
-                              <span className="text-sm mr-2 flex-shrink-0">{iconUrl}</span>
-                            )}
-                            <span className="font-medium text-sm truncate">
-                              {tokenInfo?.symbol || token.slice(0, 6) + "..."}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                            {formattedWithdrawable}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center">
-              <Label
-                htmlFor="withdraw-amount"
-                className="text-sm font-medium text-gray-700"
-              >
-                Amount
-              </Label>
-              {form.token && getWithdrawableAmount(form.token) !== "0" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const maxAmount = formatAmount(
-                      getWithdrawableAmount(form.token),
-                      tokenInfos[form.token]?.decimals || 18
-                    );
-                    setForm({ ...form, amount: maxAmount });
-                  }}
-                  className="text-xs text-primary hover:text-secondary font-medium active:scale-95 transition-all"
-                >
-                  Use max: {formatAmount(
-                    getWithdrawableAmount(form.token),
-                    tokenInfos[form.token]?.decimals || 18
-                  )} {tokenInfos[form.token]?.symbol}
-                </button>
-              )}
-            </div>
-            <Input
-              id="withdraw-amount"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.00"
-              value={form.amount}
-              onChange={(e) => {
-                const value = e.target.value;
-                // Allow empty value or valid decimal numbers
-                if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                  setForm({ ...form, amount: value });
-                }
-
-                // Clear error when user starts typing
-                if (error && value !== form.amount) {
-                  setError(null);
-                }
-              }}
-              className="mt-1 min-h-[48px]"
-            />
-            {form.token && userDeposits[form.token] && (
-              <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">
-                      Total Balance:
-                    </span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {formatAmount(
-                        userDeposits[form.token],
-                        tokenInfos[form.token]?.decimals || 18
-                      )}{" "}
-                      {tokenInfos[form.token]?.symbol}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">
-                      Can Withdraw:
-                    </span>
-                    <span className="text-base font-bold text-primary">
-                      {formatAmount(
-                        getWithdrawableAmount(form.token),
-                        tokenInfos[form.token]?.decimals || 18
-                      )}{" "}
-                      {tokenInfos[form.token]?.symbol}
-                    </span>
-                  </div>
-                  {isLocked(depositLockEnds[form.token]) && (
-                    <div className="bg-amber-50 border border-amber-200 rounded p-2">
-                      <p className="text-sm text-amber-700">
-                        🔒 Latest deposit locked until {formatDate(depositLockEnds[form.token])}
-                      </p>
-                      <p className="text-xs text-amber-600 mt-1">
-                        {hasPotentialMixedLocks(form.token) ? (
-                          "You may have earlier deposits that are already unlocked. The contract will determine your actual withdrawable amount."
-                        ) : (
-                          "All your funds are locked until this date."
-                        )}
-                      </p>
-                    </div>
-                  )}
+              <div className="bg-[#21301c] rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#a2c398] text-sm">Available</span>
+                  <span className="text-[#54d22d] font-semibold">
+                    {formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18)}{" "}
+                    {tokenInfos[form.token]?.symbol}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Mobile Money Withdrawal Option */}
-          {form.token && tokenInfos[form.token] && !isLocked(depositLockEnds[form.token]) && getWithdrawableAmount(form.token) !== "0" && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <div className="text-sm font-medium text-green-800 mb-2">
-                💰 Cash Out
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label className="text-[#a2c398] text-sm">Amount</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const maxAmount = formatAmount(
+                        getWithdrawableAmount(form.token),
+                        tokenInfos[form.token]?.decimals || 18,
+                      )
+                      setForm({ ...form, amount: maxAmount })
+                    }}
+                    className="text-[#54d22d] text-sm hover:text-white transition-colors"
+                  >
+                    Use Max
+                  </button>
+                </div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={form.amount}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                      setForm({ ...form, amount: value })
+                    }
+                    if (error && value !== form.amount) {
+                      setError(null)
+                    }
+                  }}
+                  className="bg-[#21301c] border-[#426039] text-white placeholder-[#a2c398] text-lg h-14 text-center focus:border-[#54d22d] focus:ring-[#54d22d]"
+                />
               </div>
-              <div className="text-xs text-green-700 mb-3">
-                Convert {tokenInfos[form.token]?.symbol} to local currency
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  onClick={goToPreviousStep}
+                  variant="outline"
+                  className="flex-1 bg-transparent border-[#426039] text-[#a2c398] hover:bg-[#21301c] hover:text-white h-12"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={goToNextStep}
+                  disabled={!canProceedToStep3}
+                  className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </Button>
               </div>
-              <Button
-                onClick={() => setShowMobileMoneyModal(true)}
-                variant="outline"
-                className="w-full border-green-400 text-green-700 hover:bg-green-100 min-h-[40px] bg-transparent"
-                disabled={
-                  !form.token ||
-                  getWithdrawableAmount(form.token) === "0" ||
-                  !offrampService.isCryptoSupportedForOfframp(tokenInfos[form.token]?.symbol || "")
-                }
-              >
-                <Smartphone className="w-4 h-4 mr-2" />
-                Cash Out
-              </Button>
-              {form.token && !offrampService.isCryptoSupportedForOfframp(tokenInfos[form.token]?.symbol || "") && (
-                <p className="text-xs text-yellow-600 mt-1">
-                  ⚠️ {tokenInfos[form.token]?.symbol} cash out not available
-                </p>
-              )}
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              className="flex-1 min-h-[48px] bg-transparent"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleWithdraw}
-              disabled={
-                loading ||
-                isWithdrawing ||
-                isTransactionPending ||
-                !form.token ||
-                !form.amount ||
-                getWithdrawableAmount(form.token) === "0" ||
-                parseFloat(form.amount) > parseFloat(formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18))
-              }
-              className="flex-1 bg-primary hover:bg-secondary text-white min-h-[48px]"
-            >
-              {loading || isWithdrawing || isTransactionPending ? "Processing..." : "Withdraw"}
-            </Button>
-          </div>
+          {/* Step 3: Confirm Withdrawal */}
+          {currentStep === 3 && form.token && form.amount && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="text-white text-lg font-medium mb-2">Confirm Withdrawal</h3>
+                <p className="text-[#a2c398] text-sm">Review your withdrawal details</p>
+              </div>
+
+              <div className="bg-[#21301c] rounded-xl p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[#a2c398]">Asset</span>
+                  <span className="text-white font-medium">{tokenInfos[form.token]?.symbol}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[#a2c398]">Amount</span>
+                  <span className="text-white font-semibold text-lg">{form.amount}</span>
+                </div>
+                <div className="border-t border-[#426039] pt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#a2c398]">You'll receive</span>
+                    <span className="text-[#54d22d] font-bold text-lg">
+                      {form.amount} {tokenInfos[form.token]?.symbol}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Money Option */}
+              {offrampService.isCryptoSupportedForOfframp(tokenInfos[form.token]?.symbol || "") && (
+                <div className="bg-[#2e4328] rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <Smartphone className="w-4 h-4 mr-2 text-[#54d22d]" />
+                    <span className="text-white font-medium">Cash Out Option</span>
+                  </div>
+                  <p className="text-[#a2c398] text-sm mb-3">Convert to local currency via mobile money</p>
+                  <Button
+                    onClick={() => setShowMobileMoneyModal(true)}
+                    variant="outline"
+                    className="w-full border-[#54d22d] text-[#54d22d] hover:bg-[#54d22d] hover:text-[#162013] h-10"
+                  >
+                    Cash Out Instead
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  onClick={goToPreviousStep}
+                  variant="outline"
+                  className="flex-1 bg-transparent border-[#426039] text-[#a2c398] hover:bg-[#21301c] hover:text-white h-12"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleWithdraw}
+                  disabled={loading || isWithdrawing || isTransactionPending}
+                  className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12"
+                >
+                  {loading || isWithdrawing || isTransactionPending ? "Processing..." : "Confirm Withdrawal"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Mobile Money Withdrawal Modal */}
@@ -425,28 +426,25 @@ export function FundsWithdrawalModal({
             tokenSymbol={tokenInfos[form.token]?.symbol || ""}
             tokenAddress={form.token}
             network={offrampService.detectNetworkFromTokenAddress(form.token) || "celo"}
-            availableAmount={formatAmount(
-              getWithdrawableAmount(form.token),
-              tokenInfos[form.token]?.decimals || 18
-            )}
+            availableAmount={formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18)}
             decimals={tokenInfos[form.token]?.decimals || 18}
             onWithdrawSuccess={(orderID, amount) => {
-              setShowMobileMoneyModal(false);
-              setForm({ token: "", amount: "" });
-              onClose();
+              setShowMobileMoneyModal(false)
+              setForm({ token: "", amount: "" })
+              onClose()
             }}
             onBlockchainWithdraw={async (tokenAddress: string, amount: string) => {
               try {
-                await onWithdraw(tokenAddress, amount);
-                return "0x" + Math.random().toString(16).substr(2, 64);
+                await onWithdraw(tokenAddress, amount)
+                return "0x" + Math.random().toString(16).substr(2, 64)
               } catch (error) {
-                console.error("Blockchain withdrawal failed:", error);
-                throw new Error("Withdrawal transaction failed");
+                console.error("Blockchain withdrawal failed:", error)
+                throw new Error("Withdrawal transaction failed")
               }
             }}
           />
         )}
       </DialogContent>
     </Dialog>
-  );
+  )
 }

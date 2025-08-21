@@ -12,17 +12,20 @@ import { client } from '@/lib/thirdweb/client';
 
 const wallets = [
   inAppWallet({
-    auth: {
-      options: ["google", "telegram", "farcaster", "x", "phone"],
-    },
-  }),
-  createWallet("io.metamask"),
-  createWallet("com.coinbase.wallet"),
-  createWallet("io.rabby"),
-  createWallet("com.valoraapp"),
-  createWallet("com.opera"),
-  createWallet("com.trustwallet.app"),
-];
+      auth: {
+        options: ["google", "telegram", "farcaster", "x", "phone"],
+      },
+      // accountAbstraction: {
+      //   chain: celo,
+      //   sponsorGas: true, // or false, as needed
+      // },
+    }),
+    createWallet("com.valoraapp"),
+    createWallet("io.metamask"),
+    createWallet("com.coinbase.wallet"),
+    createWallet("com.trustwallet.app"),
+    createWallet("walletConnect")
+  ];
 
 export default function Mayday() {
   return (

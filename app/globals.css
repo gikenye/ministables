@@ -113,8 +113,8 @@
 /* Extra compact for very small screens */
 @media (max-width: 375px) {
   .container {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
   }
   
   [data-testid="connect-wallet-button"],
@@ -132,7 +132,9 @@
 /* Ultra small screens (iPhone SE, etc.) */
 @media (max-width: 320px) {
   [data-testid="connect-wallet-button"],
-  button[aria-label*="Connect"] {
+  /* button[aria-label*="Connect"] { */
+    button[aria-label*="Launch App"] {
+
     font-size: 7px !important;
     padding: 2px 3px !important;
     min-height: 18px !important;
