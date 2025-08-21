@@ -23,13 +23,12 @@ export const minilendABI = [
   },
 ] as const
 import { getContract, prepareContractCall, type PreparedTransaction } from "thirdweb"
-import { getApprovalForTransaction } from "thirdweb/extensions/erc20"
+import { approve, getBalance } from "thirdweb/extensions/erc20"
 import { client } from "@/lib/thirdweb/client"
 import { celo } from "thirdweb/chains"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
 import { parseUnits } from "viem"
-import { useWalletBalance } from "thirdweb/react"
 
 interface SaveMoneyModalProps {
   isOpen: boolean
@@ -62,20 +61,55 @@ export function SaveMoneyModal({
   const [error, setError] = useState<string | null>(null)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("")
+  const [isApproved, setIsApproved] = useState(false)
 
-  const { data: selectedTokenBalance, isLoading: isSelectedTokenLoading } = useWalletBalance({
-    client,
-    chain: celo,
-    address: account?.address,
-    tokenAddress: form.token || undefined,
-  })
+  const [selectedTokenBalance, setSelectedTokenBalance] = useState<any>(null)
+  const [isSelectedTokenLoading, setIsSelectedTokenLoading] = useState(false)
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!form.token || !account?.address) {
+        setSelectedTokenBalance(null)
+        return
+      }
+
+      setIsSelectedTokenLoading(true)
+      try {
+        const tokenContract = getContract({
+          client,
+          chain: celo,
+          address: form.token,
+        })
+
+        const balance = await getBalance({
+          contract: tokenContract,
+          address: account.address,
+        })
+
+        setSelectedTokenBalance(balance)
+      } catch (error) {
+        console.error("Error fetching balance:", error)
+        setSelectedTokenBalance(null)
+      } finally {
+        setIsSelectedTokenLoading(false)
+      }
+    }
+
+    fetchBalance()
+  }, [form.token, account?.address])
 
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1)
       setError(null)
+      setIsApproved(false)
     }
   }, [isOpen])
+
+  useEffect(() => {
+    // Reset approval state when form changes
+    setIsApproved(false)
+  }, [form.token, form.amount])
 
   const prepareDepositTransaction = async () => {
     if (!form.token || !form.amount || !form.lockPeriod || !account) {
@@ -85,30 +119,37 @@ export function SaveMoneyModal({
     const decimals = tokenInfos[form.token]?.decimals || 18
     const amountWei = parseUnits(form.amount, decimals)
 
-    const minilendContract = getContract({
+    const tokenContract = getContract({
       client,
       chain: celo,
-      address: MINILEND_ADDRESS,
-      abi: minilendABI,
+      address: form.token,
     })
 
-    const depositTx = prepareContractCall({
-      contract: minilendContract,
-      method: "deposit",
-      params: [form.token, amountWei, BigInt(Number.parseInt(form.lockPeriod))],
-      erc20Value: {
-        tokenAddress: form.token,
-        amountWei,
-      },
-    })
+    if (!isApproved) {
+      // First approve the token spending
+      const approveTx = approve({
+        contract: tokenContract,
+        spender: MINILEND_ADDRESS,
+        amount: amountWei.toString(),
+      })
+      return approveTx
+    } else {
+      // Then prepare the deposit transaction
+      const minilendContract = getContract({
+        client,
+        chain: celo,
+        address: MINILEND_ADDRESS,
+        abi: minilendABI,
+      })
 
-    // Check if approval is needed
-    const approveTx = await getApprovalForTransaction({
-      transaction: depositTx as PreparedTransaction,
-      account,
-    })
+      const depositTx = prepareContractCall({
+        contract: minilendContract,
+        method: "deposit",
+        params: [form.token, amountWei, BigInt(Number.parseInt(form.lockPeriod))],
+      })
 
-    return approveTx || depositTx
+      return depositTx
+    }
   }
 
   const handleTransactionError = (error: Error) => {
@@ -140,25 +181,40 @@ export function SaveMoneyModal({
   const handleTransactionSuccess = (receipt: any) => {
     console.log("[SaveMoneyModal] Transaction successful:", receipt)
 
-    toast({
-      title: "Deposit Successful!",
-      description: `Your ${tokenInfos[form.token]?.symbol} has been deposited successfully.`,
-    })
+    if (!isApproved) {
+      // Approval successful, now prepare for deposit
+      setIsApproved(true)
+      toast({
+        title: "Approval Successful!",
+        description: "Now click 'Start Earning' again to complete the deposit.",
+      })
+    } else {
+      // Deposit successful
+      toast({
+        title: "Deposit Successful!",
+        description: `Your ${tokenInfos[form.token]?.symbol} has been deposited successfully.`,
+      })
 
-    setForm({
-      token: "",
-      amount: "",
-      lockPeriod: "2592000",
-    })
-    onClose()
+      setForm({
+        token: "",
+        amount: "",
+        lockPeriod: "2592000",
+      })
+      setIsApproved(false)
+      onClose()
+    }
   }
 
   const handleTransactionSent = (result: any) => {
     console.log("[SaveMoneyModal] Transaction sent:", result)
 
+    const message = !isApproved 
+      ? "Approval transaction submitted. Please wait for confirmation."
+      : "Deposit transaction submitted. Please wait for confirmation."
+
     toast({
       title: "Transaction Sent",
-      description: "Your transaction has been submitted. Please wait for confirmation.",
+      description: message,
     })
   }
 
@@ -585,7 +641,7 @@ export function SaveMoneyModal({
                   className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   unstyled
                 >
-                  Start Earning
+                  {!isApproved ? "Approve Token" : "Start Earning"}
                 </TransactionButton>
               </div>
             )}
