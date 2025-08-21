@@ -61,10 +61,10 @@ export const SUPPORTED_COUNTRIES = {
 } as const;
 
 // Supported assets by chain for onramp
-export const ONRAMP_SUPPORTED_ASSETS = {
+export const ONRAMP_SUPPORTED_ASSETS =  {
   CELO: ["cUSD", "USDC", "USDT"],
   BASE: ["USDC"],
-  STELLAR: ["USDC"],
+  STELLAR: ["USDC"], 
 } as const;
 
 // Asset to chain mapping (default chains for each asset)

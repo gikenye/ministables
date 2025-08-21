@@ -1,73 +1,45 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { 
-  Smartphone, 
-  AlertCircle, 
-  CheckCircle, 
-  Loader2,
-  Info,
-  X,
-  ArrowRight,
-  Clock,
-  TrendingUp,
-  Shield,
-  Zap
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Smartphone, AlertCircle, CheckCircle, Loader2, Info, X, ArrowLeft, Clock, Shield } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 import {
   enhancedOfframpService,
   ENHANCED_OFFRAMP_FIAT,
   formatEnhancedCurrencyAmount,
-  estimateEnhancedOfframpFee,
-  getTokenCategory,
-  hasPreferredFiatPairing,
   type OfframpQuoteRequest,
   type OfframpInitiateRequest,
-} from "@/lib/services/enhancedOfframpService";
+} from "@/lib/services/enhancedOfframpService"
 
 interface EnhancedMobileMoneyWithdrawModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  tokenSymbol: string;
-  tokenAddress: string;
-  network: string;
-  availableAmount: string;
-  decimals: number;
-  onWithdrawSuccess?: (orderID: string, amount: string) => void;
-  onBlockchainWithdraw: (tokenAddress: string, amount: string) => Promise<string>;
+  isOpen: boolean
+  onClose: () => void
+  tokenSymbol: string
+  tokenAddress: string
+  network: string
+  availableAmount: string
+  decimals: number
+  onWithdrawSuccess?: (orderID: string, amount: string) => void
+  onBlockchainWithdraw: (tokenAddress: string, amount: string) => Promise<string>
   // Enhanced props for DAP integration
-  userDeposits?: string;
-  userBorrows?: string;
-  isLocked?: boolean;
-  loanAmount?: string; // For loan repayment scenarios
-  transactionType?: 'withdrawal' | 'loan_repayment' | 'excess_withdrawal';
+  userDeposits?: string
+  userBorrows?: string
+  isLocked?: boolean
+  loanAmount?: string // For loan repayment scenarios
+  transactionType?: "withdrawal" | "loan_repayment" | "excess_withdrawal"
 }
 
 interface WithdrawalStep {
-  id: number;
-  title: string;
-  description: string;
-  completed: boolean;
-  current: boolean;
-  icon: React.ReactNode;
+  id: number
+  title: string
+  description: string
+  completed: boolean
+  current: boolean
 }
 
 export function MobileMoneyWithdrawModal({
@@ -84,77 +56,73 @@ export function MobileMoneyWithdrawModal({
   userBorrows = "0",
   isLocked = false,
   loanAmount = "0",
-  transactionType = 'withdrawal',
+  transactionType = "withdrawal",
 }: EnhancedMobileMoneyWithdrawModalProps) {
-  const { toast } = useToast();
+  const { toast } = useToast()
 
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(1)
   const [form, setForm] = useState({
     phoneNumber: "",
     amount: "",
     fiatCurrency: "KES",
-  });
+  })
 
-  const [quote, setQuote] = useState<any>(null);
-  const [loadingQuote, setLoadingQuote] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [transactionHash, setTransactionHash] = useState("");
-  const [orderID, setOrderID] = useState("");
+  const [quote, setQuote] = useState<any>(null)
+  const [loadingQuote, setLoadingQuote] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [transactionHash, setTransactionHash] = useState("")
+  const [orderID, setOrderID] = useState("")
 
-  const [optimizationSuggestion, setOptimizationSuggestion] = useState<any>(null);
-  const [constraintValidation, setConstraintValidation] = useState<any>(null);
+  const [optimizationSuggestion, setOptimizationSuggestion] = useState<any>(null)
+  const [constraintValidation, setConstraintValidation] = useState<any>(null)
 
   const steps: WithdrawalStep[] = [
     {
       id: 1,
-      title: "Setup",
-      description: "Enter withdrawal details",
+      title: "Phone & Amount",
+      description: "Enter your details",
       completed: currentStep > 1,
       current: currentStep === 1,
-      icon: <Smartphone className="w-4 h-4" />
     },
     {
       id: 2,
       title: "Review",
-      description: "Confirm transaction details",
+      description: "Confirm details",
       completed: currentStep > 2,
       current: currentStep === 2,
-      icon: <Shield className="w-4 h-4" />
     },
     {
       id: 3,
-      title: "Process",
-      description: "Blockchain transaction",
+      title: "Processing",
+      description: "Sending money",
       completed: currentStep > 3,
       current: currentStep === 3,
-      icon: <Zap className="w-4 h-4" />
     },
     {
       id: 4,
       title: "Complete",
-      description: "Mobile money transfer",
-      completed: currentStep > 4,
+      description: "Money sent",
+      completed: currentStep === 4,
       current: currentStep === 4,
-      icon: <CheckCircle className="w-4 h-4" />
     },
-  ];
+  ]
 
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setCurrentStep(1);
+      setCurrentStep(1)
       setForm({
         phoneNumber: "",
         amount: "",
         fiatCurrency: "KES",
-      });
-      setQuote(null);
-      setTransactionHash("");
-      setOrderID("");
-      setOptimizationSuggestion(null);
-      setConstraintValidation(null);
+      })
+      setQuote(null)
+      setTransactionHash("")
+      setOrderID("")
+      setOptimizationSuggestion(null)
+      setConstraintValidation(null)
     }
-  }, [isOpen]);
+  }, [isOpen])
 
   // Get optimization suggestions when token/fiat changes
   useEffect(() => {
@@ -162,41 +130,41 @@ export function MobileMoneyWithdrawModal({
       const suggestion = enhancedOfframpService.getOptimalWithdrawalPath(
         tokenSymbol,
         form.amount || "1",
-        form.fiatCurrency
-      );
-      setOptimizationSuggestion(suggestion);
+        form.fiatCurrency,
+      )
+      setOptimizationSuggestion(suggestion)
     }
-  }, [tokenSymbol, form.fiatCurrency]);
+  }, [tokenSymbol, form.fiatCurrency])
 
   // Validate constraints when amount changes
   useEffect(() => {
-    if (form.amount && parseFloat(form.amount) > 0) {
+    if (form.amount && Number.parseFloat(form.amount) > 0) {
       const validation = enhancedOfframpService.validateWithdrawalConstraints(
         tokenAddress,
         form.amount,
         userDeposits,
         userBorrows,
-        isLocked
-      );
-      setConstraintValidation(validation);
+        isLocked,
+      )
+      setConstraintValidation(validation)
     }
-  }, [form.amount, tokenAddress, userDeposits, userBorrows, isLocked]);
+  }, [form.amount, tokenAddress, userDeposits, userBorrows, isLocked])
 
   // Get quote when amount changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (form.amount && parseFloat(form.amount) > 0) {
-        getWithdrawalQuote();
+      if (form.amount && Number.parseFloat(form.amount) > 0) {
+        getWithdrawalQuote()
       }
-    }, 1000);
+    }, 1000)
 
-    return () => clearTimeout(timer);
-  }, [form.amount, form.fiatCurrency]);
+    return () => clearTimeout(timer)
+  }, [form.amount, form.fiatCurrency])
 
   const getWithdrawalQuote = async () => {
-    if (!form.amount || parseFloat(form.amount) <= 0) return;
+    if (!form.amount || Number.parseFloat(form.amount) <= 0) return
 
-    setLoadingQuote(true);
+    setLoadingQuote(true)
 
     try {
       const quoteRequest: OfframpQuoteRequest = {
@@ -206,26 +174,26 @@ export function MobileMoneyWithdrawModal({
         network: network,
         category: "B2C",
         tokenAddress: tokenAddress,
-      };
+      }
 
-      const result = await enhancedOfframpService.getOfframpQuote(quoteRequest);
+      const result = await enhancedOfframpService.getOfframpQuote(quoteRequest)
 
       if (result.success && result.data) {
-        setQuote(result.data);
+        setQuote(result.data)
       } else {
-        throw new Error(result.error || "Failed to get quote");
+        throw new Error(result.error || "Failed to get quote")
       }
     } catch (error: any) {
       toast({
-        title: "Quote Error",
+        title: "Rate Error",
         description: "Unable to get current rates. Please try again.",
         variant: "destructive",
-      });
-      setQuote(null);
+      })
+      setQuote(null)
     } finally {
-      setLoadingQuote(false);
+      setLoadingQuote(false)
     }
-  };
+  }
 
   const validateForm = (): boolean => {
     if (!form.phoneNumber || !form.amount) {
@@ -233,8 +201,8 @@ export function MobileMoneyWithdrawModal({
         title: "Missing Information",
         description: "Please fill in all required fields",
         variant: "destructive",
-      });
-      return false;
+      })
+      return false
     }
 
     if (!enhancedOfframpService.validatePhoneNumber(form.phoneNumber, form.fiatCurrency)) {
@@ -242,25 +210,25 @@ export function MobileMoneyWithdrawModal({
         title: "Invalid Phone Number",
         description: "Please enter a valid phone number for your selected currency",
         variant: "destructive",
-      });
-      return false;
+      })
+      return false
     }
 
     // Check constraint validation
     if (constraintValidation && !constraintValidation.valid) {
-      return false; // Error already shown in UI
+      return false // Error already shown in UI
     }
 
-    const amount = parseFloat(form.amount);
-    const available = parseFloat(availableAmount);
+    const amount = Number.parseFloat(form.amount)
+    const available = Number.parseFloat(availableAmount)
 
     if (amount <= 0) {
       toast({
         title: "Invalid Amount",
         description: "Please enter an amount greater than 0",
         variant: "destructive",
-      });
-      return false;
+      })
+      return false
     }
 
     if (amount > available) {
@@ -268,99 +236,95 @@ export function MobileMoneyWithdrawModal({
         title: "Insufficient Balance",
         description: "The withdrawal amount exceeds your available balance",
         variant: "destructive",
-      });
-      return false;
+      })
+      return false
     }
 
-    const limits = enhancedOfframpService.getWithdrawalLimits(form.fiatCurrency);
-    if (quote && parseFloat(quote.outputAmount) < limits.min) {
+    const limits = enhancedOfframpService.getWithdrawalLimits(form.fiatCurrency)
+    if (quote && Number.parseFloat(quote.outputAmount) < limits.min) {
       toast({
         title: "Amount Too Small",
         description: `Minimum withdrawal is ${formatEnhancedCurrencyAmount(limits.min, form.fiatCurrency)}`,
         variant: "destructive",
-      });
-      return false;
+      })
+      return false
     }
 
-    return true;
-  };
+    return true
+  }
 
   const handleNext = () => {
     if (currentStep === 1) {
       if (validateForm() && quote) {
-        setCurrentStep(2);
+        setCurrentStep(2)
       }
     } else if (currentStep === 2) {
-      handleBlockchainWithdraw();
+      handleBlockchainWithdraw()
     }
-  };
+  }
 
   const handleBlockchainWithdraw = async () => {
-    setCurrentStep(3);
-    setProcessing(true);
+    setCurrentStep(3)
+    setProcessing(true)
 
     try {
       // Calculate transaction breakdown for complex scenarios
-      let loanPaymentAmount = "0";
-      let excessWithdrawalAmount = form.amount;
+      let loanPaymentAmount = "0"
+      let excessWithdrawalAmount = form.amount
 
-      if (transactionType === 'loan_repayment' && loanAmount && parseFloat(loanAmount) > 0) {
+      if (transactionType === "loan_repayment" && loanAmount && Number.parseFloat(loanAmount) > 0) {
         const flow = enhancedOfframpService.calculateLoanRepaymentFlow(
           loanAmount,
           availableAmount,
           form.amount,
-          decimals
-        );
-        
+          decimals,
+        )
+
         if (!flow.canRepayAndWithdraw) {
-          throw new Error(`Insufficient balance. You need ${flow.shortfall} more to complete this transaction.`);
+          throw new Error(`Insufficient balance. You need ${flow.shortfall} more to complete this transaction.`)
         }
-        
-        loanPaymentAmount = flow.loanPayment;
-        excessWithdrawalAmount = flow.excessWithdrawal;
+
+        loanPaymentAmount = flow.loanPayment
+        excessWithdrawalAmount = flow.excessWithdrawal
       }
 
       // Perform blockchain withdrawal
-      const hash = await onBlockchainWithdraw(tokenAddress, form.amount);
-      setTransactionHash(hash);
+      const hash = await onBlockchainWithdraw(tokenAddress, form.amount)
+      setTransactionHash(hash)
 
       // Wait for transaction confirmation
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000))
 
       // Initiate mobile money transfer with enhanced data
-      await initiateMobileMoneyTransfer(hash, loanPaymentAmount, excessWithdrawalAmount);
+      await initiateMobileMoneyTransfer(hash, loanPaymentAmount, excessWithdrawalAmount)
     } catch (error: any) {
-      let userMessage = "Transaction failed. Please try again.";
-      
-      if (error.message?.includes('insufficient')) {
-        userMessage = "Insufficient balance for this transaction.";
-      } else if (error.message?.includes('rejected') || error.message?.includes('denied')) {
-        userMessage = "Transaction was cancelled.";
-      } else if (error.message?.includes('network')) {
-        userMessage = "Network error. Please check your connection.";
+      let userMessage = "Transaction failed. Please try again."
+
+      if (error.message?.includes("insufficient")) {
+        userMessage = "Insufficient balance for this transaction."
+      } else if (error.message?.includes("rejected") || error.message?.includes("denied")) {
+        userMessage = "Transaction was cancelled."
+      } else if (error.message?.includes("network")) {
+        userMessage = "Network error. Please check your connection."
       }
-      
+
       toast({
         title: "Transaction Failed",
         description: userMessage,
         variant: "destructive",
-      });
-      setCurrentStep(2); // Go back to review step
+      })
+      setCurrentStep(2) // Go back to review step
     } finally {
-      setProcessing(false);
+      setProcessing(false)
     }
-  };
+  }
 
-  const initiateMobileMoneyTransfer = async (
-    hash: string, 
-    loanPaymentAmount: string = "0", 
-    excessWithdrawalAmount: string = "0"
-  ) => {
-    setCurrentStep(4);
+  const initiateMobileMoneyTransfer = async (hash: string, loanPaymentAmount = "0", excessWithdrawalAmount = "0") => {
+    setCurrentStep(4)
 
     try {
-      const formattedPhone = enhancedOfframpService.formatPhoneNumber(form.phoneNumber, form.fiatCurrency);
-      
+      const formattedPhone = enhancedOfframpService.formatPhoneNumber(form.phoneNumber, form.fiatCurrency)
+
       const initiateRequest: OfframpInitiateRequest = {
         chain: network,
         hash: hash,
@@ -370,83 +334,62 @@ export function MobileMoneyWithdrawModal({
         loanPaymentAmount,
         excessWithdrawalAmount,
         transactionType,
-      };
+      }
 
-      const result = await enhancedOfframpService.initiateOfframp(initiateRequest);
+      const result = await enhancedOfframpService.initiateOfframp(initiateRequest)
 
       if (result.success && result.data) {
-        setOrderID(result.data.orderID);
-        
+        setOrderID(result.data.orderID)
+
         toast({
-          title: "Enhanced Withdrawal Initiated",
-          description: `Your ${tokenSymbol} will be converted to mobile money and sent to ${form.phoneNumber}`,
-        });
+          title: "Money Sent!",
+          description: `Your ${tokenSymbol} has been converted and sent to ${form.phoneNumber}`,
+        })
 
         if (onWithdrawSuccess) {
-          onWithdrawSuccess(result.data.orderID, form.amount);
+          onWithdrawSuccess(result.data.orderID, form.amount)
         }
       } else {
-        throw new Error(result.error || "Failed to initiate mobile money transfer");
+        throw new Error(result.error || "Failed to send money")
       }
     } catch (error: any) {
-      let userMessage = "Unable to complete mobile money transfer. Please try again.";
-      
-      if (error.message?.includes('phone')) {
-        userMessage = "Invalid phone number. Please check and try again.";
-      } else if (error.message?.includes('limit')) {
-        userMessage = "Transaction amount exceeds daily limits.";
-      } else if (error.message?.includes('network')) {
-        userMessage = "Mobile money service temporarily unavailable.";
+      let userMessage = "Unable to send money. Please try again."
+
+      if (error.message?.includes("phone")) {
+        userMessage = "Invalid phone number. Please check and try again."
+      } else if (error.message?.includes("limit")) {
+        userMessage = "Transaction amount exceeds daily limits."
+      } else if (error.message?.includes("network")) {
+        userMessage = "Mobile money service temporarily unavailable."
       }
-      
+
       toast({
         title: "Transfer Failed",
         description: userMessage,
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const handleClose = () => {
     if (!processing) {
-      onClose();
+      onClose()
     }
-  };
+  }
 
-  const getStepIcon = (step: WithdrawalStep) => {
-    if (step.completed) {
-      return <CheckCircle className="w-4 h-4 text-green-600" />;
-    } else if (step.current && processing) {
-      return <Loader2 className="w-4 h-4 animate-spin text-primary" />;
-    } else if (step.current) {
-      return <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center text-white text-xs">
-        {step.icon}
-      </div>;
-    } else {
-      return <div className="w-4 h-4 rounded-full bg-gray-300 flex items-center justify-center">
-        {step.icon}
-      </div>;
-    }
-  };
-
-  const tokenCategory = getTokenCategory(tokenSymbol);
-  const hasOptimalPairing = hasPreferredFiatPairing(tokenSymbol, form.fiatCurrency);
-  const fiatConfig = ENHANCED_OFFRAMP_FIAT[form.fiatCurrency as keyof typeof ENHANCED_OFFRAMP_FIAT];
+  const fiatConfig = ENHANCED_OFFRAMP_FIAT[form.fiatCurrency as keyof typeof ENHANCED_OFFRAMP_FIAT]
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] max-w-[420px] mx-auto bg-white border-0 shadow-2xl rounded-xl p-0 max-h-[90vh] overflow-hidden">
-        {/* Enhanced Header */}
-        <DialogHeader className="px-4 py-3 border-b bg-gradient-to-r from-green-50 to-blue-50">
+      <DialogContent className="w-[95vw] max-w-[420px] mx-auto bg-[#162013] border-0 shadow-2xl rounded-xl p-0 max-h-[90vh] overflow-hidden">
+        <DialogHeader className="px-6 py-4 border-b border-[#2e4328]">
           <div className="flex items-center justify-between">
             <div className="flex items-center min-w-0">
-              <Smartphone className="w-5 h-5 mr-2 text-primary flex-shrink-0" />
+              <Smartphone className="w-5 h-5 mr-3 text-[#54d22d] flex-shrink-0" />
               <div className="min-w-0">
-                <DialogTitle className="text-gray-900 text-lg font-semibold truncate">
-                  Enhanced Mobile Money Withdrawal
-                </DialogTitle>
-                <DialogDescription className="text-sm text-gray-600 mt-0.5">
-                  Convert {tokenSymbol} to {fiatConfig?.name || 'cash'} • {tokenCategory} token
+                <DialogTitle className="text-white text-lg font-semibold truncate">Send to Phone</DialogTitle>
+                <DialogDescription className="text-[#a2c398] text-sm mt-1">
+                  Convert {tokenSymbol} to mobile money
                 </DialogDescription>
               </div>
             </div>
@@ -454,7 +397,7 @@ export function MobileMoneyWithdrawModal({
               onClick={handleClose}
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
+              className="h-8 w-8 p-0 text-[#a2c398] hover:text-white hover:bg-[#2e4328]"
               disabled={processing}
             >
               <X className="w-4 h-4" />
@@ -462,21 +405,34 @@ export function MobileMoneyWithdrawModal({
           </div>
         </DialogHeader>
 
-        {/* Enhanced Progress Steps */}
-        <div className="px-4 py-3 border-b bg-gray-50">
+        <div className="px-6 py-4 border-b border-[#2e4328] bg-[#21301c]">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <div className="flex flex-col items-center">
-                  {getStepIcon(step)}
-                  <div className="text-xs text-center mt-1 max-w-[60px]">
-                    <div className={`font-medium ${step.current ? 'text-primary' : step.completed ? 'text-green-600' : 'text-gray-500'}`}>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                      step.completed
+                        ? "bg-[#54d22d] text-[#162013]"
+                        : step.current
+                          ? "bg-[#426039] text-white"
+                          : "bg-[#2e4328] text-[#a2c398]"
+                    }`}
+                  >
+                    {step.completed ? <CheckCircle className="w-4 h-4" /> : step.id}
+                  </div>
+                  <div className="text-xs text-center mt-2 max-w-[60px]">
+                    <div
+                      className={`font-medium ${
+                        step.current ? "text-[#54d22d]" : step.completed ? "text-[#54d22d]" : "text-[#a2c398]"
+                      }`}
+                    >
                       {step.title}
                     </div>
                   </div>
                 </div>
                 {index < steps.length - 1 && (
-                  <ArrowRight className="w-3 h-3 text-gray-400 mx-2" />
+                  <div className={`w-8 h-0.5 mx-2 ${step.completed ? "bg-[#54d22d]" : "bg-[#2e4328]"}`} />
                 )}
               </div>
             ))}
@@ -484,56 +440,22 @@ export function MobileMoneyWithdrawModal({
         </div>
 
         <div className="overflow-y-auto max-h-[calc(90vh-200px)]">
-          {/* Step 1: Enhanced Setup */}
           {currentStep === 1 && (
-            <div className="p-4 space-y-4">
-              {/* Optimization Suggestion */}
-              {optimizationSuggestion && !optimizationSuggestion.recommended && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <div className="flex items-start">
-                    <TrendingUp className="w-4 h-4 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm">
-                      <div className="font-medium text-yellow-800 mb-1">Optimization Tip</div>
-                      <div className="text-yellow-700 mb-2">{optimizationSuggestion.reason}</div>
-                      {optimizationSuggestion.alternativeTokens && (
-                        <div className="text-xs text-yellow-600">
-                          Consider: {optimizationSuggestion.alternativeTokens.join(', ')} 
-                          {optimizationSuggestion.estimatedSavings && ` (Save ${optimizationSuggestion.estimatedSavings})`}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Optimal Pairing Indicator */}
-              {hasOptimalPairing && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <div className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                    <div className="text-sm text-green-800">
-                      <span className="font-medium">Optimal Pairing!</span> {tokenSymbol} has direct support for {form.fiatCurrency}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-1 block">
-                    Currency {fiatConfig?.flag}
-                  </Label>
+                  <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Currency {fiatConfig?.flag}</Label>
                   <Select
                     value={form.fiatCurrency}
-                    onValueChange={(value) => setForm(prev => ({ ...prev, fiatCurrency: value }))}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, fiatCurrency: value }))}
                   >
-                    <SelectTrigger className="h-10 text-sm">
+                    <SelectTrigger className="h-12 bg-[#21301c] border-[#426039] text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-[#21301c] border-[#426039]">
                       {Object.entries(ENHANCED_OFFRAMP_FIAT).map(([currency, config]) => (
-                        <SelectItem key={currency} value={currency}>
-                          {config.flag} {currency} - {config.name}
+                        <SelectItem key={currency} value={currency} className="text-white hover:bg-[#2e4328]">
+                          {config.flag} {currency}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -541,201 +463,160 @@ export function MobileMoneyWithdrawModal({
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-1 block">
-                    Available
-                  </Label>
-                  <div className="h-10 px-3 py-2 bg-gray-50 border rounded-md flex items-center text-sm font-medium text-gray-700">
-                    {parseFloat(availableAmount).toFixed(4)} {tokenSymbol}
+                  <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Available</Label>
+                  <div className="h-12 px-4 py-3 bg-[#21301c] border border-[#426039] rounded-md flex items-center text-sm font-medium text-white">
+                    {Number.parseFloat(availableAmount).toFixed(4)} {tokenSymbol}
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">
-                  Phone Number
-                </Label>
+                <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Phone Number</Label>
                 <Input
                   type="tel"
-                  placeholder={form.fiatCurrency === 'KES' ? '0712345678' : '+1234567890'}
+                  placeholder={form.fiatCurrency === "KES" ? "0712345678" : "+1234567890"}
                   value={form.phoneNumber}
-                  onChange={(e) => setForm(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                  className="h-10 text-sm"
+                  onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                  className="h-12 bg-[#21301c] border-[#426039] text-white placeholder:text-[#a2c398]"
                 />
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">
-                  Amount ({tokenSymbol})
-                </Label>
+                <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Amount ({tokenSymbol})</Label>
                 <Input
                   type="number"
                   placeholder="0.00"
                   value={form.amount}
-                  onChange={(e) => setForm(prev => ({ ...prev, amount: e.target.value }))}
-                  className="h-10 text-sm"
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  className="h-12 bg-[#21301c] border-[#426039] text-white placeholder:text-[#a2c398]"
                   min="0.01"
                   step="0.01"
                   max={availableAmount}
                 />
-                {/* Quick percentage selectors */}
-                {parseFloat(availableAmount) > 0 && (
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount) * 0.1).toFixed(6) }))}
-                    >
-                      10%
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount) * 0.2).toFixed(6) }))}
-                    >
-                      20%
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount) * 0.5).toFixed(6) }))}
-                    >
-                      50%
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={() => setForm(prev => ({ ...prev, amount: (parseFloat(availableAmount)).toFixed(6) }))}
-                    >
-                      Max
-                    </Button>
+
+                {Number.parseFloat(availableAmount) > 0 && (
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {[0.25, 0.5, 0.75, 1].map((percentage) => (
+                      <Button
+                        key={percentage}
+                        type="button"
+                        variant="outline"
+                        className="h-8 text-xs bg-[#21301c] border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            amount: (Number.parseFloat(availableAmount) * percentage).toFixed(6),
+                          }))
+                        }
+                      >
+                        {percentage === 1 ? "Max" : `${percentage * 100}%`}
+                      </Button>
+                    ))}
                   </div>
                 )}
-                
-                {/* Enhanced Quote Display */}
+
                 {loadingQuote && (
-                  <div className="mt-2 flex items-center text-sm text-gray-600">
-                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                    Getting enhanced quote...
+                  <div className="mt-3 flex items-center text-sm text-[#a2c398]">
+                    <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                    Getting rates...
                   </div>
                 )}
 
                 {quote && !loadingQuote && (
-                  <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="mt-3 bg-[#21301c] border border-[#426039] rounded-lg p-4">
                     <div className="text-sm">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-600">You'll receive:</span>
-                        <span className="font-semibold text-green-700">
-                          {formatEnhancedCurrencyAmount(parseFloat(quote.outputAmount), form.fiatCurrency)}
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[#a2c398]">You'll receive:</span>
+                        <span className="font-semibold text-[#54d22d] text-lg">
+                          {formatEnhancedCurrencyAmount(Number.parseFloat(quote.outputAmount), form.fiatCurrency)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 mt-2">
+                      <div className="grid grid-cols-2 gap-3 text-xs text-[#a2c398] pt-2 border-t border-[#2e4328]">
                         <div className="flex justify-between">
                           <span>Rate:</span>
-                          <span>1 {tokenSymbol} = {quote.exchangeRate} {form.fiatCurrency}</span>
+                          <span className="text-white">
+                            1 {tokenSymbol} = {quote.exchangeRate} {form.fiatCurrency}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Fee:</span>
-                          <span>{formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Gas:</span>
-                          <span>~{quote.estimatedGasFee} {network.toUpperCase()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Time:</span>
-                          <span>{quote.processingTime}</span>
+                          <span className="text-white">
+                            {formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Constraint Validation */}
                 {constraintValidation && !constraintValidation.valid && (
-                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="mt-3 bg-[#2e1a1a] border border-[#5c2e2e] rounded-lg p-4">
                     <div className="flex items-start">
-                      <AlertCircle className="w-4 h-4 text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-[#ff6b6b] mr-2 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <div className="font-medium text-amber-800 mb-1">Unable to Process</div>
-                        <div className="text-amber-700 mb-2">
-                          {constraintValidation.reason.includes('exceeds') 
-                            ? 'Withdrawal amount exceeds your available balance.'
-                            : constraintValidation.reason.includes('Minimum')
-                            ? `Minimum withdrawal amount is ${constraintValidation.reason.match(/\d+/)?.[0] || '10'} ${form.fiatCurrency}.`
-                            : 'Please check your withdrawal amount and try again.'}
+                        <div className="font-medium text-[#ff6b6b] mb-1">Cannot Process</div>
+                        <div className="text-[#ffb3b3] text-xs">
+                          {constraintValidation.reason.includes("exceeds")
+                            ? "Amount exceeds your available balance."
+                            : constraintValidation.reason.includes("Minimum")
+                              ? `Minimum amount is ${constraintValidation.reason.match(/\d+/)?.[0] || "10"} ${form.fiatCurrency}.`
+                              : "Please check your amount and try again."}
                         </div>
-                        {constraintValidation.suggestions && (
-                          <div className="text-xs text-amber-600">
-                            💡 Try: Reduce withdrawal amount, Check your available balance
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-
-
             </div>
           )}
 
-          {/* Step 2: Enhanced Review */}
           {currentStep === 2 && quote && (
-            <div className="p-4 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-3">Enhanced Withdrawal Summary</h3>
-                
-                <div className="space-y-2 text-sm">
+            <div className="p-6 space-y-6">
+              <div className="bg-[#21301c] border border-[#426039] rounded-lg p-4">
+                <h3 className="font-semibold text-white mb-4 flex items-center">
+                  <Shield className="w-4 h-4 mr-2 text-[#54d22d]" />
+                  Review Details
+                </h3>
+
+                <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">From:</span>
-                    <span className="font-medium">{form.amount} {tokenSymbol}</span>
+                    <span className="text-[#a2c398]">Sending:</span>
+                    <span className="font-medium text-white">
+                      {form.amount} {tokenSymbol}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">To:</span>
-                    <span className="font-medium">{form.phoneNumber}</span>
+                    <span className="text-[#a2c398]">To phone:</span>
+                    <span className="font-medium text-white">{form.phoneNumber}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Network:</span>
-                    <span className="font-medium capitalize">{network}</span>
+                    <span className="text-[#a2c398]">Exchange rate:</span>
+                    <span className="font-medium text-white">
+                      1 {tokenSymbol} = {quote.exchangeRate} {form.fiatCurrency}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Token Category:</span>
-                    <span className="font-medium capitalize">{tokenCategory}</span>
+                    <span className="text-[#a2c398]">Fee:</span>
+                    <span className="font-medium text-white">
+                      {formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Exchange Rate:</span>
-                    <span className="font-medium">1 {tokenSymbol} = {quote.exchangeRate} {form.fiatCurrency}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Processing Fee:</span>
-                    <span className="font-medium">{formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Estimated Gas:</span>
-                    <span className="font-medium">{quote.estimatedGasFee} {network.toUpperCase()}</span>
-                  </div>
-                  <div className="border-t pt-2 flex justify-between font-semibold text-base">
-                    <span className="text-gray-900">You'll receive:</span>
-                    <span className="text-green-600">
-                      {formatEnhancedCurrencyAmount(parseFloat(quote.outputAmount), form.fiatCurrency)}
+                  <div className="border-t border-[#2e4328] pt-3 flex justify-between font-semibold text-base">
+                    <span className="text-white">They'll receive:</span>
+                    <span className="text-[#54d22d]">
+                      {formatEnhancedCurrencyAmount(Number.parseFloat(quote.outputAmount), form.fiatCurrency)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="bg-[#2e2a1a] border border-[#5c5439] rounded-lg p-4">
                 <div className="flex items-start">
-                  <Info className="w-4 h-4 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-yellow-800">
-                    <div className="font-medium mb-1">Enhanced Processing</div>
-                    <div>
-                      Estimated completion: {quote.processingTime} • 
-                      Slippage tolerance: {quote.slippageTolerance}% • 
-                      Transaction type: {transactionType.replace('_', ' ')}
+                  <Info className="w-4 h-4 text-[#f59e0b] mr-2 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-[#fbbf24]">
+                    <div className="font-medium mb-1">Processing Time</div>
+                    <div className="text-xs text-[#fcd34d]">
+                      Money will be sent within {quote.processingTime || "5-10 minutes"}
                     </div>
                   </div>
                 </div>
@@ -743,79 +624,58 @@ export function MobileMoneyWithdrawModal({
             </div>
           )}
 
-          {/* Step 3: Enhanced Processing */}
           {currentStep === 3 && (
-            <div className="p-4 text-center space-y-4">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <div className="p-6 text-center space-y-6">
+              <div className="w-16 h-16 bg-[#21301c] rounded-full flex items-center justify-center mx-auto">
+                <Loader2 className="w-8 h-8 text-[#54d22d] animate-spin" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Processing Enhanced Blockchain Transfer
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Transferring your {tokenSymbol} with enhanced security and optimization...
+                <h3 className="text-lg font-semibold text-white mb-2">Sending Money</h3>
+                <p className="text-sm text-[#a2c398]">
+                  Converting your {tokenSymbol} and sending to {form.phoneNumber}...
                 </p>
               </div>
-              {transactionHash && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 mb-1">Transaction Hash:</p>
-                  <p className="font-mono text-xs break-all">{transactionHash}</p>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Step 4: Enhanced Completion */}
           {currentStep === 4 && (
-            <div className="p-4 text-center space-y-4">
+            <div className="p-6 text-center space-y-6">
               {orderID ? (
                 <>
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  <div className="w-16 h-16 bg-[#21301c] rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-8 h-8 text-[#54d22d]" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Enhanced Withdrawal Initiated!
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Your enhanced mobile money transfer is being processed with optimal routing.
-                    </p>
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1">Enhanced Order ID:</p>
-                      <p className="font-mono text-sm font-medium">{orderID}</p>
+                    <h3 className="text-lg font-semibold text-white mb-2">Money Sent!</h3>
+                    <p className="text-sm text-[#a2c398] mb-4">Your mobile money transfer is being processed.</p>
+                    <div className="bg-[#21301c] border border-[#426039] rounded-lg p-3">
+                      <p className="text-xs text-[#a2c398] mb-1">Reference:</p>
+                      <p className="font-mono text-sm font-medium text-white">{orderID}</p>
                     </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-                    <Clock className="w-8 h-8 text-primary" />
+                  <div className="w-16 h-16 bg-[#21301c] rounded-full flex items-center justify-center mx-auto">
+                    <Clock className="w-8 h-8 text-[#54d22d]" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Initiating Enhanced Mobile Money Transfer
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      Setting up your optimized mobile money withdrawal...
-                    </p>
+                    <h3 className="text-lg font-semibold text-white mb-2">Almost Done</h3>
+                    <p className="text-sm text-[#a2c398]">Setting up your mobile money transfer...</p>
                   </div>
                 </>
               )}
             </div>
           )}
-
-
         </div>
 
-        {/* Enhanced Action Buttons */}
-        <div className="border-t bg-gray-50 p-4">
+        <div className="border-t border-[#2e4328] bg-[#21301c] p-6">
           {currentStep === 1 && (
             <div className="flex gap-3">
               <Button
                 onClick={handleClose}
                 variant="outline"
-                className="flex-1 h-10 text-sm bg-white"
+                className="flex-1 h-12 bg-[#162013] border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
                 disabled={processing}
               >
                 Cancel
@@ -823,15 +683,15 @@ export function MobileMoneyWithdrawModal({
               <Button
                 onClick={handleNext}
                 disabled={!quote || !validateForm() || loadingQuote}
-                className="flex-1 bg-primary hover:bg-secondary text-white h-10 text-sm"
+                className="flex-1 bg-[#54d22d] hover:bg-[#4bc226] text-[#162013] h-12 font-medium"
               >
                 {loadingQuote ? (
                   <>
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Loading...
                   </>
                 ) : (
-                  "Review Enhanced Quote"
+                  "Review & Send"
                 )}
               </Button>
             </div>
@@ -842,23 +702,24 @@ export function MobileMoneyWithdrawModal({
               <Button
                 onClick={() => setCurrentStep(1)}
                 variant="outline"
-                className="flex-1 h-10 text-sm bg-white"
+                className="flex-1 h-12 bg-[#162013] border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
                 disabled={processing}
               >
+                <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
               <Button
                 onClick={handleNext}
                 disabled={processing}
-                className="flex-1 bg-primary hover:bg-secondary text-white h-10 text-sm"
+                className="flex-1 bg-[#54d22d] hover:bg-[#4bc226] text-[#162013] h-12 font-medium"
               >
                 {processing ? (
                   <>
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                    Processing...
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
                   </>
                 ) : (
-                  "Confirm Enhanced Withdrawal"
+                  "Confirm & Send"
                 )}
               </Button>
             </div>
@@ -868,7 +729,7 @@ export function MobileMoneyWithdrawModal({
             <Button
               onClick={handleClose}
               disabled={processing && !orderID}
-              className="w-full bg-primary hover:bg-secondary text-white h-10 text-sm"
+              className="w-full bg-[#54d22d] hover:bg-[#4bc226] text-[#162013] h-12 font-medium"
             >
               {orderID ? "Done" : "Processing..."}
             </Button>
@@ -876,5 +737,5 @@ export function MobileMoneyWithdrawModal({
         </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

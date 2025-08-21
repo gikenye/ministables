@@ -1,54 +1,36 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useMemo } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowUpRight, DollarSign, CreditCard } from "lucide-react";
-import { formatAmount } from "@/lib/utils";
-import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react";
-import { OnrampDepositModal } from "./OnrampDepositModal";
-import { onrampService } from "@/lib/services/onrampService";
-import { useToast } from "@/hooks/use-toast";
-import { oracleService } from "@/lib/services/oracleService";
-import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
-import { parseUnits } from "viem";
-import { celo } from "thirdweb/chains";
-import { client } from "@/lib/thirdweb/client";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
-import { getTokenIcon } from "@/lib/utils/tokenIcons";
-import { useUserBorrows } from "@/hooks/useContractData";
-import { LoanItem } from "./LoanItem";
+import { useState, useEffect, useMemo } from "react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { ArrowLeft, Plus } from "lucide-react"
+import { formatAmount } from "@/lib/utils"
+import { useActiveAccount, TransactionButton, useWalletBalance } from "thirdweb/react"
+import { OnrampDepositModal } from "./OnrampDepositModal"
+import { onrampService } from "@/lib/services/onrampService"
+import { useToast } from "@/hooks/use-toast"
+import { oracleService } from "@/lib/services/oracleService"
+import { getContract, prepareContractCall } from "thirdweb"
+import { parseUnits } from "viem"
+import { celo } from "thirdweb/chains"
+import { client } from "@/lib/thirdweb/client"
+import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
+import { LoanItem } from "./LoanItem"
 
 interface ActiveLoan {
-  token: string;
-  symbol: string;
-  principal: string;
-  totalOwed: string;
-  decimals: number;
+  token: string
+  symbol: string
+  principal: string
+  totalOwed: string
+  decimals: number
 }
 
 interface PayBackModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onPayBack: (token: string, amount: string) => Promise<void>;
-  tokenInfos: Record<string, { symbol: string; decimals: number }>;
-  loading: boolean;
-  userBalances?: Record<string, string>;
+  isOpen: boolean
+  onClose: () => void
+  onPayBack: (token: string, amount: string) => Promise<void>
+  tokenInfos: Record<string, { symbol: string; decimals: number }>
+  loading: boolean
+  userBalances?: Record<string, string>
 }
 
 export function PayBackModal({
@@ -59,43 +41,53 @@ export function PayBackModal({
   loading,
   userBalances = {},
 }: PayBackModalProps) {
-  const account = useActiveAccount();
-  const address = account?.address;
-  const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
-  const [showOnrampModal, setShowOnrampModal] = useState(false);
-  const { toast } = useToast();
+  const account = useActiveAccount()
+  const address = account?.address
+  const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null)
+  const [showOnrampModal, setShowOnrampModal] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1)
+  const { toast } = useToast()
 
   const [form, setForm] = useState({
     token: "",
     amount: "",
-  });
+  })
 
   // Memoize contract instance to prevent re-creation
-  const contract = useMemo(() => getContract({
-    client,
-    chain: celo,
-    address: MINILEND_ADDRESS,
-  }), []);
+  const contract = useMemo(
+    () =>
+      getContract({
+        client,
+        chain: celo,
+        address: MINILEND_ADDRESS,
+      }),
+    [],
+  )
 
   // Get supported tokens from props - filtered to only cKES
   const supportedStablecoins = useMemo(() => {
-    return Object.keys(tokenInfos).filter(tokenAddress => {
-      const tokenInfo = tokenInfos[tokenAddress];
-      return tokenInfo?.symbol === 'cKES';
-    });
-  }, [tokenInfos]);
+    return Object.keys(tokenInfos).filter((tokenAddress) => {
+      const tokenInfo = tokenInfos[tokenAddress]
+      return tokenInfo?.symbol === "cKES"
+    })
+  }, [tokenInfos])
 
-
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1)
+      setForm({ token: "", amount: "" })
+      setSelectedLoan(null)
+    }
+  }, [isOpen])
 
   const handleLoanSelect = (loan: ActiveLoan) => {
-    setSelectedLoan(loan);
+    setSelectedLoan(loan)
     setForm({
       token: loan.token,
       amount: formatAmount(loan.totalOwed, loan.decimals),
-    });
-  };
-
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction({ payModal: false });
+    })
+    setCurrentStep(2)
+  }
 
   // Balances for auto-wrap support when paying back with CELO
   const { data: repayTokenBalance } = useWalletBalance({
@@ -103,287 +95,372 @@ export function PayBackModal({
     chain: celo,
     address,
     tokenAddress: form.token || undefined,
-  });
+  })
   const { data: nativeBalanceData } = useWalletBalance({
     client,
     chain: celo,
     address,
-  });
+  })
 
-  const handlePayBack = async () => {
-    if (!form.token || !form.amount) return;
-
-    try {
-      const isOracleValid = await oracleService.validatePriceData(form.token);
-      if (!isOracleValid) {
-        toast({
-          title: "Oracle Price Error",
-          description: "Unable to get current market prices. Please try again in a moment.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Auto-wrap CELO if needed before repay
-      const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438";
-      const erc20Balance = parseFloat(repayTokenBalance?.displayValue || "0");
-      const nativeBalance = parseFloat(nativeBalanceData?.displayValue || "0");
-      const inputAmount = parseFloat(form.amount);
-      if (form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= (inputAmount - erc20Balance)) {
-        const amountToWrap = inputAmount - erc20Balance;
-        const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 });
-        const wrapTx = prepareContractCall({
-          contract: celoContract,
-          method: "function deposit()",
-          params: [],
-          value: parseUnits(amountToWrap.toString(), 18),
-        });
-        const wrapResult = await sendTransaction(wrapTx);
-        if (wrapResult?.transactionHash) {
-          await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash });
-        }
-      }
-
-      await onPayBack(form.token, form.amount);
-      setForm({ token: "", amount: "" });
-      setSelectedLoan(null);
-      onClose();
-      toast({
-        title: "Payment Successful",
-        description: "Your loan payment has been processed successfully.",
-      });
-    } catch (error: any) {
-      console.error("Payment error:", error);
-      if (error.message?.includes("ERC20: insufficient allowance") || error.message?.includes("Approve contract first")) {
-        toast({
-          title: "Approval Required",
-          description: "Please approve the contract to spend your tokens first. This should happen automatically.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Payment Failed",
-          description: error.message || "Failed to process payment. Please try again.",
-          variant: "destructive",
-        });
-      }
+  const preparePayBackTransaction = async () => {
+    if (!form.token || !form.amount || !account) {
+      throw new Error("Missing required parameters")
     }
-  };
 
+    const isOracleValid = await oracleService.validatePriceData(form.token)
+    if (!isOracleValid) {
+      throw new Error("Unable to get current market prices. Please try again in a moment.")
+    }
 
+    // Auto-wrap CELO if needed before repay
+    const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438"
+    const erc20Balance = Number.parseFloat(repayTokenBalance?.displayValue || "0")
+    const nativeBalance = Number.parseFloat(nativeBalanceData?.displayValue || "0")
+    const inputAmount = Number.parseFloat(form.amount)
 
+    if (form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= inputAmount - erc20Balance) {
+      const amountToWrap = inputAmount - erc20Balance
+      const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 })
+      const wrapTx = prepareContractCall({
+        contract: celoContract,
+        method: "function deposit()",
+        params: [],
+        value: parseUnits(amountToWrap.toString(), 18),
+      })
+      return wrapTx
+    }
 
+    // Prepare the actual payback transaction
+    const decimals = tokenInfos[form.token]?.decimals || 18
+    const amountWei = parseUnits(form.amount, decimals)
+
+    const paybackTx = prepareContractCall({
+      contract,
+      method: "function repay(address,uint256)",
+      params: [form.token, amountWei],
+      erc20Value: {
+        tokenAddress: form.token,
+        amountWei,
+      },
+    })
+
+    return paybackTx
+  }
+
+  const handleTransactionSuccess = (receipt: any) => {
+    toast({
+      title: "Payment Successful",
+      description: "Your loan payment has been processed successfully.",
+    })
+    setForm({ token: "", amount: "" })
+    setSelectedLoan(null)
+    setCurrentStep(1)
+    onClose()
+  }
+
+  const handleTransactionError = (error: any) => {
+    console.error("Payment error:", error)
+    if (error.message?.includes("ERC20: insufficient allowance") || error.message?.includes("Approve contract first")) {
+      toast({
+        title: "Approval Required",
+        description: "Please approve the contract to spend your tokens first. This should happen automatically.",
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Failed to process payment. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1)
+    }
+  }
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
+  }
+
+  const hasZeroBalance = () => {
+    if (!form.token) return false
+    const balance = Number.parseFloat(repayTokenBalance?.displayValue || "0")
+    return balance === 0
+  }
+
+  const isAssetSupportedForOnramp = (tokenAddress: string) => {
+    try {
+      const tokenSymbol = tokenInfos[tokenAddress]?.symbol
+      if (!tokenSymbol) return false
+
+      const chainName = "CELO" // Chain name string, not chain object
+      return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
+    } catch (error) {
+      console.error("Error checking onramp support:", error)
+      return false
+    }
+  }
+
+  const handleOnrampSuccess = (transactionCode: string, amount: number) => {
+    toast({
+      title: "Deposit Initiated",
+      description: `${selectedLoan?.symbol} deposit processing`,
+    })
+    setShowOnrampModal(false)
+    setCurrentStep(2)
+  }
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader className="pb-3">
-            <DialogTitle className="text-base font-medium text-gray-900">
-              Pay Back Loans
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-600">
-              Select a loan and amount to repay. Your wallet will handle approvals and the transaction.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden">
+          <div className="flex h-5 w-full items-center justify-center bg-[#162013]">
+            <div className="h-1 w-9 rounded-full bg-[#426039]"></div>
+          </div>
 
-          <div className="space-y-3">
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {supportedStablecoins.map((tokenAddress) => {
-                const tokenInfo = tokenInfos[tokenAddress];
-                if (!tokenInfo || !address) return null;
-                
-                return (
-                  <LoanItem
-                    key={tokenAddress}
-                    contract={contract}
-                    userAddress={address}
-                    tokenAddress={tokenAddress}
-                    tokenInfo={tokenInfo}
-                    onSelect={handleLoanSelect}
-                    isSelected={selectedLoan?.token === tokenAddress}
-                  />
-                );
-              })}
+          <div className="px-4 pb-5">
+            <div className="flex items-center justify-between pt-5 pb-3">
+              {currentStep > 1 && (
+                <button onClick={prevStep} className="p-1 text-[#a2c398] hover:text-white transition-colors">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              <div className="flex-1 text-center">
+                <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Pay Back Loan</h1>
+                <div className="flex justify-center gap-1 mt-2">
+                  {[1, 2, 3].map((step) => (
+                    <div
+                      key={step}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              {currentStep > 1 && <div className="w-7" />}
             </div>
 
-            {address && (
-              <>
-                <div className="border-t pt-3">
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                        Select Loan
-                      </Label>
-                      <Select
-                        value={form.token}
-                        onValueChange={(value) => {
-                          const tokenInfo = tokenInfos[value];
-                          if (tokenInfo) {
-                            // Create a minimal loan object for selection
-                            const loan = {
-                              token: value,
-                              symbol: tokenInfo.symbol,
-                              principal: "0",
-                              totalOwed: "0",
-                              decimals: tokenInfo.decimals,
-                            };
-                            handleLoanSelect(loan);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Select loan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {supportedStablecoins.map((tokenAddress) => {
-                            const tokenInfo = tokenInfos[tokenAddress];
-                            if (!tokenInfo) return null;
-                            
-                            return (
-                              <SelectItem key={tokenAddress} value={tokenAddress}>
-                                <div className="flex items-center gap-2">
-                                  {getTokenIcon(tokenInfo.symbol).startsWith('http') ? (
-                                    <img src={getTokenIcon(tokenInfo.symbol)} alt={tokenInfo.symbol} className="w-4 h-4 rounded-full" />
-                                  ) : (
-                                    <span className="text-sm">{getTokenIcon(tokenInfo.symbol)}</span>
-                                  )}
-                                  <span className="font-medium">
-                                    {tokenInfo.symbol}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+            {!account && (
+              <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm mb-4">
+                Connect wallet to continue
+              </div>
+            )}
 
-                    <div>
-                      <div className="flex justify-between items-center">
-                        <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                          Amount
-                        </Label>
-                        {selectedLoan && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setForm({
-                                ...form,
-                                amount: formatAmount(
-                                  selectedLoan.totalOwed,
-                                  selectedLoan.decimals
-                                ),
-                              })
-                            }
-                            className="text-xs text-blue-600 hover:text-blue-800"
-                          >
-                            Full
-                          </button>
-                        )}
-                      </div>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={form.amount}
-                        onChange={(e) =>
-                          setForm({ ...form, amount: e.target.value })
-                        }
-                        className="h-10"
-                        min="0.01"
-                        step="0.01"
-                      />
-                      {form.token && (
-                        <div className="mt-2 text-xs text-gray-600">
-                          Wallet balance: {formatAmount(
-                            userBalances[form.token] || '0',
-                            tokenInfos[form.token]?.decimals || 18
-                          )} {tokenInfos[form.token]?.symbol}
-                        </div>
-                      )}
-                      {selectedLoan && (
-                        <div className="mt-2 grid grid-cols-4 gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.1).toFixed(6) })}
-                          >
-                            10%
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.2).toFixed(6) })}
-                          >
-                            20%
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.5).toFixed(6) })}
-                          >
-                            50%
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            onClick={() => setForm({ ...form, amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals))).toFixed(6) })}
-                          >
-                            Max
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+            <div className="min-h-[300px]">
+              {currentStep === 1 && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h3 className="text-white text-lg font-medium mb-2">Select loan to pay</h3>
+                    <p className="text-[#a2c398] text-sm">Choose which loan you'd like to pay back</p>
+                  </div>
+
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {supportedStablecoins.map((tokenAddress) => {
+                      const tokenInfo = tokenInfos[tokenAddress]
+                      if (!tokenInfo || !address) return null
+
+                      return (
+                        <LoanItem
+                          key={tokenAddress}
+                          contract={contract}
+                          userAddress={address}
+                          tokenAddress={tokenAddress}
+                          tokenInfo={tokenInfo}
+                          onSelect={handleLoanSelect}
+                          isSelected={selectedLoan?.token === tokenAddress}
+                        />
+                      )
+                    })}
                   </div>
                 </div>
+              )}
 
-                <div className="flex gap-2 pt-3">
-                  <Button
-                    onClick={onClose}
-                    variant="outline"
-                    className="flex-1 h-9 text-sm"
+              {currentStep === 2 && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h3 className="text-white text-lg font-medium mb-2">How much to pay?</h3>
+                    <p className="text-[#a2c398] text-sm">
+                      Balance: {Number.parseFloat(repayTokenBalance?.displayValue || "0").toFixed(4)}{" "}
+                      {tokenInfos[form.token]?.symbol}
+                    </p>
+                  </div>
+
+                  {hasZeroBalance() && isAssetSupportedForOnramp(form.token) && (
+                    <div className="bg-[#2a3d24] border border-[#426039] rounded-xl p-3 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[#a2c398] text-sm">No {tokenInfos[form.token]?.symbol} balance</div>
+                        <div className="text-[#54d22d] text-xs">Get tokens first</div>
+                      </div>
+                      <button
+                        onClick={() => setShowOnrampModal(true)}
+                        className="w-full h-10 bg-[#54d22d] text-[#162013] text-sm font-medium rounded-lg hover:bg-[#4bc428] transition-colors flex items-center justify-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Get {tokenInfos[form.token]?.symbol}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={form.amount}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                          setForm({ ...form, amount: value })
+                        }
+                      }}
+                      className="w-full h-16 rounded-xl text-white bg-[#21301c] border-2 border-[#426039] focus:border-[#54d22d] focus:outline-0 focus:ring-0 pl-4 pr-20 text-2xl font-medium text-center"
+                      autoFocus
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a2c398] text-sm">
+                      {tokenInfos[form.token]?.symbol}
+                    </div>
+                  </div>
+
+                  {selectedLoan && (
+                    <div className="grid grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.1).toFixed(
+                              6,
+                            ),
+                          })
+                        }
+                        className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                      >
+                        10%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            amount: (Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.5).toFixed(
+                              6,
+                            ),
+                          })
+                        }
+                        className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                      >
+                        50%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            amount: (
+                              Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) * 0.75
+                            ).toFixed(6),
+                          })
+                        }
+                        className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                      >
+                        75%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({ ...form, amount: formatAmount(selectedLoan.totalOwed, selectedLoan.decimals) })
+                        }
+                        className="h-10 bg-[#54d22d] text-[#162013] text-sm font-medium rounded-lg hover:bg-[#4bc428] transition-colors"
+                      >
+                        Full
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={nextStep}
+                    disabled={!form.amount || Number(form.amount) <= 0}
+                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handlePayBack}
-                    disabled={
-                      loading ||
-                      isTransactionPending ||
-                      !form.token ||
-                      !form.amount ||
-                      Number(form.amount) <= 0
-                    }
-                    className="flex-1 h-9 text-sm bg-primary hover:bg-secondary text-white"
-                  >
-                    {loading || isTransactionPending ? "Processing..." : "Pay Back"}
-                  </Button>
+                    Continue
+                  </button>
                 </div>
-              </>
-            )}
+              )}
+
+              {currentStep === 3 && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h3 className="text-white text-lg font-medium mb-2">Confirm payment</h3>
+                    <p className="text-[#a2c398] text-sm">Review your loan payment</p>
+                  </div>
+
+                  <div className="bg-[#21301c] rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#a2c398]">Paying</span>
+                      <div className="text-right">
+                        <div className="text-white font-medium">{form.amount}</div>
+                        <div className="text-[#a2c398] text-sm">{tokenInfos[form.token]?.symbol}</div>
+                      </div>
+                    </div>
+
+                    {selectedLoan && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#a2c398]">Total owed</span>
+                        <div className="text-white font-medium">
+                          {formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)} {selectedLoan.symbol}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
+                      <span className="text-[#a2c398]">After payment</span>
+                      <div className="text-right">
+                        <div className="text-[#54d22d] font-bold">
+                          {selectedLoan
+                            ? (
+                                Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) -
+                                Number(form.amount)
+                              ).toFixed(4)
+                            : "0.0000"}{" "}
+                          {tokenInfos[form.token]?.symbol}
+                        </div>
+                        <div className="text-[#a2c398] text-sm">remaining</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <TransactionButton
+                    transaction={preparePayBackTransaction}
+                    onTransactionConfirmed={handleTransactionSuccess}
+                    onError={handleTransactionError}
+                    disabled={!account || !form.token || !form.amount || Number(form.amount) <= 0}
+                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    unstyled
+                  >
+                    Pay Back Loan
+                  </TransactionButton>
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {showOnrampModal && (
-      <OnrampDepositModal
-        isOpen={showOnrampModal}
-        onClose={() => setShowOnrampModal(false)}
-        selectedAsset={selectedLoan?.symbol || ""}
-        assetSymbol={selectedLoan?.symbol || ""}
-        onSuccess={(transactionCode, amount) => {
-          toast({
-            title: "Deposit Initiated",
-            description: `${selectedLoan?.symbol} deposit processing`,
-          });
-          setShowOnrampModal(false);
-        }}
-      />
+        <OnrampDepositModal
+          isOpen={showOnrampModal}
+          onClose={() => setShowOnrampModal(false)}
+          selectedAsset={selectedLoan?.symbol || ""}
+          assetSymbol={selectedLoan?.symbol || ""}
+          onSuccess={handleOnrampSuccess}
+        />
       )}
     </>
-  );
+  )
 }
