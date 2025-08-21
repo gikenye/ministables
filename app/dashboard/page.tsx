@@ -1,33 +1,26 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink } from "lucide-react";
-import { useSession, signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { formatAmount, formatAddress } from "@/lib/utils";
-import { extractTransactionError } from "@/lib/utils/errorMapping";
-import { FundsWithdrawalModal } from "@/components/WithdrawModal";
-import { OracleRatesCard } from "@/components/OracleRatesCard";
-import { MINILEND_ADDRESS, thirdwebService } from "@/lib/services/thirdwebService";
-import { oracleService } from "@/lib/services/oracleService";
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { ArrowLeft, TrendingUp, ArrowDownLeft, Shield, ExternalLink, Wallet, DollarSign } from "lucide-react"
+import { useSession, signIn } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { formatAddress } from "@/lib/utils"
+import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal"
+import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
+import { getContract } from "thirdweb";
+import { useActiveAccount, useReadContract } from "thirdweb/react"
+import { client } from "@/lib/thirdweb/client"
+import { celo } from "thirdweb/chains"
+
 interface UserData {
-  deposits: Record<string, string>;
-  borrows: Record<string, string>;
-  collateral: Record<string, string>;
-  lockEnds: Record<string, number>;
+  deposits: Record<string, string>
+  borrows: Record<string, string>
+  collateral: Record<string, string>
+  lockEnds: Record<string, number>
 }
-
-import { useActiveAccount } from "thirdweb/react";
-import {
-  useWithdraw as useWithdrawContract
-} from '@/lib/thirdweb/minilend-contract';
-import { getContract, readContract } from "thirdweb";
-import { client } from "@/lib/thirdweb/client";
-import { celo } from "thirdweb/chains";
-
 
 // Supported stablecoins from deployment config
 const SUPPORTED_STABLECOINS = [
@@ -43,7 +36,7 @@ const SUPPORTED_STABLECOINS = [
   "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
   "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
-];
+]
 
 // Valid collateral assets from deployment config
 const SUPPORTED_COLLATERAL = [
@@ -52,7 +45,7 @@ const SUPPORTED_COLLATERAL = [
   "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
   "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-];
+]
 
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
   "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", decimals: 18 },
@@ -68,203 +61,40 @@ const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
   "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
   "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { symbol: "cNGN", decimals: 18 },
-};
-
-
-
-import TVLCard from "@/components/TVLCard";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { NetworkStatus, RateLimitWarning } from "@/components/NetworkStatus";
-
-// Rate limiting utility
-const createRateLimiter = (maxRequests: number, windowMs: number) => {
-  const requests: number[] = [];
-  
-  return {
-    canMakeRequest: () => {
-      const now = Date.now();
-      const windowStart = now - windowMs;
-      
-      // Remove old requests
-      while (requests.length > 0 && requests[0] < windowStart) {
-        requests.shift();
-      }
-      
-      return requests.length < maxRequests;
-    },
-    recordRequest: () => {
-      requests.push(Date.now());
-    },
-    getWaitTime: () => {
-      if (requests.length === 0) return 0;
-      const oldestRequest = requests[0];
-      const windowStart = Date.now() - windowMs;
-      return Math.max(0, oldestRequest - windowStart + 100); // Add 100ms buffer
-    }
-  };
-};
-
-const rateLimiter = createRateLimiter(5, 1000); // 5 requests per second
-
-const useDashboardData = (address: string | undefined, contract: any) => {
-  const [userData, setUserData] = useState<UserData>({
-    deposits: {},
-    borrows: {},
-    collateral: {},
-    lockEnds: {},
-  });
-  const [poolData, setPoolData] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
-  const [showRateLimitWarning, setShowRateLimitWarning] = useState(false);
-
-  const makeRateLimitedRequest = async <T>(requestFn: () => Promise<T>): Promise<T> => {
-    while (!rateLimiter.canMakeRequest()) {
-      const waitTime = rateLimiter.getWaitTime();
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-    
-    rateLimiter.recordRequest();
-    return await requestFn();
-  };
-
-  const loadDashboardData = async () => {
-    if (!address) return;
-    setLoading(true);
-    try {
-      const deposits: Record<string, string> = {};
-      const borrows: Record<string, string> = {};
-      const collateral: Record<string, string> = {};
-      const lockEnds: Record<string, number> = {};
-      const pools: Record<string, string> = {};
-      const rates: Record<string, number> = {};
-
-      // Process only first 3 tokens to reduce requests
-      const tokensToProcess = SUPPORTED_STABLECOINS.slice(0, 3);
-      
-      for (const token of tokensToProcess) {
-        try {
-          // Add delay between token processing
-          if (tokensToProcess.indexOf(token) > 0) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-          
-          const contractCalls = await Promise.allSettled([
-            makeRateLimitedRequest(() => readContract({
-              contract,
-              method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
-              params: [address, token, BigInt(0)],
-            })),
-            makeRateLimitedRequest(() => readContract({
-              contract,
-              method: "function userBorrows(address, address) view returns (uint256)",
-              params: [address, token],
-            })),
-            makeRateLimitedRequest(() => readContract({
-              contract,
-              method: "function userCollateral(address, address) view returns (uint256)",
-              params: [address, token],
-            }))
-          ]);
-          
-          const userDeposit = contractCalls[0].status === 'fulfilled' ? contractCalls[0].value : [BigInt(0), BigInt(0)];
-          const userBorrow = contractCalls[1].status === 'fulfilled' ? contractCalls[1].value : BigInt(0);
-          const userCollat = contractCalls[2].status === 'fulfilled' ? contractCalls[2].value : BigInt(0);
-          
-          deposits[token] = userDeposit[0].toString();
-          borrows[token] = userBorrow.toString();
-          collateral[token] = userCollat.toString();
-          lockEnds[token] = Number(userDeposit[1]);
-          pools[token] = "0";
-          try {
-            const priceUsd = await oracleService.getTokenPrice(token);
-            rates[token] = priceUsd;
-          } catch {
-          rates[token] = 1.0;
-          }
-        } catch (error: any) {
-          const tokenSymbol = TOKEN_INFO[token]?.symbol || 'Unknown';
-          console.warn(`Skipping ${tokenSymbol} due to contract error:`, error.code || error.message);
-          
-          if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
-            setShowRateLimitWarning(true);
-            setTimeout(() => setShowRateLimitWarning(false), 5000);
-            // Wait longer on rate limit
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-          
-          deposits[token] = "0";
-          borrows[token] = "0";
-          collateral[token] = "0";
-          lockEnds[token] = 0;
-          pools[token] = "0";
-          rates[token] = rates[token] ?? 1.0;
-        }
-      }
-      
-      // Set default values for remaining tokens
-      SUPPORTED_STABLECOINS.slice(3).forEach(token => {
-        deposits[token] = "0";
-        borrows[token] = "0";
-        collateral[token] = "0";
-        lockEnds[token] = 0;
-        pools[token] = "0";
-        if (rates[token] === undefined) rates[token] = 1.0;
-      });
-
-      setUserData({ deposits, borrows, collateral, lockEnds });
-      setPoolData(pools);
-      setExchangeRates(rates);
-    } catch (error) {
-      console.error("Error loading dashboard data:", error);
-      // Set empty data on error to prevent UI crashes
-      setUserData({
-        deposits: {},
-        borrows: {},
-        collateral: {},
-        lockEnds: {},
-      });
-      setPoolData({});
-      setExchangeRates({});
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning };
-};
+}
 
 export default function DashboardPage() {
-  const account = useActiveAccount();
-  const { data: session, status: sessionStatus } = useSession();
-  const router = useRouter();
-  const address = account?.address;
-  const isConnected = !!address;
-  
-  // Verification state
-  const [needsVerification, setNeedsVerification] = useState(false);
-  const [verificationSkipped, setVerificationSkipped] = useState(false);
-  
-  const contract = getContract({
-    client,
-    chain: celo,
-    address: MINILEND_ADDRESS,
-  });
+  const account = useActiveAccount()
+  const { data: session, status: sessionStatus } = useSession()
+  const router = useRouter()
+  const address = account?.address
+  const isConnected = !!address
 
-  const withdrawFn = useWithdrawContract();
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  
-  const { userData, poolData, loading, exchangeRates, loadDashboardData, showRateLimitWarning, setShowRateLimitWarning } = useDashboardData(address, contract);
+ const contract = getContract({
+   address: MINILEND_ADDRESS,
+   chain: celo,
+   client,
+})
 
-  useEffect(() => {
-    if (isConnected && address) {
-      // Add delay before loading to prevent immediate rate limiting
-      const timer = setTimeout(() => {
-        loadDashboardData();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isConnected, address]);
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [verificationSkipped, setVerificationSkipped] = useState(false)
+
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
+
+  const { data: userDepositsData, isLoading: depositsLoading } = useReadContract({
+    contract,
+    method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
+    params: address ? [address, SUPPORTED_STABLECOINS[0], BigInt(0)] : undefined,
+    queryOptions: { enabled: !!address },
+  })
+
+  const { data: userBorrowsData, isLoading: borrowsLoading } = useReadContract({
+    contract,
+    method: "function userBorrows(address, address) view returns (uint256)",
+    params: address ? [address, SUPPORTED_STABLECOINS[0]] : undefined,
+    queryOptions: { enabled: !!address },
+  })
 
   useEffect(() => {
     if (isConnected && address && !session?.user?.address) {
@@ -272,190 +102,74 @@ export default function DashboardPage() {
         address,
         verificationData: "",
         redirect: false,
-      });
+      })
     }
-  }, [isConnected, address, session]);
+  }, [isConnected, address, session])
 
   // Check localStorage for verification skip state
   useEffect(() => {
-    const skipped = localStorage.getItem('verification-skipped') === 'true';
-    setVerificationSkipped(skipped);
-  }, []);
+    const skipped = localStorage.getItem("verification-skipped") === "true"
+    setVerificationSkipped(skipped)
+  }, [])
 
   // Remove forced verification - make it optional
   useEffect(() => {
-    if (sessionStatus === "loading") return;
+    if (sessionStatus === "loading") return
     // Don't show verification if user has skipped it or is already verified
-    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped);
-  }, [isConnected, session, sessionStatus, verificationSkipped]);
-
-
-
-  const getActualWithdrawableAmount = async (token: string): Promise<string> => {
-    if (!address) return "0";
-    
-    try {
-      // Use thirdweb getUserBalance function
-      const balance = await thirdwebService.getUserBalance(address, token);
-      return balance;
-    } catch (error) {
-      console.error(`Error getting user balance:`, error);
-      return "0";
-    }
-  };
-
-  const handleWithdraw = async (token: string, amount: string): Promise<void> => {
-    try {
-      // Validate Oracle price before withdrawal
-      const isOracleValid = await oracleService.validatePriceData(token);
-      if (!isOracleValid) {
-        throw new Error("Unable to get current market prices. Please try again in a moment.");
-      }
-      
-      const tokenInfo = TOKEN_INFO[token];
-      if (!tokenInfo) throw new Error("Token not supported");
-      const amountWei = BigInt(parseFloat(amount) * Math.pow(10, tokenInfo.decimals));
-      
-      // The contract's withdraw function will automatically calculate withdrawable amount
-      // based on unlocked deposits and validate the request
-      await withdrawFn(contract, token, amountWei);
-      await loadDashboardData();
-    } catch (error: any) {
-      const errorMessage = extractTransactionError(error);
-      console.error("Error withdrawing:", error);
-      throw new Error(errorMessage);
-    }
-  };
-
-  const handleHistoryClick = () => {
-    window.open(`https://celoscan.io/address/${address}`, "_blank");
-  };
-
-  const getExchangeRate = (tokenAddress: string): number => {
-    return exchangeRates[tokenAddress] || 1.0;
-  };
-
-  const convertToUSD = (amount: string, decimals: number, tokenAddress: string): number => {
-    if (!amount || amount === "0") return 0;
-    const numericAmount = Number(formatAmount(amount, decimals));
-    const exchangeRate = getExchangeRate(tokenAddress);
-    return numericAmount * exchangeRate;
-  };
-
-  const getTotalSavingsUSD = (): number => {
-    return Object.entries(userData.deposits).reduce((acc, [token, amount]) => {
-      if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
-      const info = TOKEN_INFO[token];
-      return acc + convertToUSD(amount, info.decimals, token);
-    }, 0);
-  };
-
-  const getTotalBorrowsUSD = (): number => {
-    return Object.entries(userData.borrows).reduce((acc, [token, amount]) => {
-      if (!amount || amount === "0" || !TOKEN_INFO[token]) return acc;
-      const info = TOKEN_INFO[token];
-      return acc + convertToUSD(amount, info.decimals, token);
-    }, 0);
-  };
-
-  const TokenList = ({ tokens, data, type, emptyMessage, convertToUSD }: {
-    tokens: string[];
-    data: Record<string, string>;
-    type: string;
-    emptyMessage: string;
-    convertToUSD: (amount: string, decimals: number, token: string) => number;
-  }) => {
-    const colorClass = type === "borrows" ? "text-red-600" : "text-primary";
-    return (
-      <div className="space-y-1.5">
-        {tokens
-          .filter((token) => data[token] && data[token] !== "0" && TOKEN_INFO[token])
-          .slice(0, 3)
-          .map((token) => {
-            const info = TOKEN_INFO[token];
-            const amount = data[token];
-            return (
-              <div key={token} className="flex justify-between items-center">
-                <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                <span className={`${colorClass} font-semibold text-xs`}>
-                  {formatAmount(amount, info.decimals)}
-                  <span className="text-gray-500 ml-1">
-                    (${convertToUSD(amount, info.decimals, token).toFixed(2)})
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        {Object.values(data).every((d) => !d || d === "0") && (
-          <p className="text-gray-500 text-center py-3 text-xs">
-            {emptyMessage}
-          </p>
-        )}
-      </div>
-    );
-  };
+    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped)
+  }, [isConnected, session, sessionStatus, verificationSkipped])
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <Card className="w-full max-w-md bg-white border-secondary">
+      <div className="min-h-screen bg-[#162013] flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-[#21301c] border-[#426039]">
           <CardContent className="p-6 text-center">
-            <h2 className="text-lg font-semibold text-primary mb-4">
-              Connect Your Wallet
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Please connect your wallet to view your dashboard
-            </p>
+            <Wallet className="w-12 h-12 mx-auto mb-4 text-[#54d22d]" />
+            <h2 className="text-lg font-semibold text-white mb-4">Connect Your Wallet</h2>
+            <p className="text-[#a2c398] mb-6">Connect your wallet to view your financial dashboard</p>
             <Link href="/">
-              <Button className="bg-primary hover:bg-secondary text-white">
-                Go to Home
-              </Button>
+              <Button className="bg-[#54d22d] hover:bg-[#426039] text-[#162013] font-medium w-full">Go to Home</Button>
             </Link>
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <NetworkStatus />
-      <RateLimitWarning 
-        show={showRateLimitWarning} 
-        onDismiss={() => setShowRateLimitWarning(false)} 
-      />
-      <header className="bg-white border-b border-gray-200 px-3 py-2">
+    <div className="min-h-screen bg-[#162013]">
+      <header className="bg-[#21301c] border-b border-[#426039] px-4 py-3">
         <div className="flex items-center max-w-lg mx-auto">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="mr-2 p-1.5">
+            <Button variant="ghost" size="sm" className="mr-3 p-2 text-[#a2c398] hover:text-white hover:bg-[#2e4328]">
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
           <div className="flex items-center flex-1">
-            <img src="/minilend-logo.png" alt="Minilend Logo" className="w-7 h-7 object-contain mr-2" />
+            <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mr-3">
+              <DollarSign className="w-5 h-5 text-[#162013]" />
+            </div>
             <div>
-              <h1 className="text-lg font-bold text-primary">Dashboard</h1>
-              <div className="text-xs text-gray-600">
-                {formatAddress(address || "")}
-              </div>
+              <h1 className="text-lg font-bold text-white">Your Money</h1>
+              <div className="text-xs text-[#a2c398]">{formatAddress(address || "")}</div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="px-3 py-3 max-w-lg mx-auto pb-24 space-y-3">
+      <main className="px-4 py-6 max-w-lg mx-auto pb-24 space-y-6">
         {needsVerification && isConnected && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-sm">
+          <div className="bg-[#2e4328] border border-[#426039] text-[#a2c398] rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <Shield className="w-4 h-4 mr-2" />
-                <p>Verify you're human for enhanced security (optional)</p>
+                <Shield className="w-5 h-5 mr-3 text-[#54d22d]" />
+                <p className="text-sm">Verify your identity for enhanced security</p>
               </div>
               <div className="flex gap-2 ml-4">
                 <Button
                   size="sm"
                   onClick={() => router.push("/self")}
-                  className="bg-primary hover:bg-primary/90 text-white text-xs px-3 py-1 h-7"
+                  className="bg-[#54d22d] hover:bg-[#426039] text-[#162013] text-xs px-4 py-2"
                 >
                   Verify
                 </Button>
@@ -463,11 +177,11 @@ export default function DashboardPage() {
                   size="sm"
                   variant="ghost"
                   onClick={() => {
-                    localStorage.setItem('verification-skipped', 'true');
-                    setVerificationSkipped(true);
-                    setNeedsVerification(false);
+                    localStorage.setItem("verification-skipped", "true")
+                    setVerificationSkipped(true)
+                    setNeedsVerification(false)
                   }}
-                  className="text-gray-600 hover:text-gray-800 text-xs px-3 py-1 h-7"
+                  className="text-[#a2c398] hover:text-white hover:bg-[#2e4328] text-xs px-4 py-2"
                 >
                   Skip
                 </Button>
@@ -475,198 +189,107 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-        <Card className="bg-white border-secondary shadow-sm">
-          <CardContent className="p-4">
-            <h2 className="text-lg font-semibold text-center text-primary mb-3">
-              Financial Summary
-            </h2>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="text-center p-3 bg-blue-50 rounded-lg">
-                <TrendingUp className="w-5 h-5 mx-auto mb-1 text-primary" />
-                <p className="text-xs font-medium mb-1 text-gray-600">Savings</p>
-                <p className="text-lg font-bold text-primary">
-                  ${getTotalSavingsUSD().toFixed(2)}
-                </p>
+
+        <Card className="bg-[#21301c] border-[#426039]">
+          <CardContent className="p-6">
+            <h2 className="text-xl font-bold text-center text-white mb-6">Your Money Overview</h2>
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+                <TrendingUp className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
+                <p className="text-sm font-medium mb-1 text-[#a2c398]">Money Saved</p>
+                <p className="text-2xl font-bold text-white">${depositsLoading ? "..." : "0.00"}</p>
               </div>
-              <div className="text-center p-3 bg-red-50 rounded-lg">
-                <ArrowDownLeft className="w-5 h-5 mx-auto mb-1 text-red-600" />
-                <p className="text-xs font-medium mb-1 text-gray-600">Loans</p>
-                <p className="text-lg font-bold text-red-600">
-                  ${getTotalBorrowsUSD().toFixed(2)}
-                </p>
+              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+                <ArrowDownLeft className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
+                <p className="text-sm font-medium mb-1 text-[#a2c398]">Money Borrowed</p>
+                <p className="text-2xl font-bold text-white">${borrowsLoading ? "..." : "0.00"}</p>
               </div>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex space-x-3">
               <Button
-                className="flex-1 h-10 text-sm text-white bg-primary hover:bg-primary/90"
+                className="flex-1 h-12 text-sm font-medium bg-[#54d22d] hover:bg-[#426039] text-[#162013]"
                 onClick={() => setWithdrawOpen(true)}
               >
-                Withdraw
+                Cash Out
               </Button>
               <Button
                 variant="outline"
-                className="flex-1 h-10 text-sm border-primary text-primary hover:bg-primary/10"
-                onClick={handleHistoryClick}
+                className="flex-1 h-12 text-sm font-medium border-[#426039] text-[#54d22d] hover:bg-[#2e4328] bg-transparent"
+                onClick={() => window.open(`https://celoscan.io/address/${address}`, "_blank")}
               >
-                <ExternalLink className="w-4 h-4 mr-1" />
+                <ExternalLink className="w-4 h-4 mr-2" />
                 History
               </Button>
             </div>
-
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="flex items-center text-sm text-primary">
-                <TrendingUp className="w-4 h-4 mr-1.5" />
-                Savings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="space-y-1.5">
-                {SUPPORTED_STABLECOINS
-                  .filter((token) => {
-                    const deposit = userData.deposits[token];
-                    return deposit && deposit !== "0" && TOKEN_INFO[token];
-                  })
-                  .slice(0, 3)
-                  .map((token) => {
-                    const info = TOKEN_INFO[token];
-                    const deposit = userData.deposits[token];
-                    return (
-                      <div key={token} className="flex justify-between items-center">
-                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                        <span className="text-primary font-semibold text-xs">
-                          {formatAmount(deposit, info.decimals)}
-                          <span className="text-gray-500 ml-1">
-                            (${convertToUSD(deposit, info.decimals, token).toFixed(2)})
-                          </span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                {Object.values(userData.deposits).every((d) => !d || d === "0") && (
-                  <p className="text-gray-500 text-center py-3 text-xs">
-                    No savings yet
-                  </p>
+        <Card className="bg-[#21301c] border-[#426039]">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center justify-center text-lg text-white">
+              <Wallet className="w-5 h-5 mr-2 text-[#54d22d]" />
+              Your Wallet Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+                <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
+                  <TrendingUp className="w-4 h-4 text-[#162013]" />
+                </div>
+                <p className="text-xs font-medium mb-1 text-[#a2c398]">Savings</p>
+                {depositsLoading ? (
+                  <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
+                ) : (
+                  <p className="text-sm font-bold text-white">$0.00</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="flex items-center text-sm text-primary">
-                <ArrowDownLeft className="w-4 h-4 mr-1.5" />
-                Loans
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="space-y-1.5">
-                {SUPPORTED_STABLECOINS
-                  .filter((token) => {
-                    const borrow = userData.borrows[token];
-                    return borrow && borrow !== "0" && TOKEN_INFO[token];
-                  })
-                  .slice(0, 3)
-                  .map((token) => {
-                    const info = TOKEN_INFO[token];
-                    const borrow = userData.borrows[token];
-                    return (
-                      <div key={token} className="flex justify-between items-center">
-                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                        <span className="text-red-600 font-semibold text-xs">
-                          {formatAmount(borrow, info.decimals)}
-                          <span className="text-gray-500 ml-1">
-                            (${convertToUSD(borrow, info.decimals, token).toFixed(2)})
-                          </span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                {Object.values(userData.borrows).every((b) => !b || b === "0") && (
-                  <p className="text-gray-500 text-center py-3 text-xs">
-                    No active loans
-                  </p>
+              
+              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+                <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
+                  <ArrowDownLeft className="w-4 h-4 text-[#162013]" />
+                </div>
+                <p className="text-xs font-medium mb-1 text-[#a2c398]">Loans</p>
+                {borrowsLoading ? (
+                  <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
+                ) : (
+                  <p className="text-sm font-bold text-white">$0.00</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-secondary shadow-sm">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="flex items-center text-sm text-primary">
-                <Shield className="w-4 h-4 mr-1.5" />
-                Collateral
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="space-y-1.5">
-                {SUPPORTED_COLLATERAL
-                  .filter((token) => {
-                    const collat = userData.collateral[token];
-                    return collat && collat !== "0" && TOKEN_INFO[token];
-                  })
-                  .slice(0, 3)
-                  .map((token) => {
-                    const info = TOKEN_INFO[token];
-                    const collat = userData.collateral[token];
-                    return (
-                      <div key={token} className="flex justify-between items-center">
-                        <span className="font-medium text-xs text-gray-700">{info.symbol}</span>
-                        <span className="text-primary font-semibold text-xs">
-                          {formatAmount(collat, info.decimals)}
-                          <span className="text-gray-500 ml-1">
-                            (${convertToUSD(collat, info.decimals, token).toFixed(2)})
-                          </span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                {Object.values(userData.collateral).every((c) => !c || c === "0") && (
-                  <p className="text-gray-500 text-center py-3 text-xs">
-                    No collateral
-                  </p>
-                )}
+              
+              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+                <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Shield className="w-4 h-4 text-[#162013]" />
+                </div>
+                <p className="text-xs font-medium mb-1 text-[#a2c398]">Security</p>
+                <p className="text-sm font-bold text-white">$0.00</p>
               </div>
-            </CardContent>
-          </Card>
-
-          <div className="bg-white border-secondary shadow-sm rounded-lg">
-            <OracleRatesCard
-              tokens={[
-                "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0",
-                "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
-                "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-                "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71",
-              ]}
-              localTokenAddress={"0x456a3D042C0DbD3db53D5489e98dFb038553B0d0"}
-            />
-          </div>
-
-          <Card className="bg-white border-secondary shadow-sm col-span-2">
-            <CardContent className="p-4">
-              <ErrorBoundary>
-                <TVLCard 
-                  contract={contract} 
-                  supportedTokens={SUPPORTED_STABLECOINS}
-                  tokenInfo={TOKEN_INFO}
-                />
-              </ErrorBoundary>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-[#426039]">
+              <div className="text-center">
+                <p className="text-xs text-[#a2c398] mb-2">Quick Actions</p>
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1 bg-[#54d22d] hover:bg-[#426039] text-[#162013] text-xs">
+                    Save Money
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1 border-[#426039] text-[#54d22d] hover:bg-[#2e4328] text-xs">
+                    Borrow
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 py-2 fixed bottom-0 left-0 right-0 shadow-md">
+      <footer className="bg-[#21301c] border-t border-[#426039] py-3 fixed bottom-0 left-0 right-0">
         <div className="flex justify-center max-w-lg mx-auto">
-          <Link href="/" className="flex flex-col items-center text-gray-400 px-8">
+          <Link href="/" className="flex flex-col items-center text-[#a2c398] hover:text-white px-8">
             <TrendingUp className="w-5 h-5" />
             <span className="text-xs mt-1">Home</span>
           </Link>
-          <Link href="/dashboard" className="flex flex-col items-center text-primary px-8">
+          <Link href="/dashboard" className="flex flex-col items-center text-[#54d22d] px-8">
             <ArrowDownLeft className="w-5 h-5" />
             <span className="text-xs mt-1">Dashboard</span>
           </Link>
@@ -676,14 +299,14 @@ export default function DashboardPage() {
       <FundsWithdrawalModal
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
-        onWithdraw={handleWithdraw}
-        userDeposits={userData.deposits}
-        depositLockEnds={userData.lockEnds}
+        onWithdraw={async () => {}}
+        userDeposits={{}}
+        depositLockEnds={{}}
         tokenInfos={TOKEN_INFO}
-        loading={loading}
+        loading={false}
         userAddress={address}
-        getWithdrawableAmount={getActualWithdrawableAmount}
+        getWithdrawableAmount={async () => "0"}
       />
     </div>
-  );
+  )
 }
