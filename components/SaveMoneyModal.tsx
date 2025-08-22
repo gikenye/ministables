@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useActiveAccount, TransactionButton } from "thirdweb/react"
+import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
-import { onrampService } from "@/lib/services/onrampService" // Import onrampService
+import { onrampService } from "@/lib/services/onrampService"
 
 // Define the minilend contract ABI for deposit function
 export const minilendABI = [
@@ -22,8 +21,9 @@ export const minilendABI = [
     type: "function",
   },
 ] as const
-import { getContract, prepareContractCall, type PreparedTransaction } from "thirdweb"
-import { approve, getBalance } from "thirdweb/extensions/erc20"
+
+import { getContract, prepareContractCall, type PreparedTransaction, waitForReceipt } from "thirdweb"
+import { getApprovalForTransaction } from "thirdweb/extensions/erc20"
 import { client } from "@/lib/thirdweb/client"
 import { celo } from "thirdweb/chains"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
@@ -48,7 +48,6 @@ export function SaveMoneyModal({
   loading = false,
 }: SaveMoneyModalProps) {
   const account = useActiveAccount()
-  const { toast } = useToast()
 
   const supportedStablecoins = Object.keys(tokenInfos)
   const [currentStep, setCurrentStep] = useState(1)
@@ -61,95 +60,80 @@ export function SaveMoneyModal({
   const [error, setError] = useState<string | null>(null)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("")
-  const [isApproved, setIsApproved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const [selectedTokenBalance, setSelectedTokenBalance] = useState<any>(null)
-  const [isSelectedTokenLoading, setIsSelectedTokenLoading] = useState(false)
+  // Use the working setup's wallet balance hook
+  const { data: walletBalanceData, isLoading: isBalanceLoading } = useWalletBalance({
+    client,
+    chain: celo,
+    address: account?.address,
+    tokenAddress: form.token || undefined,
+  })
 
-  useEffect(() => {
-    const fetchBalance = async () => {
-      if (!form.token || !account?.address) {
-        setSelectedTokenBalance(null)
-        return
-      }
-
-      setIsSelectedTokenLoading(true)
-      try {
-        const tokenContract = getContract({
-          client,
-          chain: celo,
-          address: form.token,
-        })
-
-        const balance = await getBalance({
-          contract: tokenContract,
-          address: account.address,
-        })
-
-        setSelectedTokenBalance(balance)
-      } catch (error) {
-        console.error("Error fetching balance:", error)
-        setSelectedTokenBalance(null)
-      } finally {
-        setIsSelectedTokenLoading(false)
-      }
-    }
-
-    fetchBalance()
-  }, [form.token, account?.address])
+  // Use the working setup's transaction hook
+  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction({ payModal: false })
 
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1)
       setError(null)
-      setIsApproved(false)
+      setIsSaving(false)
     }
   }, [isOpen])
-
-  useEffect(() => {
-    // Reset approval state when form changes
-    setIsApproved(false)
-  }, [form.token, form.amount])
 
   const prepareDepositTransaction = async () => {
     if (!form.token || !form.amount || !form.lockPeriod || !account) {
       throw new Error("Missing required parameters")
     }
 
+    console.log("[SaveMoneyModal] Starting save with params:", {
+      tokenAddress: form.token,
+      tokenSymbol: tokenInfos[form.token]?.symbol,
+      amount: form.amount,
+      lockPeriod: form.lockPeriod,
+      MINILEND_ADDRESS
+    })
+
     const decimals = tokenInfos[form.token]?.decimals || 18
     const amountWei = parseUnits(form.amount, decimals)
 
-    const tokenContract = getContract({
-      client,
-      chain: celo,
-      address: form.token,
+    console.log("[SaveMoneyModal] Calculated wei amount:", {
+      inputAmount: form.amount,
+      decimals,
+      amountWei: amountWei.toString()
     })
 
-    if (!isApproved) {
-      // First approve the token spending
-      const approveTx = approve({
-        contract: tokenContract,
-        spender: MINILEND_ADDRESS,
-        amount: amountWei.toString(),
-      })
-      return approveTx
-    } else {
-      // Then prepare the deposit transaction
-      const minilendContract = getContract({
-        client,
-        chain: celo,
-        address: MINILEND_ADDRESS,
-        abi: minilendABI,
-      })
+    // Create Minilend contract instance
+    console.log("[SaveMoneyModal] Creating Minilend contract instance with address:", MINILEND_ADDRESS)
+    const minilendContract = getContract({
+      client,
+      chain: celo,
+      address: MINILEND_ADDRESS,
+      abi: minilendABI,
+    })
 
-      const depositTx = prepareContractCall({
-        contract: minilendContract,
-        method: "deposit",
-        params: [form.token, amountWei, BigInt(Number.parseInt(form.lockPeriod))],
-      })
+    // Prepare deposit transaction
+    console.log("[SaveMoneyModal] Preparing deposit transaction with params:", {
+      token: form.token,
+      amount: amountWei.toString(),
+      lockPeriod: form.lockPeriod
+    })
 
-      return depositTx
-    }
+    const depositTx = prepareContractCall({
+      contract: minilendContract,
+      method: "deposit",
+      params: [
+        form.token,
+        amountWei,
+        BigInt(parseInt(form.lockPeriod)),
+      ],
+      erc20Value: {
+        tokenAddress: form.token,
+        amountWei,
+      },
+    })
+
+    return depositTx
   }
 
   const handleTransactionError = (error: Error) => {
@@ -157,7 +141,11 @@ export function SaveMoneyModal({
 
     let userMessage = "Transaction failed. Please try again."
 
-    if (error.message.includes("receipt not found")) {
+    if (error.message.includes("TransactionError: Error - E3")) {
+      const currentSymbol = tokenInfos[form.token]?.symbol || "selected asset"
+      userMessage = `There was an issue processing ${currentSymbol}. Please select a different deposit asset and try again.`
+      setCurrentStep(1)
+    } else if (error.message.includes("receipt not found")) {
       userMessage =
         "Transaction is taking longer than expected. It may still complete successfully. Please check your wallet or try again."
     } else if (error.message.includes("user rejected") || error.message.includes("User rejected")) {
@@ -171,51 +159,96 @@ export function SaveMoneyModal({
     }
 
     setError(userMessage)
-    toast({
-      title: "Transaction Failed",
-      description: userMessage,
-      variant: "destructive",
-    })
   }
 
-  const handleTransactionSuccess = (receipt: any) => {
+  const handleTransactionSuccess = (receipt: any, isApproval: boolean = false) => {
     console.log("[SaveMoneyModal] Transaction successful:", receipt)
 
-    if (!isApproved) {
-      // Approval successful, now prepare for deposit
-      setIsApproved(true)
-      toast({
-        title: "Approval Successful!",
-        description: "Now click 'Start Earning' again to complete the deposit.",
-      })
-    } else {
-      // Deposit successful
-      toast({
-        title: "Deposit Successful!",
-        description: `Your ${tokenInfos[form.token]?.symbol} has been deposited successfully.`,
-      })
-
+    if (!isApproval) {
       setForm({
         token: "",
         amount: "",
         lockPeriod: "2592000",
       })
-      setIsApproved(false)
       onClose()
     }
   }
 
-  const handleTransactionSent = (result: any) => {
+  const handleTransactionSent = (result: any, isApproval: boolean = false) => {
     console.log("[SaveMoneyModal] Transaction sent:", result)
+  }
 
-    const message = !isApproved 
-      ? "Approval transaction submitted. Please wait for confirmation."
-      : "Deposit transaction submitted. Please wait for confirmation."
+  const handleSave = async () => {
+    if (!form.token || !form.amount || !form.lockPeriod) return
+    if (!account) {
+      setError("Please connect your wallet first")
+      return
+    }
 
-    toast({
-      title: "Transaction Sent",
-      description: message,
-    })
+    // Validate balance
+    const erc20Balance = parseFloat(walletBalanceData?.displayValue || "0")
+    const inputAmount = parseFloat(form.amount)
+    if (inputAmount > erc20Balance) {
+      setError(`Amount exceeds available balance of ${erc20Balance} ${walletBalanceData?.symbol || ""}`)
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      const depositTx = await prepareDepositTransaction()
+      
+      // Check if approval is needed and handle it
+      console.log("[SaveMoneyModal] Checking if approval is needed for deposit transaction")
+      const approveTx = await getApprovalForTransaction({
+        transaction: depositTx as PreparedTransaction,
+        account,
+      })
+      
+      if (approveTx) {
+        console.log("[SaveMoneyModal] Approval required, sending approval transaction")
+        const approveResult = await sendTransaction(approveTx)
+        console.log("[SaveMoneyModal] Approval transaction submitted:", approveResult?.transactionHash)
+        
+        handleTransactionSent(approveResult, true)
+        
+        if (approveResult?.transactionHash) {
+          console.log("[SaveMoneyModal] Waiting for approval confirmation...")
+          const approvalReceipt = await waitForReceipt({
+            client,
+            chain: celo,
+            transactionHash: approveResult.transactionHash,
+          })
+          handleTransactionSuccess(approvalReceipt, true)
+        }
+      } else {
+        console.log("[SaveMoneyModal] No approval needed, proceeding with deposit")
+      }
+      
+      // Execute deposit transaction
+      console.log("[SaveMoneyModal] Sending deposit transaction")
+      const depositResult = await sendTransaction(depositTx)
+      console.log("[SaveMoneyModal] Deposit result:", depositResult)
+      
+      handleTransactionSent(depositResult, false)
+      
+      if (depositResult?.transactionHash) {
+        console.log("[SaveMoneyModal] Deposit transaction submitted with hash:", depositResult.transactionHash)
+        // Wait for deposit confirmation
+        const depositReceipt = await waitForReceipt({
+          client,
+          chain: celo,
+          transactionHash: depositResult.transactionHash,
+        })
+        handleTransactionSuccess(depositReceipt, false)
+      }
+
+    } catch (err: any) {
+      handleTransactionError(err)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const getLockPeriodText = (seconds: string) => {
@@ -233,8 +266,7 @@ export function SaveMoneyModal({
 
   const defaultLockPeriods = ["604800", "2592000", "7776000", "15552000"] // 7 days, 30, 90, 180 days
 
-  const selectedTokenDecimals = form.token ? tokenInfos[form.token]?.decimals || 18 : 18
-  const walletBalance = Number.parseFloat(selectedTokenBalance?.displayValue || "0")
+  const walletBalance = parseFloat(walletBalanceData?.displayValue || "0")
 
   const formatDisplayNumber = (value: number): string => {
     if (!isFinite(value)) return "0.0000"
@@ -289,10 +321,6 @@ export function SaveMoneyModal({
   }
 
   const handleOnrampSuccess = (transactionCode: string, amount: number) => {
-    toast({
-      title: "Deposit Initiated",
-      description: `Your mobile money deposit is being processed. You'll receive ${tokenInfos[selectedTokenForOnramp]?.symbol} shortly.`,
-    })
     setShowOnrampModal(false)
     // Optionally set the token and continue to amount step
     setForm((prev) => ({ ...prev, token: selectedTokenForOnramp }))
@@ -300,7 +328,7 @@ export function SaveMoneyModal({
   }
 
   const hasZeroBalance = () => {
-    if (isSelectedTokenLoading || !form.token) return false
+    if (isBalanceLoading || !form.token) return false
     return walletBalance === 0
   }
 
@@ -325,6 +353,10 @@ export function SaveMoneyModal({
         </div>
 
         <div className="px-4 pb-5">
+          <DialogTitle className="sr-only">Start Earning</DialogTitle>
+          <DialogDescription className="sr-only">
+            Start earning by choosing a token, entering an amount, selecting a lock period, and confirming your deposit.
+          </DialogDescription>
           <div className="flex items-center justify-between pt-5 pb-3">
             {currentStep > 1 && (
               <button onClick={prevStep} className="p-1 text-[#a2c398] hover:text-white transition-colors">
@@ -332,15 +364,21 @@ export function SaveMoneyModal({
               </button>
             )}
             <div className="flex-1 text-center">
-              <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Start Earning</h1>
-              <div className="flex justify-center gap-1 mt-2">
+              <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Select Asset</h1>
+              <div className="flex justify-center gap-2 mt-2">
                 {[1, 2, 3, 4].map((step) => (
                   <div
                     key={step}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"
+                    className={`min-w-8 h-7 px-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors ${
+                      step === currentStep
+                        ? "bg-[#54d22d] text-[#162013]"
+                        : step < currentStep
+                        ? "bg-[#2e4328] text-white"
+                        : "bg-[#21301c] text-[#a2c398] border border-[#426039]"
                     }`}
-                  />
+                  >
+                    {step}
+                  </div>
                 ))}
               </div>
             </div>
@@ -368,107 +406,106 @@ export function SaveMoneyModal({
                   <p className="text-[#a2c398] text-sm">Select which token you'd like to deposit</p>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {supportedStablecoins.map((token) => {
                     const symbol = tokenInfos[token]?.symbol || "Unknown"
                     const isSelected = form.token === token
-                    const showBalance = isSelected && !isSelectedTokenLoading
+                    const showBalance = isSelected && !isBalanceLoading
                     const zeroBalance = isSelected && hasZeroBalance()
 
+                    const onrampSupported = isAssetSupportedForOnramp(token)
+
                     return (
-                      <div key={token} className="space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForm({ ...form, token })
-                          }}
-                          className={`w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all border ${
+                      <div key={token} className="w-full">
+                        <div
+                          className={`w-full rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-[#54d22d] text-[#162013] border-[#54d22d] scale-[0.98]"
+                              ? "bg-[#54d22d] text-[#162013] border-[#54d22d]"
                               : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
                           }`}
                         >
-                          {getTokenIcon(symbol).startsWith("http") ? (
-                            <img
-                              src={getTokenIcon(symbol) || "/placeholder.svg"}
-                              alt={symbol}
-                              className="w-8 h-8 rounded-full"
-                            />
-                          ) : (
-                            <span className="text-2xl">{getTokenIcon(symbol)}</span>
-                          )}
-                          <div className="flex-1">
-                            <div className="font-medium">{symbol}</div>
-                            {isSelected && (
-                              <div className={`text-sm ${isSelected ? "text-[#162013]/70" : "text-[#a2c398]"}`}>
-                                {isSelectedTokenLoading ? (
-                                  <span className="flex items-center gap-1">
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                    Loading...
-                                  </span>
-                                ) : (
-                                  `Balance: ${formatDisplayNumber(walletBalance)}`
+                          <div className="flex items-center gap-3 p-3">
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, token })}
+                              className="flex items-center gap-3 flex-1 text-left"
+                            >
+                              {getTokenIcon(symbol).startsWith("http") ? (
+                                <img
+                                  src={getTokenIcon(symbol) || "/placeholder.svg"}
+                                  alt={symbol}
+                                  className="w-8 h-8 rounded-full"
+                                />
+                              ) : (
+                                <span className="text-2xl">{getTokenIcon(symbol)}</span>
+                              )}
+                              <div className="flex-1">
+                                <div className="font-medium">{symbol}</div>
+                                {isSelected && (
+                                  <div className={`text-sm ${isSelected ? "text-[#162013]/70" : "text-[#a2c398]"}`}>
+                                    {isBalanceLoading ? (
+                                      <span className="flex items-center gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Loading...
+                                      </span>
+                                    ) : (
+                                      `Balance: ${formatDisplayNumber(walletBalance)}`
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                            )}
-                          </div>
-                          {isSelected && <Check className="w-5 h-5 ml-auto" />}
-                        </button>
-
-                        {isSelected && zeroBalance && isAssetSupportedForOnramp(token) && (
-                          <div className="bg-[#2a3d24] border border-[#426039] rounded-xl p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-[#a2c398] text-sm">No {symbol} balance</div>
-                              <div className="text-[#54d22d] text-xs">Get tokens first</div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedTokenForOnramp(token)
-                                  setShowOnrampModal(true)
-                                }}
-                                className="flex-1 h-10 bg-[#54d22d] text-[#162013] text-sm font-medium rounded-lg hover:bg-[#4bc428] transition-colors flex items-center justify-center gap-1"
-                              >
-                                <Plus className="w-4 h-4" />
-                                Get {symbol}
-                              </button>
-                              <button
-                                onClick={nextStep}
-                                className="px-4 h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
-                              >
-                                Skip
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {isSelected && zeroBalance && !isAssetSupportedForOnramp(token) && (
-                          <div className="bg-[#2a3d24] border border-[#426039] rounded-xl p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-[#a2c398] text-sm">No {symbol} balance</div>
-                              <div className="text-yellow-400 text-xs">External deposit needed</div>
-                            </div>
-                            <div className="text-[#a2c398] text-xs mb-3">
-                              {symbol} deposits via mobile money are not available. Please deposit from another wallet
-                              or exchange.
-                            </div>
-                            <button
-                              onClick={nextStep}
-                              className="w-full h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
-                            >
-                              Continue anyway
+                              {isSelected && <Check className="w-5 h-5 ml-auto" />}
                             </button>
                           </div>
-                        )}
 
-                        {isSelected && !zeroBalance && showBalance && (
-                          <button
-                            onClick={nextStep}
-                            className="w-full h-10 bg-[#54d22d] text-[#162013] text-sm font-bold rounded-lg hover:bg-[#4bc428] transition-colors"
-                          >
-                            Continue with {symbol}
-                          </button>
-                        )}
+                          {isSelected && (
+                            <div className={`px-3 pb-3 ${isSelected ? "text-[#162013]" : "text-white"}`}>
+                              {zeroBalance ? (
+                                onrampSupported ? (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedTokenForOnramp(token)
+                                        setShowOnrampModal(true)
+                                      }}
+                                      className="flex-1 h-9 bg-[#162013] text-white text-xs font-medium rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-1 md:h-8"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                      Get {symbol}
+                                    </button>
+                                    <button
+                                      onClick={nextStep}
+                                      className="px-3 h-9 bg-transparent border border-current text-xs rounded-lg hover:opacity-80 transition-colors md:h-8"
+                                    >
+                                      Continue
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs opacity-80 flex-1">No {symbol} balance</span>
+                                    <button
+                                      onClick={nextStep}
+                                      className="px-3 h-9 bg-transparent border border-current text-xs rounded-lg hover:opacity-80 transition-colors md:h-8"
+                                    >
+                                      Continue anyway
+                                    </button>
+                                  </div>
+                                )
+                              ) : (
+                                showBalance && (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={nextStep}
+                                      className="w-full h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
+                                    >
+                                      Continue with {symbol}
+                                    </button>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
@@ -481,7 +518,7 @@ export function SaveMoneyModal({
                 <div className="text-center">
                   <h3 className="text-white text-lg font-medium mb-2">How much?</h3>
                   <p className="text-[#a2c398] text-sm">
-                    {isSelectedTokenLoading ? (
+                    {isBalanceLoading ? (
                       <span className="flex items-center justify-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         Loading balance...
@@ -632,17 +669,21 @@ export function SaveMoneyModal({
                   </div>
                 </div>
 
-                <TransactionButton
-                  transaction={prepareDepositTransaction}
-                  onTransactionSent={handleTransactionSent}
-                  onTransactionConfirmed={handleTransactionSuccess}
-                  onError={handleTransactionError}
-                  disabled={!account || !form.token || !form.amount || !form.lockPeriod}
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!account || !form.token || !form.amount || !form.lockPeriod || isSaving || isTransactionPending}
                   className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  unstyled
                 >
-                  {!isApproved ? "Approve Token" : "Start Earning"}
-                </TransactionButton>
+                  {isSaving || isTransactionPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </span>
+                  ) : (
+                    "Start Earning"
+                  )}
+                </button>
               </div>
             )}
           </div>
