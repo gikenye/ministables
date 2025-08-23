@@ -61,6 +61,12 @@ export function SaveMoneyModal({
   const [showOnrampModal, setShowOnrampModal] = useState(false)
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [depositSuccess, setDepositSuccess] = useState<{
+    token: string
+    amount: string
+    lockPeriod: string
+    transactionHash?: string
+  } | null>(null)
 
   // Use the working setup's wallet balance hook
   const { data: walletBalanceData, isLoading: isBalanceLoading } = useWalletBalance({
@@ -78,6 +84,7 @@ export function SaveMoneyModal({
       setCurrentStep(1)
       setError(null)
       setIsSaving(false)
+      setDepositSuccess(null)
     }
   }, [isOpen])
 
@@ -165,12 +172,15 @@ export function SaveMoneyModal({
     console.log("[SaveMoneyModal] Transaction successful:", receipt)
 
     if (!isApproval) {
-      setForm({
-        token: "",
-        amount: "",
-        lockPeriod: "2592000",
+      // Set the success state with current form data and transaction hash
+      setDepositSuccess({
+        token: form.token,
+        amount: form.amount,
+        lockPeriod: form.lockPeriod,
+        transactionHash: receipt.transactionHash
       })
-      onClose()
+      // Move to success step
+      setCurrentStep(5)
     }
   }
 
@@ -251,6 +261,27 @@ export function SaveMoneyModal({
     }
   }
 
+  const handleMakeAnotherDeposit = () => {
+    setDepositSuccess(null)
+    setCurrentStep(1)
+    setForm({
+      token: "",
+      amount: "",
+      lockPeriod: "2592000",
+    })
+    setError(null)
+  }
+
+  const handleCloseSuccess = () => {
+    setForm({
+      token: "",
+      amount: "",
+      lockPeriod: "2592000",
+    })
+    setDepositSuccess(null)
+    onClose()
+  }
+
   const getLockPeriodText = (seconds: string) => {
     const totalSeconds = Number.parseInt(seconds)
     if (totalSeconds < 3600) {
@@ -288,13 +319,15 @@ export function SaveMoneyModal({
         return form.token !== "" && form.amount !== ""
       case 4:
         return form.token !== "" && form.amount !== "" && form.lockPeriod !== ""
+      case 5:
+        return depositSuccess !== null
       default:
         return true
     }
   }
 
   const nextStep = () => {
-    if (currentStep < 4 && canProceedToStep(currentStep + 1)) {
+    if (currentStep < 5 && canProceedToStep(currentStep + 1)) {
       setCurrentStep(currentStep + 1)
     }
   }
@@ -358,15 +391,21 @@ export function SaveMoneyModal({
             Start earning by choosing a token, entering an amount, selecting a lock period, and confirming your deposit.
           </DialogDescription>
           <div className="flex items-center justify-between pt-5 pb-3">
-            {currentStep > 1 && (
+            {currentStep > 1 && currentStep !== 5 && (
               <button onClick={prevStep} className="p-1 text-[#a2c398] hover:text-white transition-colors">
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div className="flex-1 text-center">
-              <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Select Asset</h1>
+              <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">
+                {currentStep === 1 && "Select Asset"}
+                {currentStep === 2 && "Enter Amount"}
+                {currentStep === 3 && "Lock Period"}
+                {currentStep === 4 && "Review"}
+                {currentStep === 5 && "Success!"}
+              </h1>
               <div className="flex justify-center gap-2 mt-2">
-                {[1, 2, 3, 4].map((step) => (
+                {[1, 2, 3, 4, 5].map((step) => (
                   <div
                     key={step}
                     className={`min-w-8 h-7 px-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors ${
@@ -377,12 +416,16 @@ export function SaveMoneyModal({
                         : "bg-[#21301c] text-[#a2c398] border border-[#426039]"
                     }`}
                   >
-                    {step}
+                    {step === 5 ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      step
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-            {currentStep > 1 && <div className="w-7" />}
+            {currentStep > 1 && currentStep !== 5 && <div className="w-7" />}
           </div>
 
           {error && (
@@ -642,7 +685,7 @@ export function SaveMoneyModal({
             {currentStep === 4 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">Ready to earn</h3>
+                  <h3 className="text-white text-lg font-medium mb-2">Deposit {tokenInfos[form.token]?.symbol}</h3>
                   <p className="text-[#a2c398] text-sm">Review your deposit</p>
                 </div>
 
@@ -681,9 +724,75 @@ export function SaveMoneyModal({
                       Processing...
                     </span>
                   ) : (
-                    "Start Earning"
+                    "proceed to deposit "
                   )}
                 </button>
+              </div>
+            )}
+
+            {currentStep === 5 && depositSuccess && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Check className="w-8 h-8 text-[#162013]" />
+                  </div>
+                  <h3 className="text-white text-lg font-medium mb-2">Deposit Successful!</h3>
+                  <p className="text-[#a2c398] text-sm">Your funds have been deposited and are now earning rewards</p>
+                </div>
+
+                <div className="bg-[#21301c] rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#a2c398]">Deposited</span>
+                    <div className="text-right">
+                      <div className="text-white font-medium">{depositSuccess.amount}</div>
+                      <div className="text-[#a2c398] text-sm">{tokenInfos[depositSuccess.token]?.symbol}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#a2c398]">Lock period</span>
+                    <div className="text-white font-medium">{getLockPeriodText(depositSuccess.lockPeriod)}</div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
+                    <span className="text-[#a2c398]">Earning</span>
+                    <div className="text-right">
+                      <div className="text-[#54d22d] font-bold text-lg">{getAPY(depositSuccess.lockPeriod)}</div>
+                      <div className="text-[#a2c398] text-sm">APY</div>
+                    </div>
+                  </div>
+
+                  {depositSuccess.transactionHash && (
+                    <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
+                      <span className="text-[#a2c398]">Transaction</span>
+                      <a
+                        href={`https://celoscan.io/tx/${depositSuccess.transactionHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#54d22d] text-sm hover:underline truncate max-w-32"
+                      >
+                        {`${depositSuccess.transactionHash.slice(0, 6)}...${depositSuccess.transactionHash.slice(-4)}`}
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleMakeAnotherDeposit}
+                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
+                  >
+                    Make Another Deposit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseSuccess}
+                    className="w-full h-12 bg-transparent border border-[#426039] text-white text-base font-medium rounded-xl hover:bg-[#21301c] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             )}
           </div>

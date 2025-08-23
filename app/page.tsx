@@ -13,6 +13,7 @@ import {
   BarChart3,
   type LucideIcon,
 } from "lucide-react"
+import FooterNavigation from "@/components/Footer"
 import { useActiveAccount, useSendTransaction } from "thirdweb/react"
 import { ConnectWallet } from "@/components/ConnectWallet"
 import {
@@ -607,8 +608,42 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-6 sm:space-y-8">
+            {/* <div className="bg-[#21301c]/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-1 sm:p-6 max-w-1x1 mx-auto border border-[#2e4328] shadow-lg">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
+              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
+                <Link href="/dashboard" className="w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    View Dashboard
+                  </Button>
+                </Link>
+              </div>
+            </div> */}
+            
+            <div className="text-center">
+              {/* <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">What would you like to do?</h2> */}
+              <p className="text-[#a2c398] text-base sm:text-lg">Choose an option to get started</p>
+              {session?.user?.verified ? (
+                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d]">
+                  <Shield className="w-3 h-3 mr-1" />
+                  Verified
+                </div>
+              ) : (
+                isConnected && (
+                  <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#2e4328] text-[#a2c398]">
+                    <Shield className="w-3 h-3 mr-1" />
+                    Unverified
+                  </div>
+                )
+              )}
+            </div>
+
+            <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />
             {/* Quick Stats */}
-            <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2xl mx-auto border border-[#2e4328] shadow-lg">
+            <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-[#2e4328] shadow-lg">
               <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
               <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                 <Link href="/dashboard" className="w-full sm:w-auto">
@@ -622,30 +657,28 @@ export default function HomePage() {
                 </Link>
               </div>
             </div>
-            
-            <div className="text-center">
-              {/* <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">What would you like to do?</h2> */}
-              <p className="text-[#a2c398] text-base sm:text-lg">Choose an option to get started</p>
-              {/* {session?.user?.verified ? (
-                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d]">
-                  <Shield className="w-3 h-3 mr-1" />
-                  Verified
-                </div>
-              ) : (
-                isConnected && (
-                  <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#2e4328] text-[#a2c398]">
-                    <Shield className="w-3 h-3 mr-1" />
-                    Unverified
-                  </div>
-                )
-              )} */}
-            </div>
-
-            <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />
 
             
           </div>
+          
         )}
+
+        {/* <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-[#2e4328] shadow-lg">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
+              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
+                <Link href="/dashboard" className="w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    View Dashboard
+                  </Button>
+                </Link>
+              </div>
+            </div> */}
+        
+        {/* <FooterNavigation currentPath="/" /> */}
       </main>
 
       {/* Modals */}
