@@ -8,38 +8,41 @@ export default function VerifiedPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect to home page after 2 seconds
+    // Redirect to home page after 3 seconds
     const timer = setTimeout(() => {
       router.push("/");
-    }, 2000);
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, [router]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white px-4">
-      <div className="w-full max-w-xs">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-primary">Identity Verified!</h1>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-blue-50 px-4">
+      <div className="w-full max-w-md text-center">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-green-600 mb-2">
+            ✅ Verification Successful!
+          </h1>
+          <p className="text-gray-600 text-lg">
+            Your identity has been verified
+          </p>
         </div>
 
-        <div className="flex justify-center">
+        <div className="flex justify-center mb-8">
           <Image
-            src="https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3d2NnNDg0cmNvc3VnMW82M2J1bG1vaHoxMTd3cXhqYjd6cmE5cDk5eSZlcD12MV9zdGlja2Vyc19zZWFyY2gmY3Q9cw/xREmhz5xoZyfbIr8EI/giphy.gif"
-            alt="Verification successful"
-            width={200}
-            height={200}
+            src="https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNzd0ZmQ5d2ZmcTE1dHNidzgwYXJnbDBlZHh2dG9xMDkyMGl0ZG0yciZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/IRFQYGCokErS0/giphy.gif"
+            alt="Verification successful animation"
+            width={250}
+            height={250}
             priority
             unoptimized={true}
+            className="rounded-lg shadow-lg"
           />
         </div>
 
-        <div className="text-center mt-6">
-          <p className="text-gray-600 text-sm">
-            Age & Identity Verified
-          </p>
-          <p className="text-gray-500 text-xs mt-1">
-            Redirecting to Minilend...
+        <div className="text-center">
+          <p className="text-gray-500 text-sm">
+            Redirecting to home page in a moment...
           </p>
         </div>
       </div>

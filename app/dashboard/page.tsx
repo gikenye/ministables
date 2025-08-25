@@ -11,6 +11,8 @@ import {
   ExternalLink,
   Wallet,
   DollarSign,
+  Coins,
+  Percent,
 } from "lucide-react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -24,6 +26,8 @@ import { useActiveAccount, useReadContract } from "thirdweb/react";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { useUserDeposits } from "@/hooks/useUserDeposits";
+import { useInterestAccrued } from "@/hooks/useInterestAccrued";
 
 interface UserData {
   deposits: Record<string, string>;
@@ -127,11 +131,30 @@ export default function DashboardPage() {
     {}
   );
 
+  // Get user deposits data  
+  const {
+    deposits: userDeposits,
+    totalUsdValue: totalSaved,
+    loading: depositsLoading,
+  } = useUserDeposits(address);
+
+  // Get user interest data
+  const {
+    totalInterestUsd: totalInterest,
+    tokenInterests,
+    loading: interestLoading,
+  } = useInterestAccrued(address);
+
+  // Get dashboard data (deposits, borrows, etc.)
   const {
     deposits,
     borrows,
+    collateral,
+    lockEnds,
     loading: dashboardLoading,
   } = useDashboardData(address);
+
+  const loading = depositsLoading || interestLoading || dashboardLoading;
 
   const bigIntPow10 = (n: number) => {
     let result = BigInt(1);
@@ -307,7 +330,7 @@ export default function DashboardPage() {
                   Money Saved
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardLoading ? "..." : `$${totals.saved}`}
+                  {loading ? "..." : `$${totals.saved}`}
                 </p>
               </div>
               <div className="text-center p-4 bg-[#2e4328] rounded-xl">
@@ -316,7 +339,7 @@ export default function DashboardPage() {
                   Money Borrowed
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardLoading ? "..." : `$${totals.borrowed}`}
+                  {loading ? "..." : `$${totals.borrowed}`}
                 </p>
               </div>
             </div>
@@ -360,7 +383,7 @@ export default function DashboardPage() {
                 <p className="text-xs font-medium mb-1 text-[#a2c398]">
                   Savings
                 </p>
-                {dashboardLoading ? (
+                {loading ? (
                   <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
                 ) : (
                   <p className="text-sm font-bold text-white">
@@ -374,7 +397,7 @@ export default function DashboardPage() {
                   <ArrowDownLeft className="w-4 h-4 text-[#162013]" />
                 </div>
                 <p className="text-xs font-medium mb-1 text-[#a2c398]">Loans</p>
-                {dashboardLoading ? (
+                {loading ? (
                   <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
                 ) : (
                   <p className="text-sm font-bold text-white">
@@ -420,10 +443,10 @@ export default function DashboardPage() {
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={async () => {}}
-        userDeposits={{}}
-        depositLockEnds={{}}
+        userDeposits={deposits}
+        depositLockEnds={lockEnds}
         tokenInfos={TOKEN_INFO}
-        loading={false}
+        loading={loading}
         userAddress={address}
         getWithdrawableAmount={async () => "0"}
       />
