@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useSession, signIn } from "next-auth/react"
+import { useMiniApp } from "@/hooks/useMiniApp"
 import Link from "next/link"
 import {
   Wallet,
@@ -109,6 +110,7 @@ export default function HomePage() {
   const address = account?.address
   const isConnected = !!account
   const { mutateAsync: sendTransaction } = useSendTransaction({ payModal: false })
+  const { isSDKLoaded, context } = useMiniApp()
 
   // Get contract instance
   const contract = getContract({
@@ -626,19 +628,26 @@ export default function HomePage() {
             <div className="text-center">
               {/* <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">What would you like to do?</h2> */}
               <p className="text-[#a2c398] text-base sm:text-lg">Choose an option to get started</p>
-              {session?.user?.verified ? (
-                <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d]">
-                  <Shield className="w-3 h-3 mr-1" />
-                  Verified
-                </div>
-              ) : (
-                isConnected && (
-                  <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#2e4328] text-[#a2c398]">
+              <div className="mt-2 flex flex-wrap justify-center gap-2">
+                {session?.user?.verified ? (
+                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d]">
                     <Shield className="w-3 h-3 mr-1" />
-                    Unverified
+                    Verified
                   </div>
-                )
-              )}
+                ) : (
+                  isConnected && (
+                    <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#2e4328] text-[#a2c398]">
+                      <Shield className="w-3 h-3 mr-1" />
+                      Unverified
+                    </div>
+                  )
+                )}
+                {isSDKLoaded && context && (
+                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300">
+                    🚀 Farcaster Mini App
+                  </div>
+                )}
+              </div>
             </div>
 
             <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />

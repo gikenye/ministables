@@ -1,0 +1,1 @@
+export { useMiniApp } from '@neynar/react';
