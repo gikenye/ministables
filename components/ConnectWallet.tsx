@@ -1,5 +1,5 @@
 "use client";
-import { ConnectButton } from "thirdweb/react";
+import { ConnectButton, useConnect } from "thirdweb/react";
 import { lightTheme, darkTheme } from "thirdweb/react";
 import { inAppWallet, createWallet } from "thirdweb/wallets";
 import { base, celo, scroll } from "thirdweb/chains";
@@ -35,6 +35,8 @@ export function ConnectWallet({
 }: ConnectWalletButtonProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [hideConnectBtn, setHideConnectBtn] = useState(false);
+  const { connect } = useConnect();
 
   useEffect(() => {
     // Check initial theme preference
@@ -45,6 +47,12 @@ export function ConnectWallet({
     const mobileQuery = window.matchMedia("(max-width: 768px)");
     setIsMobile(mobileQuery.matches);
 
+    // MiniPay detection and auto-connection
+    if (window.ethereum && window.ethereum.isMiniPay) {
+      setHideConnectBtn(true);
+      connect(createWallet("io.metamask"),);
+    }
+
     // Listen for theme changes
     const handleThemeChange = (e: MediaQueryListEvent) => {
       setIsDarkMode(e.matches);
@@ -53,7 +61,7 @@ export function ConnectWallet({
     // Listen for mobile changes
     const handleMobileChange = (e: MediaQueryListEvent) => {
       setIsMobile(e.matches);
-    };
+    }; 
 
     mediaQuery.addEventListener("change", handleThemeChange);
     mobileQuery.addEventListener("change", handleMobileChange);
@@ -63,7 +71,7 @@ export function ConnectWallet({
       mediaQuery.removeEventListener("change", handleThemeChange);
       mobileQuery.removeEventListener("change", handleMobileChange);
     };
-  }, []);
+  }, [connect]);
 
   const getButtonStyle = () => {
     // Base style
@@ -166,30 +174,32 @@ export function ConnectWallet({
         }),
       }}
     >
-      <ConnectButton
-        accountAbstraction={{
-          chain: celo,
-          sponsorGas: false,
-        }}
-        client={client}
-        connectButton={{ label: "Launch App" }}
-        connectModal={{
-          showThirdwebBranding: false,
-          size: "compact",
-          title: "Minilend :)",
-          titleIcon: "https://ministables.vercel.app/minilend-logo.png",
-        }}
-        theme={darkTheme({
-          colors: {
-            modalBg: "hsl(148, 19%, 15%)",
-            borderColor: "hsl(217, 19%, 27%)",
-            accentText: "hsl(193, 100%, 55%)",
-            primaryButtonBg: "hsl(150, 75%, 22%)",
-            primaryButtonText: "hsl(0, 0%, 100%)",
-          },
-        })}
-        wallets={wallets}
-      />
+      {!hideConnectBtn && (
+        <ConnectButton
+          accountAbstraction={{
+            chain: celo,
+            sponsorGas: false,
+          }}
+          client={client}
+          connectButton={{ label: "Launch App" }}
+          connectModal={{
+            showThirdwebBranding: false,
+            size: "compact",
+            title: "Minilend :)",
+            titleIcon: "https://ministables.vercel.app/minilend-logo.png",
+          }}
+          theme={darkTheme({
+            colors: {
+              modalBg: "hsl(148, 19%, 15%)",
+              borderColor: "hsl(217, 19%, 27%)",
+              accentText: "hsl(193, 100%, 55%)",
+              primaryButtonBg: "hsl(150, 75%, 22%)",
+              primaryButtonText: "hsl(0, 0%, 100%)",
+            },
+          })}
+          wallets={wallets}
+        />
+      )}
     </div>
   );
 }

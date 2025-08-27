@@ -11,7 +11,9 @@ import {
   ExternalLink,
   Wallet,
   DollarSign,
-} from "lucide-react";
+}
+from "lucide-react";
+import { ConnectWallet } from "@/components/ConnectWallet";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -20,10 +22,10 @@ import { formatAddress } from "@/lib/utils";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getContract } from "thirdweb";
-import { useActiveAccount, useReadContract } from "thirdweb/react";
+import { useActiveAccount, useReadContract, useConnect } from "thirdweb/react";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
-import { useDashboardData } from "@/hooks/useDashboardData";
+import { useEnhancedDashboard } from "@/hooks/useEnhancedDashboard";
 
 interface UserData {
   deposits: Record<string, string>;
@@ -110,8 +112,18 @@ export default function DashboardPage() {
   const account = useActiveAccount();
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
+  const { connect } = useConnect();
   const address = account?.address;
   const isConnected = !!address;
+  
+  // Debug logs to track wallet connection status
+  useEffect(() => {
+    console.log("Dashboard mounted, wallet connection status:", { 
+      address,
+      isConnected,
+      account
+    });
+  }, [address, isConnected, account]);
 
   const contract = getContract({
     address: MINILEND_ADDRESS,
@@ -129,9 +141,17 @@ export default function DashboardPage() {
 
   const {
     deposits,
+    depositValue,
     borrows,
+    borrowValue,
+    interest,
+    interestUsd,
+    totalInterestUsd,
+    lockEnds,
+    nearestUnlockTime,
     loading: dashboardLoading,
-  } = useDashboardData(address);
+    tokenInfo,
+  } = useEnhancedDashboard(address);
 
   const bigIntPow10 = (n: number) => {
     let result = BigInt(1);
@@ -155,24 +175,10 @@ export default function DashboardPage() {
   };
 
   const totals = useMemo(() => {
-    let saved = 0;
-    let borrowed = 0;
-    for (const token of Object.keys(deposits || {})) {
-      const info = TOKEN_INFO[token];
-      const decimals = info?.decimals ?? 18;
-      const pow = Math.max(decimals - 2, 0);
-      const denom = bigIntPow10(pow);
-      const d = Number(BigInt(deposits[token] || "0") / denom) / 100;
-      saved += isFinite(d) ? d : 0;
-    }
-    for (const token of Object.keys(borrows || {})) {
-      const info = TOKEN_INFO[token];
-      const decimals = info?.decimals ?? 18;
-      const pow = Math.max(decimals - 2, 0);
-      const denom = bigIntPow10(pow);
-      const b = Number(BigInt(borrows[token] || "0") / denom) / 100;
-      borrowed += isFinite(b) ? b : 0;
-    }
+    const saved = parseFloat(depositValue || "0");
+    const borrowed = parseFloat(borrowValue || "0");
+    const interest = parseFloat(totalInterestUsd || "0");
+    
     return {
       saved: saved.toLocaleString(undefined, {
         minimumFractionDigits: 2,
@@ -182,8 +188,13 @@ export default function DashboardPage() {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
+      interest: interest.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+      nextUnlock: nearestUnlockTime ? new Date(nearestUnlockTime * 1000).toLocaleDateString() : null,
     };
-  }, [deposits, borrows]);
+  }, [depositValue, borrowValue, totalInterestUsd, nearestUnlockTime]);
 
   useEffect(() => {
     if (isConnected && address && !session?.user?.address) {
@@ -222,11 +233,25 @@ export default function DashboardPage() {
             <p className="text-[#a2c398] mb-6">
               Connect your wallet to view your financial dashboard
             </p>
-            <Link href="/">
-              <Button className="bg-[#54d22d] hover:bg-[#426039] text-[#162013] font-medium w-full">
-                Go to Home
+            <div className="flex flex-col space-y-3">
+              <Button 
+                className="bg-[#54d22d] hover:bg-[#426039] text-[#162013] font-medium w-full"
+                onClick={() => {
+                  // Use ConnectWallet component's approach
+                  const wallets = document.querySelector('.ConnectButton') as HTMLButtonElement;
+                  if (wallets) {
+                    wallets.click();
+                  }
+                }}
+              >
+                Connect Wallet
               </Button>
-            </Link>
+              <Link href="/">
+                <Button className="bg-transparent border border-[#426039] hover:bg-[#2e4328] text-[#a2c398] font-medium w-full">
+                  Go to Home
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -309,6 +334,11 @@ export default function DashboardPage() {
                 <p className="text-2xl font-bold text-white">
                   {dashboardLoading ? "..." : `$${totals.saved}`}
                 </p>
+                {totals.nextUnlock && (
+                  <p className="text-xs text-[#a2c398] mt-2">
+                    Next unlock: {totals.nextUnlock}
+                  </p>
+                )}
               </div>
               <div className="text-center p-4 bg-[#2e4328] rounded-xl">
                 <ArrowDownLeft className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
@@ -318,6 +348,11 @@ export default function DashboardPage() {
                 <p className="text-2xl font-bold text-white">
                   {dashboardLoading ? "..." : `$${totals.borrowed}`}
                 </p>
+                {parseFloat(totals.interest) > 0 && (
+                  <p className="text-xs text-[#a2c398] mt-2">
+                    Interest: ${totals.interest}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex space-x-3">
@@ -363,9 +398,16 @@ export default function DashboardPage() {
                 {dashboardLoading ? (
                   <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
                 ) : (
-                  <p className="text-sm font-bold text-white">
-                    ${totals.saved}
-                  </p>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      ${totals.saved}
+                    </p>
+                    {totals.nextUnlock && (
+                      <p className="text-[10px] text-[#a2c398] mt-1">
+                        Unlock: {totals.nextUnlock}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -377,9 +419,16 @@ export default function DashboardPage() {
                 {dashboardLoading ? (
                   <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
                 ) : (
-                  <p className="text-sm font-bold text-white">
-                    ${totals.borrowed}
-                  </p>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      ${totals.borrowed}
+                    </p>
+                    {parseFloat(totals.interest) > 0 && (
+                      <p className="text-[10px] text-[#a2c398] mt-1">
+                        Int: ${totals.interest}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -388,9 +437,17 @@ export default function DashboardPage() {
                   <Shield className="w-4 h-4 text-[#162013]" />
                 </div>
                 <p className="text-xs font-medium mb-1 text-[#a2c398]">
-                  Security
+                  Assets
                 </p>
-                <p className="text-sm font-bold text-white">$0.00</p>
+                {dashboardLoading ? (
+                  <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
+                ) : (
+                  <p className="text-sm font-bold text-white">
+                    {Object.keys(deposits).filter(token => 
+                      deposits[token] !== "0"
+                    ).length || 0}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -420,12 +477,18 @@ export default function DashboardPage() {
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={async () => {}}
-        userDeposits={{}}
-        depositLockEnds={{}}
-        tokenInfos={TOKEN_INFO}
-        loading={false}
+        userDeposits={deposits}
+        depositLockEnds={lockEnds}
+        tokenInfos={tokenInfo}
+        loading={dashboardLoading}
         userAddress={address}
-        getWithdrawableAmount={async () => "0"}
+        getWithdrawableAmount={async (token: string) => {
+          if (!deposits[token] || deposits[token] === "0") return "0";
+          if (lockEnds[token] && lockEnds[token] > Math.floor(Date.now() / 1000)) {
+            return "0"; // Still locked
+          }
+          return deposits[token]; // Available for withdrawal
+        }}
       />
     </div>
   );
