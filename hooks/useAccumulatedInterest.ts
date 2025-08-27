@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
-import { getContract } from "thirdweb";
+import { useState, useEffect, useMemo } from "react";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { calculateEquivalentValue } from "@/lib/oracles/priceService";
 import { useReadContract } from "thirdweb/react";
+import { prepareContractCall, readContract } from "thirdweb";
 
 export function useAccumulatedInterest(address: string | undefined, stablecoins: string[]) {
   const [interest, setInterest] = useState<Record<string, string>>({});
@@ -13,7 +13,7 @@ export function useAccumulatedInterest(address: string | undefined, stablecoins:
   const [borrowStartTimes, setBorrowStartTimes] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
 
-  // Fetch accumulated interest for user
+  // Fetch accumulated interest for user using the useReadContract hook
   const { data: accumulatedInterestData, isPending: interestLoading } = useReadContract({
     contract: {
       chain: celo,
@@ -27,107 +27,101 @@ export function useAccumulatedInterest(address: string | undefined, stablecoins:
     },
   });
 
-  // Fetch borrowStartTime for each token
-  // Use a proper hook pattern instead of mapping hooks in the component body
-  const [borrowStartTimesResults, setBorrowStartTimesResults] = useState<Array<{token: string, data: any}>>([]);
-  
-  // Fetch borrowStartTimes in a single useEffect to avoid recreation on each render
+  // Memoize the accumulated interest to avoid unnecessary recalculations
+  const accumulatedInterest = useMemo(() => {
+    return accumulatedInterestData ? accumulatedInterestData.toString() : "0";
+  }, [accumulatedInterestData]);
+
+  // Fetch borrow start times for all tokens in a single effect
   useEffect(() => {
     if (!address || !stablecoins.length) return;
     
     const fetchBorrowStartTimes = async () => {
+      setLoading(true);
+      
       try {
-        const contract = getContract({
-          chain: celo,
-          client, 
-          address: MINILEND_ADDRESS,
-        });
+        // Create a map to hold results
+        const newBorrowStartTimes: Record<string, number> = {};
         
-        const results = await Promise.all(stablecoins.map(async (token) => {
+        // Use Promise.all with the recommended thirdweb pattern
+        await Promise.all(stablecoins.map(async (token) => {
           try {
-            const data = await contract.read("borrowStartTime", [address, token]);
-            return { token, data };
+            // Use prepareContractCall and readContract instead of getContract
+            const tx = prepareContractCall({
+              contract: {
+                chain: celo,
+                client, 
+                address: MINILEND_ADDRESS,
+              },
+              method: "function borrowStartTime(address,address) view returns (uint256)",
+              params: [address, token],
+            });
+            
+            const result = await readContract(tx);
+            newBorrowStartTimes[token] = Number(result || 0);
           } catch (error) {
             console.error(`Error fetching borrow start time for ${token}:`, error);
-            return { token, data: null };
+            newBorrowStartTimes[token] = 0;
           }
         }));
         
-        setBorrowStartTimesResults(results);
+        setBorrowStartTimes(newBorrowStartTimes);
+        
+        // Process interest data after borrowStartTimes are ready
+        processInterestData(newBorrowStartTimes);
       } catch (error) {
         console.error("Error fetching borrow start times:", error);
+        setLoading(false);
       }
     };
     
     fetchBorrowStartTimes();
-  }, [address, stablecoins]);
+  }, [address, stablecoins, accumulatedInterest]);
 
-  // Process fetch results
-  useEffect(() => {
-    if (!address || !stablecoins.length) return;
-    
-    const processInterestData = async () => {
-      setLoading(true);
-      try {
-        const newInterest: Record<string, string> = {};
-        const newBorrowStartTimes: Record<string, number> = {};
-        
-        // Stable reference USD token for conversion
-        const cUsdToken = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
-        
-        // Set accumulated interest
-        if (accumulatedInterestData) {
-          for (const token of stablecoins) {
-            newInterest[token] = accumulatedInterestData.toString();
-          }
-        }
-
-        // Process borrow start times
-        borrowStartTimesResults.forEach(result => {
-          if (result.data) {
-            newBorrowStartTimes[result.token] = Number(result.data);
-          } else {
-            newBorrowStartTimes[result.token] = 0;
-          }
-        });
-
-        setInterest(newInterest);
-        setBorrowStartTimes(newBorrowStartTimes);
-
-        // Calculate USD equivalent values
-        const usdValues: Record<string, string> = {};
-        
+  // Process interest data separately to avoid nested async functions
+  const processInterestData = async (newBorrowStartTimes: Record<string, number>) => {
+    try {
+      const newInterest: Record<string, string> = {};
+      
+      // Stable reference USD token for conversion
+      const cUsdToken = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
+      
+      // Set accumulated interest for all tokens
+      if (accumulatedInterestData) {
         for (const token of stablecoins) {
-          if (newInterest[token] && newInterest[token] !== "0") {
-            try {
-              const equivalentValue = await calculateEquivalentValue(token, cUsdToken, newInterest[token]);
-              if (equivalentValue) {
-                usdValues[token] = equivalentValue.value;
-              } else {
-                usdValues[token] = newInterest[token];
-              }
-            } catch {
+          newInterest[token] = accumulatedInterestData.toString();
+        }
+      }
+
+      setInterest(newInterest);
+
+      // Calculate USD equivalent values
+      const usdValues: Record<string, string> = {};
+      
+      for (const token of stablecoins) {
+        if (newInterest[token] && newInterest[token] !== "0") {
+          try {
+            const equivalentValue = await calculateEquivalentValue(token, cUsdToken, newInterest[token]);
+            if (equivalentValue) {
+              usdValues[token] = equivalentValue.value;
+            } else {
               usdValues[token] = newInterest[token];
             }
-          } else {
-            usdValues[token] = "0";
+          } catch {
+            usdValues[token] = newInterest[token];
           }
+        } else {
+          usdValues[token] = "0";
         }
-        
-        setInterestUsd(usdValues);
-      } catch (error) {
-        console.error("Error loading interest data:", error);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    processInterestData();
-  // Stable dependencies that won't cause unnecessary rerenders:
-  // - address and stablecoins only change when actually needed
-  // - accumulatedInterestData is from thirdweb hook that manages its own reactivity
-  // - borrowStartTimesResults will only change when the data actually changes
-  }, [address, stablecoins, accumulatedInterestData, borrowStartTimesResults]);
+      
+      setInterestUsd(usdValues);
+    } catch (error) {
+      console.error("Error processing interest data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return { 
     interest, 
