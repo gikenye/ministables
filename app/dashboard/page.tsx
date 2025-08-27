@@ -234,19 +234,13 @@ export default function DashboardPage() {
               Connect your wallet to view your financial dashboard
             </p>
             <div className="flex flex-col space-y-3">
-              <Button 
-                className="bg-[#54d22d] hover:bg-[#426039] text-[#162013] font-medium w-full"
-                onClick={() => {
-                  // Use ConnectWallet component's approach
-                  const wallets = document.querySelector('.ConnectButton') as HTMLButtonElement;
-                  if (wallets) {
-                    wallets.click();
-                  }
-                }}
-              >
-                Connect Wallet
-              </Button>
-              <Link href="/">
+              <div className="w-full">
+                <ConnectWallet 
+                  size="lg"
+                  className="w-full" 
+                />
+              </div>
+              <Link href="/" className="w-full">
                 <Button className="bg-transparent border border-[#426039] hover:bg-[#2e4328] text-[#a2c398] font-medium w-full">
                   Go to Home
                 </Button>
