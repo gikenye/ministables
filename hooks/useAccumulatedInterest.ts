@@ -28,21 +28,39 @@ export function useAccumulatedInterest(address: string | undefined, stablecoins:
   });
 
   // Fetch borrowStartTime for each token
-  const borrowStartTimesResults = stablecoins.map(token => {
-    const { data } = useReadContract({
-      contract: {
-        chain: celo,
-        client, 
-        address: MINILEND_ADDRESS,
-      },
-      method: "function borrowStartTime(address,address) view returns (uint256)",
-      params: [address || "0x0000000000000000000000000000000000000000", token],
-      queryOptions: {
-        enabled: !!address,
-      },
-    });
-    return { token, data };
-  });
+  // Use a proper hook pattern instead of mapping hooks in the component body
+  const [borrowStartTimesResults, setBorrowStartTimesResults] = useState<Array<{token: string, data: any}>>([]);
+  
+  // Fetch borrowStartTimes in a single useEffect to avoid recreation on each render
+  useEffect(() => {
+    if (!address || !stablecoins.length) return;
+    
+    const fetchBorrowStartTimes = async () => {
+      try {
+        const contract = getContract({
+          chain: celo,
+          client, 
+          address: MINILEND_ADDRESS,
+        });
+        
+        const results = await Promise.all(stablecoins.map(async (token) => {
+          try {
+            const data = await contract.read("borrowStartTime", [address, token]);
+            return { token, data };
+          } catch (error) {
+            console.error(`Error fetching borrow start time for ${token}:`, error);
+            return { token, data: null };
+          }
+        }));
+        
+        setBorrowStartTimesResults(results);
+      } catch (error) {
+        console.error("Error fetching borrow start times:", error);
+      }
+    };
+    
+    fetchBorrowStartTimes();
+  }, [address, stablecoins]);
 
   // Process fetch results
   useEffect(() => {
@@ -105,6 +123,10 @@ export function useAccumulatedInterest(address: string | undefined, stablecoins:
     };
 
     processInterestData();
+  // Stable dependencies that won't cause unnecessary rerenders:
+  // - address and stablecoins only change when actually needed
+  // - accumulatedInterestData is from thirdweb hook that manages its own reactivity
+  // - borrowStartTimesResults will only change when the data actually changes
   }, [address, stablecoins, accumulatedInterestData, borrowStartTimesResults]);
 
   return { 
