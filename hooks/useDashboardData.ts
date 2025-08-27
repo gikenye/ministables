@@ -1,9 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { client } from "@/lib/thirdweb/client";
-import { celo } from "thirdweb/chains";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
-import { useReadContract } from "thirdweb/react";
+import { fetchUserDashboardData } from "@/lib/services/dashboardService";
 
 const SUPPORTED_STABLECOINS = [
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
@@ -23,68 +20,7 @@ export function useDashboardData(address: string | undefined) {
   const [poolData, setPoolData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  // Create batch contract reads
-  const userDepositBatch = SUPPORTED_STABLECOINS.map(token => {
-    return useReadContract({
-      contract: {
-        client,
-        chain: celo,
-        address: MINILEND_ADDRESS,
-      },
-      method: "function userDeposits(address, address, uint256) view returns (uint256 amount, uint256 lockEnd)",
-      params: [address || "0x0000000000000000000000000000000000000000", token, 0n],
-      queryOptions: {
-        enabled: !!address,
-      }
-    });
-  });
-
-  const userBorrowBatch = SUPPORTED_STABLECOINS.map(token => {
-    return useReadContract({
-      contract: {
-        client,
-        chain: celo,
-        address: MINILEND_ADDRESS,
-      },
-      method: "function userBorrows(address, address) view returns (uint256)",
-      params: [address || "0x0000000000000000000000000000000000000000", token],
-      queryOptions: {
-        enabled: !!address,
-      }
-    });
-  });
-
-  const userCollateralBatch = SUPPORTED_STABLECOINS.map(token => {
-    return useReadContract({
-      contract: {
-        client,
-        chain: celo,
-        address: MINILEND_ADDRESS,
-      },
-      method: "function userCollateral(address, address) view returns (uint256)",
-      params: [address || "0x0000000000000000000000000000000000000000", token],
-      queryOptions: {
-        enabled: !!address,
-      }
-    });
-  });
-
-  const totalSupplyBatch = SUPPORTED_STABLECOINS.map(token => {
-    return useReadContract({
-      contract: {
-        client,
-        chain: celo,
-        address: MINILEND_ADDRESS,
-      },
-      method: "function totalSupply(address) view returns (uint256)",
-      params: [token],
-      queryOptions: {
-        enabled: !!address,
-      }
-    });
-  });
-
-  // Process data when available
+  // Use a single effect to load all data at once
   useEffect(() => {
     if (!address) {
       console.log("No wallet address available for dashboard data");
@@ -93,70 +29,38 @@ export function useDashboardData(address: string | undefined) {
     }
     
     console.log("Loading dashboard data for address:", address);
-
-    const allDataReady = [
-      ...userDepositBatch, 
-      ...userBorrowBatch, 
-      ...userCollateralBatch,
-      ...totalSupplyBatch
-    ].every(item => !item.isPending);
-
-    if (!allDataReady) return;
-
-    try {
-      const newDeposits: Record<string, string> = {};
-      const newBorrows: Record<string, string> = {};
-      const newCollateral: Record<string, string> = {};
-      const newLockEnds: Record<string, number> = {};
-      const newPoolData: Record<string, string> = {};
-
-      // Process deposits and lock ends
-      userDepositBatch.forEach((result, index) => {
-        const token = SUPPORTED_STABLECOINS[index];
-        if (result.data) {
-          newDeposits[token] = result.data[0].toString();
-          newLockEnds[token] = Number(result.data[1]);
-        } else {
-          newDeposits[token] = "0";
-          newLockEnds[token] = 0;
-        }
-      });
-
-      // Process borrows
-      userBorrowBatch.forEach((result, index) => {
-        const token = SUPPORTED_STABLECOINS[index];
-        newBorrows[token] = result.data ? result.data.toString() : "0";
-      });
-
-      // Process collateral
-      userCollateralBatch.forEach((result, index) => {
-        const token = SUPPORTED_STABLECOINS[index];
-        newCollateral[token] = result.data ? result.data.toString() : "0";
-      });
-
-      // Process total supply
-      totalSupplyBatch.forEach((result, index) => {
-        const token = SUPPORTED_STABLECOINS[index];
-        newPoolData[token] = result.data ? result.data.toString() : "0";
-      });
-
-      setDeposits(newDeposits);
-      setBorrows(newBorrows);
-      setCollateral(newCollateral);
-      setLockEnds(newLockEnds);
-      setPoolData(newPoolData);
+    
+    const loadDashboardData = async () => {
+      setLoading(true);
       
-      console.log("Dashboard data loaded successfully:", {
-        deposits: newDeposits,
-        borrows: newBorrows,
-        collateral: newCollateral
-      });
-    } catch (error) {
-      console.error("Error loading dashboard data:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [address, userDepositBatch, userBorrowBatch, userCollateralBatch, totalSupplyBatch]);
+      try {
+        const data = await fetchUserDashboardData(address, SUPPORTED_STABLECOINS);
+        
+        if (data.success) {
+          setDeposits(data.deposits);
+          setBorrows(data.borrows);
+          setCollateral(data.collateral);
+          setLockEnds(data.lockEnds);
+          
+          console.log("Dashboard data loaded successfully:", {
+            deposits: data.deposits,
+            borrows: data.borrows,
+            collateral: data.collateral
+          });
+        } else {
+          console.error("Error loading dashboard data:", data.error);
+        }
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadDashboardData();
+    
+    // Only re-fetch when the address changes
+  }, [address]);
 
   return { deposits, borrows, collateral, lockEnds, poolData, loading };
 }

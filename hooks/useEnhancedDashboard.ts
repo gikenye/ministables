@@ -1,12 +1,18 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import { getContract } from "thirdweb";
+import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
-import { useDashboardData } from "./useDashboardData";
-import { useAccumulatedInterest } from "./useAccumulatedInterest";
 import { calculateEquivalentValue } from "@/lib/oracles/priceService";
+import { 
+  fetchUserDeposit, 
+  fetchUserBorrow, 
+  fetchUserCollateral,
+  fetchAccumulatedInterest,
+  fetchBorrowStartTime,
+  fetchTotalSupply
+} from "@/lib/services/dashboardService";
 
 // Standard stablecoin reference for value comparison
 const USD_REFERENCE_TOKEN = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // cUSD
@@ -29,19 +35,58 @@ const SUPPORTED_STABLECOINS = [
 
 // Token info mapping
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
-  "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", decimals: 18 },
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", decimals: 18 },
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
-  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", decimals: 18 },
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", decimals: 18 },
-  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", decimals: 18 },
-  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", decimals: 18 },
-  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", decimals: 18 },
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { symbol: "cNGN", decimals: 18 },
+  "0x471EcE3750Da237f93B8E339c536989b8978a438": {
+    symbol: "CELO",
+    decimals: 18,
+  },
+  "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
+    symbol: "cUSD",
+    decimals: 18,
+  },
+  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": {
+    symbol: "cEUR",
+    decimals: 18,
+  },
+  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": {
+    symbol: "cREAL",
+    decimals: 18,
+  },
+  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": {
+    symbol: "eXOF",
+    decimals: 18,
+  },
+  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": {
+    symbol: "cKES",
+    decimals: 18,
+  },
+  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": {
+    symbol: "PUSO",
+    decimals: 18,
+  },
+  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": {
+    symbol: "cCOP",
+    decimals: 18,
+  },
+  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": {
+    symbol: "cGHS",
+    decimals: 18,
+  },
+  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { 
+    symbol: "USDT", 
+    decimals: 6 
+  },
+  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { 
+    symbol: "USDC", 
+    decimals: 6 
+  },
+  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": {
+    symbol: "USDGLO",
+    decimals: 18,
+  },
+  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": {
+    symbol: "cNGN",
+    decimals: 18,
+  },
 };
 
 export interface EnhancedUserData {
@@ -61,13 +106,15 @@ export interface EnhancedUserData {
 }
 
 export function useEnhancedDashboard(address: string | undefined): EnhancedUserData {
-  const { 
-    deposits, borrows, collateral, lockEnds, loading: dashboardLoading 
-  } = useDashboardData(address);
-  
-  const { 
-    interest, interestUsd, borrowStartTimes, loading: interestLoading 
-  } = useAccumulatedInterest(address, SUPPORTED_STABLECOINS);
+  const [dashboardData, setDashboardData] = useState({
+    deposits: {} as Record<string, string>,
+    borrows: {} as Record<string, string>,
+    collateral: {} as Record<string, string>,
+    lockEnds: {} as Record<string, number>,
+    interest: {} as Record<string, string>,
+    interestUsd: {} as Record<string, string>,
+    borrowStartTimes: {} as Record<string, number>,
+  });
   
   const [depositValue, setDepositValue] = useState("0");
   const [borrowValue, setBorrowValue] = useState("0");
@@ -98,104 +145,211 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   // Calculate total interest in USD
   const totalInterestUsd = useMemo(() => {
     let total = 0;
-    for (const token of Object.keys(interestUsd)) {
-      total += parseFloat(interestUsd[token] || "0");
+    for (const token of Object.keys(dashboardData.interestUsd)) {
+      total += parseFloat(dashboardData.interestUsd[token] || "0");
     }
     return total.toFixed(2);
-  }, [interestUsd]);
+  }, [dashboardData.interestUsd]);
 
   // Find nearest unlock time
   const nearestUnlockTime = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
-    const futureUnlockTimes = Object.values(lockEnds)
+    const futureUnlockTimes = Object.values(dashboardData.lockEnds)
       .filter(time => time > now)
       .sort((a, b) => a - b);
     
     return futureUnlockTimes.length > 0 ? futureUnlockTimes[0] : null;
-  }, [lockEnds]);
+  }, [dashboardData.lockEnds]);
 
-  // Calculate USD values for deposits and borrows
+  // Fetch all data using the service functions with contract
   useEffect(() => {
-    const calculateValues = async () => {
+    if (!address) {
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true; // Track component mount state for cleanup
+    
+    const loadAllDashboardData = async () => {
       setLoading(true);
       
       try {
-        let depositTotal = 0;
-        let borrowTotal = 0;
-        
-        // Calculate deposit values
-        for (const token of Object.keys(deposits)) {
-          if (deposits[token] === "0") continue;
-          
+        // Initialize contract - similar to BorrowMoneyModal implementation
+        const contract = getContract({
+          address: MINILEND_ADDRESS,
+          chain: celo,
+          client,
+        });
+
+        // Fetch user data using the ThirdWeb function patterns
+        const deposits: Record<string, string> = {};
+        const borrows: Record<string, string> = {};
+        const collateral: Record<string, string> = {};
+        const lockEnds: Record<string, number> = {};
+        const interest: Record<string, string> = {};
+        const startTimes: Record<string, number> = {};
+
+        // Process each supported stablecoin
+        for (const token of SUPPORTED_STABLECOINS) {
           try {
-            const amount = formatAmount(deposits[token], token);
-            
-            // Convert to USD equivalent if needed
-            if (token !== USD_REFERENCE_TOKEN) {
-              const result = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, amount);
-              if (result) {
-                depositTotal += parseFloat(result.value);
-              } else {
-                depositTotal += parseFloat(amount);
-              }
+            // Fetch deposit data
+            const depositResult = await fetchUserDeposit(contract, address, token, 0n);
+            if (depositResult) {
+              const [amount, lockEnd] = depositResult as [bigint, bigint];
+              deposits[token] = amount.toString();
+              lockEnds[token] = Number(lockEnd);
             } else {
-              depositTotal += parseFloat(amount);
+              deposits[token] = "0";
+              lockEnds[token] = 0;
             }
-          } catch (error) {
-            console.error(`Error calculating value for deposit token ${token}:`, error);
+
+            // Fetch borrow data
+            const borrowResult = await fetchUserBorrow(contract, address, token);
+            borrows[token] = borrowResult ? borrowResult.toString() : "0";
+
+            // Fetch collateral data
+            const collateralResult = await fetchUserCollateral(contract, address, token);
+            collateral[token] = collateralResult ? collateralResult.toString() : "0";
+
+            // Fetch borrow start times
+            const startTimeResult = await fetchBorrowStartTime(contract, address, token);
+            startTimes[token] = startTimeResult ? Number(startTimeResult) : 0;
+
+          } catch (err) {
+            console.error(`Error processing data for token ${token}:`, err);
+            deposits[token] = "0";
+            borrows[token] = "0";
+            collateral[token] = "0";
+            lockEnds[token] = 0;
+            startTimes[token] = 0;
           }
         }
-        
-        // Calculate borrow values
-        for (const token of Object.keys(borrows)) {
-          if (borrows[token] === "0") continue;
-          
-          try {
-            const amount = formatAmount(borrows[token], token);
-            
-            // Convert to USD equivalent if needed
-            if (token !== USD_REFERENCE_TOKEN) {
-              const result = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, amount);
-              if (result) {
-                borrowTotal += parseFloat(result.value);
-              } else {
-                borrowTotal += parseFloat(amount);
-              }
-            } else {
-              borrowTotal += parseFloat(amount);
-            }
-          } catch (error) {
-            console.error(`Error calculating value for borrow token ${token}:`, error);
-          }
+
+        // Fetch accumulated interest (once for user)
+        let accumulatedInterest = "0";
+        try {
+          const interestResult = await fetchAccumulatedInterest(contract, address);
+          accumulatedInterest = interestResult ? interestResult.toString() : "0";
+        } catch (err) {
+          console.error("Error fetching accumulated interest:", err);
         }
-        
-        setDepositValue(depositTotal.toFixed(2));
-        setBorrowValue(borrowTotal.toFixed(2));
+
+        // Fill interest data for all tokens
+        for (const token of SUPPORTED_STABLECOINS) {
+          interest[token] = accumulatedInterest;
+        }
+
+        if (isMounted) {
+          setDashboardData({
+            deposits,
+            borrows,
+            collateral,
+            lockEnds,
+            interest,
+            interestUsd: {}, // Will calculate below
+            borrowStartTimes: startTimes
+          });
+          
+          // Calculate USD values
+          await calculateUsdValues(deposits, borrows, interest);
+        }
       } catch (error) {
-        console.error("Error calculating USD values:", error);
+        console.error("Error loading enhanced dashboard data:", error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
-    if (!dashboardLoading && !interestLoading && address) {
-      calculateValues();
+    loadAllDashboardData();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [address]);
+  
+  // Calculate USD values for all tokens
+  const calculateUsdValues = async (
+    deposits: Record<string, string>, 
+    borrows: Record<string, string>,
+    interest: Record<string, string>
+  ) => {
+    try {
+      let depositTotal = 0;
+      let borrowTotal = 0;
+      const interestUsdValues: Record<string, string> = {};
+      
+      for (const token of SUPPORTED_STABLECOINS) {
+        // Calculate deposit value
+        if (deposits[token] && deposits[token] !== "0") {
+          try {
+            const equivalentValue = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, deposits[token]);
+            if (equivalentValue) {
+              depositTotal += parseFloat(equivalentValue.value);
+            }
+          } catch (error) {
+            console.error(`Error converting deposit value for ${token}:`, error);
+          }
+        }
+        
+        // Calculate borrow value
+        if (borrows[token] && borrows[token] !== "0") {
+          try {
+            const equivalentValue = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, borrows[token]);
+            if (equivalentValue) {
+              borrowTotal += parseFloat(equivalentValue.value);
+            }
+          } catch (error) {
+            console.error(`Error converting borrow value for ${token}:`, error);
+          }
+        }
+        
+        // Calculate interest USD value
+        if (interest[token] && interest[token] !== "0") {
+          try {
+            const equivalentValue = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, interest[token]);
+            if (equivalentValue) {
+              interestUsdValues[token] = equivalentValue.value;
+            } else {
+              interestUsdValues[token] = "0";
+            }
+          } catch (error) {
+            console.error(`Error converting interest value for ${token}:`, error);
+            interestUsdValues[token] = "0";
+          }
+        } else {
+          interestUsdValues[token] = "0";
+        }
+      }
+      
+      setDepositValue(depositTotal.toFixed(2));
+      setBorrowValue(borrowTotal.toFixed(2));
+      
+      setDashboardData(prev => ({
+        ...prev,
+        interestUsd: interestUsdValues
+      }));
+      
+    } catch (error) {
+      console.error("Error calculating USD values:", error);
     }
-  }, [address, deposits, borrows, dashboardLoading, interestLoading]);
+  };
 
   return {
-    deposits,
+    deposits: dashboardData.deposits,
     depositValue,
-    borrows,
+    borrows: dashboardData.borrows,
     borrowValue,
-    collateral,
-    interest,
-    interestUsd,
+    collateral: dashboardData.collateral,
+    interest: dashboardData.interest,
+    interestUsd: dashboardData.interestUsd,
     totalInterestUsd,
-    lockEnds,
-    borrowStartTimes,
+    lockEnds: dashboardData.lockEnds,
+    borrowStartTimes: dashboardData.borrowStartTimes,
     nearestUnlockTime,
-    loading: loading || dashboardLoading || interestLoading,
+    loading,
     tokenInfo: TOKEN_INFO
   };
 }
