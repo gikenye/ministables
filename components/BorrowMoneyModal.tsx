@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, AlertCircle, CreditCard, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, AlertCircle, CreditCard, CheckCircle2, RefreshCw } from "lucide-react"
 import { formatAmount } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { parseUnits } from "viem"
@@ -12,11 +12,22 @@ import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
-import { getContract, prepareContractCall, waitForReceipt } from "thirdweb"
+import { 
+  getContract, 
+  prepareContractCall, 
+  sendTransaction,
+  waitForReceipt
+} from "thirdweb"
 import { client } from "@/lib/thirdweb/client"
 import { celo } from "thirdweb/chains"
+import { calculateRequiredCollateral } from "@/lib/oracles/priceService"
+import { useRouter } from "next/navigation"
 
-import { useActiveAccount, useSendTransaction, useReadContract, useWalletBalance } from "thirdweb/react"
+import { 
+  useActiveAccount, 
+  useReadContract, 
+  useWalletBalance 
+} from "thirdweb/react"
 
 interface BorrowMoneyModalProps {
   isOpen: boolean
@@ -28,9 +39,6 @@ interface BorrowMoneyModalProps {
   tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading: boolean
 }
-
-// Constants
-const COLLATERALIZATION_RATIO = 1.5 // 150% collateralization
 
 enum BorrowStep {
   SELECT_TOKEN = 1,
@@ -51,6 +59,7 @@ export function BorrowMoneyModal({
 }: BorrowMoneyModalProps) {
   const { toast } = useToast()
   const account = useActiveAccount()
+  const router = useRouter()
 
   const contract = getContract({
     client,
@@ -81,19 +90,62 @@ export function BorrowMoneyModal({
   })
 
   const [requiredCollateral, setRequiredCollateral] = useState<string | null>(null)
-  const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({})
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null)
+  const [fetchingRate, setFetchingRate] = useState(false)
   const [transactionStatus, setTransactionStatus] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
 
-  // Added step reset when modal opens/closes
+  // Reset when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(BorrowStep.SELECT_TOKEN)
       setForm({ token: "", collateralToken: "", amount: "" })
+      setRequiredCollateral(null)
+      setExchangeRate(null)
       setTransactionStatus(null)
     }
   }, [isOpen])
+
+  // Calculate required collateral using oracle price data when amount/tokens change
+  useEffect(() => {
+    const updateCollateralRequirement = async () => {
+      if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
+        setFetchingRate(true)
+        try {
+          const result = await calculateRequiredCollateral(
+            form.token,
+            form.collateralToken,
+            form.amount,
+            1.5 // 150% collateralization ratio
+          )
+          
+          if (result) {
+            setRequiredCollateral(result.amount)
+            setExchangeRate(result.rate)
+          } else {
+            // Fallback to fixed ratio if oracle data is unavailable
+            const amountValue = Number(form.amount)
+            setRequiredCollateral((amountValue * 1.5).toFixed(4))
+            setExchangeRate(null)
+          }
+        } catch (error) {
+          console.error("Error calculating collateral:", error)
+          // Fallback to fixed ratio
+          const amountValue = Number(form.amount)
+          setRequiredCollateral((amountValue * 1.5).toFixed(4))
+          setExchangeRate(null)
+        } finally {
+          setFetchingRate(false)
+        }
+      } else {
+        setRequiredCollateral(null)
+        setExchangeRate(null)
+      }
+    }
+
+    updateCollateralRequirement()
+  }, [form.token, form.collateralToken, form.amount])
 
   const hasCollateral = (token: string) => {
     const collateral = userCollaterals[token]
@@ -106,7 +158,18 @@ export function BorrowMoneyModal({
     return available >= Number.parseFloat(required)
   }
 
-  // Use same simplified logic as TVL - only fetch totalSupply to reduce requests
+  // Check if borrowing is paused for token
+  const { data: isBorrowingPaused, isPending: checkingBorrowingStatus } = useReadContract({
+    contract,
+    method: "function isBorrowingPaused(address) view returns (bool)",
+    params: [form.token || "0x0000000000000000000000000000000000000000"],
+    queryOptions: {
+      enabled: !!form.token,
+      retry: 2,
+    },
+  })
+
+  // Get total supply to check liquidity
   const { data: totalSupply, isPending: checkingLiquidity } = useReadContract({
     contract,
     method: "function totalSupply(address) view returns (uint256)",
@@ -117,15 +180,30 @@ export function BorrowMoneyModal({
     },
   })
 
+  // Get total borrows to calculate available liquidity
+  const { data: totalBorrows, isPending: checkingBorrows } = useReadContract({
+    contract, 
+    method: "function totalBorrows(address) view returns (uint256)",
+    params: [form.token || "0x0000000000000000000000000000000000000000"],
+    queryOptions: {
+      enabled: !!form.token,
+      retry: 2,
+    },
+  })
+
+  // Calculate available liquidity
   const selectedTokenLiquidity = useMemo(() => {
-    if (!form.token || checkingLiquidity) return null
-    if (!totalSupply || totalSupply <= 0) return "0"
-
+    if (!form.token || checkingLiquidity || checkingBorrows) return null
+    if (!totalSupply) return "0"
+    
+    const borrowsAmount = totalBorrows || BigInt(0)
+    const availableLiquidity = totalSupply > borrowsAmount ? totalSupply - borrowsAmount : BigInt(0)
+    
+    if (availableLiquidity <= 0) return "0"
+    
     const decimals = tokenInfos[form.token]?.decimals || 18
-    return formatAmount(totalSupply.toString(), decimals)
-  }, [form.token, totalSupply, tokenInfos, checkingLiquidity])
-
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction({ payModal: false })
+    return formatAmount(availableLiquidity.toString(), decimals)
+  }, [form.token, totalSupply, totalBorrows, tokenInfos, checkingLiquidity, checkingBorrows])
 
   // Balances for auto-wrap support when depositing collateral in CELO
   const { data: collateralTokenBalance } = useWalletBalance({
@@ -134,21 +212,48 @@ export function BorrowMoneyModal({
     address: account?.address,
     tokenAddress: form.collateralToken || undefined,
   })
+  
   const { data: nativeBalanceData } = useWalletBalance({
     client,
     chain: celo,
     address: account?.address,
   })
 
+  // Force refresh of rates
+  const refreshExchangeRate = async () => {
+    if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
+      setFetchingRate(true)
+      try {
+        const result = await calculateRequiredCollateral(
+          form.token,
+          form.collateralToken, 
+          form.amount,
+          1.5
+        )
+        
+                  if (result) {
+            setRequiredCollateral(result.amount)
+            setExchangeRate(result.rate)
+          }
+      } catch (error) {
+        console.error("Failed to refresh rates:", error)
+        setTransactionStatus("Could not update market rates. Using previous values.")
+      } finally {
+        setFetchingRate(false)
+      }
+    }
+  }
+
   const handleBorrowWithCollateral = async () => {
-    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return
+    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral || !account) return
+
+    if (isBorrowingPaused) {
+      setTransactionStatus(`Borrowing ${tokenInfos[form.token]?.symbol} is currently paused. Please try again later or select another token.`)
+      return
+    }
 
     if (selectedTokenLiquidity === "0") {
-      toast({
-        title: "No Funds Available",
-        description: `There are no funds available for ${tokenInfos[form.token]?.symbol}. Please try again later.`,
-        variant: "destructive",
-      })
+      setTransactionStatus(`There are no funds available for ${tokenInfos[form.token]?.symbol}. Please try again later.`)
       return
     }
 
@@ -156,6 +261,7 @@ export function BorrowMoneyModal({
     setTransactionStatus("Processing your request...")
 
     try {
+      // Check if user has sufficient collateral
       if (!hasSufficientCollateral(form.collateralToken, requiredCollateral)) {
         setTransactionStatus("Securing your loan...")
         const decimals = tokenInfos[form.collateralToken]?.decimals || 18
@@ -168,6 +274,7 @@ export function BorrowMoneyModal({
           const nativeBal = Number.parseFloat(nativeBalanceData?.displayValue || "0")
           const amountToWrap = Math.min(required - walletBalance, nativeBal)
           if (amountToWrap > 0) {
+            setTransactionStatus("Converting CELO for collateral...")
             const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 })
             const wrapTx = prepareContractCall({
               contract: celoContract,
@@ -175,9 +282,12 @@ export function BorrowMoneyModal({
               params: [],
               value: parseUnits(amountToWrap.toString(), 18),
             })
-            const wrapResult = await sendTransaction(wrapTx)
+            
+            const wrapResult = await sendTransaction({ transaction: wrapTx, account })
             if (wrapResult?.transactionHash) {
+              setTransactionStatus("Waiting for CELO conversion...")
               await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash })
+              setTransactionStatus("CELO converted successfully ✓")
             }
           }
         }
@@ -190,38 +300,81 @@ export function BorrowMoneyModal({
           )
         }
 
+        // Deposit collateral using thirdweb contract call
         setTransactionStatus("Adding security...")
-        await onDepositCollateral(form.collateralToken, requiredCollateral)
+        const amount = parseUnits(requiredCollateral, tokenInfos[form.collateralToken]?.decimals || 18)
+        
+        // Prepare ERC20 approval
+        const tokenContract = getContract({
+          client,
+          chain: celo,
+          address: form.collateralToken
+        })
+        
+        const allowanceTx = prepareContractCall({
+          contract: tokenContract,
+          method: "function approve(address spender, uint256 amount)",
+          params: [MINILEND_ADDRESS, amount]
+        })
+        
+        // Execute approval transaction
+        setTransactionStatus("Approving collateral use...")
+        const allowanceResult = await sendTransaction({ transaction: allowanceTx, account })
+        if (allowanceResult?.transactionHash) {
+          await waitForReceipt({ client, chain: celo, transactionHash: allowanceResult.transactionHash })
+        }
+        
+        // Prepare deposit collateral transaction
+        const depositTx = prepareContractCall({
+          contract,
+          method: "function depositCollateral(address token, uint256 amount)",
+          params: [form.collateralToken, amount],
+        })
+        
+        // Execute deposit transaction
+        setTransactionStatus("Depositing your security...")
+        const depositResult = await sendTransaction({ transaction: depositTx, account })
+        if (depositResult?.transactionHash) {
+          await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash })
+        }
+        
         setTransactionStatus("Security added ✓")
         await new Promise((resolve) => setTimeout(resolve, 1000))
       }
 
+      // Execute borrow transaction
       setTransactionStatus("Getting your cash...")
-      await onBorrow(form.token, form.amount, form.collateralToken)
+      const borrowAmount = parseUnits(form.amount, tokenInfos[form.token]?.decimals || 18)
+      
+      const borrowTx = prepareContractCall({
+        contract,
+        method: "function borrow(address token, uint256 amount, address collateralToken)",
+        params: [form.token, borrowAmount, form.collateralToken],
+      })
+      
+      const borrowResult = await sendTransaction({ transaction: borrowTx, account })
+      if (borrowResult?.transactionHash) {
+        setTransactionStatus("Processing transaction...")
+        await waitForReceipt({ client, chain: celo, transactionHash: borrowResult.transactionHash })
+      }
 
       setTransactionStatus("Cash sent to your wallet ✓")
-      toast({
-        title: "Cash Ready!",
-        description: `${form.amount} ${tokenInfos[form.token]?.symbol} is now in your wallet`,
-      })
-
+      
+      // Instead of automatically closing, update status with instructions
       setTimeout(() => {
-        setForm({ token: "", collateralToken: "", amount: "" })
-        setTransactionStatus(null)
-        setCurrentStep(BorrowStep.SELECT_TOKEN)
-        onClose()
+        setTransactionStatus(
+          `${form.amount} ${tokenInfos[form.token]?.symbol} has been sent to your wallet.\n\nPlease check your wallet to confirm receipt and visit the dashboard to view your outstanding loans.`
+        )
+        
+        // Don't automatically close - let the user close the modal when ready
       }, 2000)
     } catch (error: any) {
       setTransactionStatus("Something went wrong")
 
       if (error.message?.includes("insufficient reserves") || error.message?.includes("E5")) {
-        toast({
-          title: "Not Enough Funds",
-          description: "We don't have enough funds for this amount. Please try a smaller amount.",
-          variant: "destructive",
-        })
+        setTransactionStatus("Not enough funds available. Please try a smaller amount.")
       } else {
-        handleTransactionError(error, toast, "Failed to process your request")
+        setTransactionStatus(error.message || "Failed to process your request")
       }
 
       setTimeout(() => setTransactionStatus(null), 3000)
@@ -245,13 +398,13 @@ export function BorrowMoneyModal({
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case BorrowStep.SELECT_TOKEN:
-        return !!form.token && selectedTokenLiquidity !== "0"
+        return !!form.token && selectedTokenLiquidity !== "0" && !isBorrowingPaused
       case BorrowStep.ENTER_AMOUNT:
         return !!form.amount && Number.parseFloat(form.amount) > 0
       case BorrowStep.CHOOSE_SECURITY:
         return !!form.collateralToken
       case BorrowStep.CONFIRM:
-        return !!requiredCollateral
+        return !!requiredCollateral && !fetchingRate
       default:
         return false
     }
@@ -303,8 +456,10 @@ export function BorrowMoneyModal({
                         )}
                         <div className="flex-1 text-left">
                           <div className="font-semibold text-white">{symbol}</div>
-                          {checkingLiquidity ? (
+                          {checkingLiquidity || checkingBorrows ? (
                             <div className="text-xs text-[#a2c398]">Checking availability...</div>
+                          ) : isBorrowingPaused ? (
+                            <div className="text-xs text-red-400">Currently paused</div>
                           ) : selectedTokenLiquidity === "0" ? (
                             <div className="text-xs text-red-400">Not available</div>
                           ) : selectedTokenLiquidity && isSelected ? (
@@ -427,36 +582,84 @@ export function BorrowMoneyModal({
 
                 <div className="flex justify-between items-center">
                   <span className="text-[#a2c398]">Security required</span>
-                  <span className="text-white font-semibold">
-                    {requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-white font-semibold">
+                      {fetchingRate ? "Calculating..." : requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
+                    </span>
+                    <button 
+                      onClick={refreshExchangeRate}
+                      disabled={fetchingRate || !form.token || !form.collateralToken || !form.amount}
+                      className="ml-2 p-1 rounded-full hover:bg-[#426039] text-[#a2c398] hover:text-white"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${fetchingRate ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
                 </div>
+                
+                {exchangeRate && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[#a2c398]">Current exchange rate</span>
+                    <span className="text-[#a2c398]">
+                      1 {tokenInfos[form.collateralToken]?.symbol} = {(1/exchangeRate).toFixed(4)} {tokenInfos[form.token]?.symbol}
+                    </span>
+                  </div>
+                )}
 
                 {form.collateralToken &&
                   requiredCollateral &&
-                  !hasSufficientCollateral(form.collateralToken, requiredCollateral) && (
-                    <div className="border-t border-[#426039] pt-3">
-                      <div className="text-xs text-[#a2c398] mb-2">
-                        You need more {tokenInfos[form.collateralToken]?.symbol}
+                  (() => {
+                    // Check wallet balance and compare against required collateral
+                    const decimals = tokenInfos[form.collateralToken]?.decimals || 18;
+                    const walletBalance = Number.parseFloat(formatAmount(userBalances[form.collateralToken] || "0", decimals));
+                    const requiredAmount = Number.parseFloat(requiredCollateral);
+                    
+                    // Only show the "Get more" section if wallet balance is insufficient
+                    return walletBalance < requiredAmount ? (
+                      <div className="border-t border-[#426039] pt-3">
+                        <div className="text-xs text-[#a2c398] mb-2">
+                          You need more {tokenInfos[form.collateralToken]?.symbol}
+                        </div>
+                        {onrampService.isAssetSupportedForOnramp(tokenInfos[form.collateralToken]?.symbol || "") && (
+                          <Button
+                            onClick={() => setShowOnrampModal(true)}
+                            variant="outline"
+                            size="sm"
+                            className="w-full bg-[#54d22d] text-[#162013] border-[#54d22d] hover:bg-[#4bc226]"
+                          >
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            Get {tokenInfos[form.collateralToken]?.symbol}
+                          </Button>
+                        )}
                       </div>
-                      {onrampService.isAssetSupportedForOnramp(tokenInfos[form.collateralToken]?.symbol || "") && (
-                        <Button
-                          onClick={() => setShowOnrampModal(true)}
-                          variant="outline"
-                          size="sm"
-                          className="w-full bg-[#54d22d] text-[#162013] border-[#54d22d] hover:bg-[#4bc226]"
-                        >
-                          <CreditCard className="w-4 h-4 mr-2" />
-                          Get {tokenInfos[form.collateralToken]?.symbol}
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
               </div>
 
               {transactionStatus && (
                 <div className="bg-[#21301c] border border-[#54d22d] rounded-xl p-4">
-                  <div className="text-sm text-[#54d22d] font-medium text-center">{transactionStatus}</div>
+                  <div className="text-sm text-[#54d22d] font-medium text-center" style={{ whiteSpace: 'pre-line' }}>{transactionStatus}</div>
+                  
+                  {/* Show a "View Dashboard" button if transaction is complete */}
+                  {transactionStatus.includes("check your wallet") && (
+                    <div className="mt-4 flex justify-center">
+                      <Button
+                        onClick={() => {
+                          // Reset the form and close the modal
+                          setForm({ token: "", collateralToken: "", amount: "" })
+                          setTransactionStatus(null)
+                          setCurrentStep(BorrowStep.SELECT_TOKEN)
+                          onClose()
+                          
+                          // Use Next.js router to navigate to dashboard without page reload
+                          // Make sure to leave some time for wallet to persist
+                          setTimeout(() => router.push("/dashboard"), 300);
+                        }}
+                        className="bg-[#54d22d] text-[#162013] hover:bg-[#4bc226] font-semibold px-4 py-2 rounded"
+                      >
+                        View Dashboard
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -524,17 +727,20 @@ export function BorrowMoneyModal({
                 onClick={handleBorrowWithCollateral}
                 disabled={
                   isProcessing ||
-                  isTransactionPending ||
                   !form.token ||
                   !form.collateralToken ||
                   !form.amount ||
                   !requiredCollateral ||
                   selectedTokenLiquidity === "0" ||
-                  checkingLiquidity
+                  checkingLiquidity ||
+                  isBorrowingPaused ||
+                  fetchingRate ||
+                  // Disable button if transaction is complete and showing final message
+                  transactionStatus?.includes("check your wallet")
                 }
                 className="flex-1 bg-[#54d22d] text-[#162013] hover:bg-[#4bc226] font-semibold"
               >
-                {isProcessing || isTransactionPending ? "Processing..." : "Get Cash"}
+                {isProcessing ? "Processing..." : "Get Cash"}
               </Button>
             )}
           </div>
@@ -548,11 +754,13 @@ export function BorrowMoneyModal({
           selectedAsset={tokenInfos[form.collateralToken]?.symbol || ""}
           assetSymbol={tokenInfos[form.collateralToken]?.symbol || ""}
           onSuccess={(transactionCode, amount) => {
-            toast({
-              title: "Deposit Started",
-              description: `${tokenInfos[form.collateralToken]?.symbol} is being added to your wallet`,
-            })
+            setTransactionStatus(`${tokenInfos[form.collateralToken]?.symbol} deposit initiated. Funds will appear in your wallet soon.`)
             setShowOnrampModal(false)
+            
+            // Clear message after a few seconds
+            setTimeout(() => {
+              setTransactionStatus(null)
+            }, 4000)
           }}
         />
       )}
@@ -560,31 +768,4 @@ export function BorrowMoneyModal({
   )
 }
 
-// Error handling utility
-const handleTransactionError = (error: any, toast: any, defaultMessage: string) => {
-  console.error("Transaction error:", error)
-
-  if (
-    error.message?.includes("FILE_ERROR_NO_SPACE") ||
-    error.message?.includes("QuotaExceededError") ||
-    error.message?.includes("no space")
-  ) {
-    toast({
-      title: "Storage Error",
-      description: "Your device is running out of disk space. Please free up some space and try again.",
-      variant: "destructive",
-    })
-  } else if (error.message?.includes("User rejected") || error.message?.includes("rejected the request")) {
-    toast({
-      title: "Transaction Cancelled",
-      description: "You cancelled the transaction in your wallet.",
-      variant: "default",
-    })
-  } else {
-    toast({
-      title: "Error",
-      description: error.message || defaultMessage,
-      variant: "destructive",
-    })
-  }
-}
+// This helper function is no longer needed as we're using transaction status directly
