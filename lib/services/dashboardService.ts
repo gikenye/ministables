@@ -74,12 +74,21 @@ export async function fetchUserDeposit(
   tokenAddress: string,
   depositIndex: bigint,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function userDeposits(address,address,uint256)",
-    params: [userAddress, tokenAddress, depositIndex],
-  });
-  return await readContract(tx);
+  console.log(`fetchUserDeposit called for user ${userAddress}, token ${tokenAddress}`);
+  try {
+    const tx = prepareContractCall({
+      contract,
+      method: "function userDeposits(address,address,uint256)",
+      params: [userAddress, tokenAddress, depositIndex],
+    });
+    console.log("fetchUserDeposit prepared transaction:", tx);
+    const result = await readContract(tx);
+    console.log(`fetchUserDeposit result:`, result);
+    return result;
+  } catch (error) {
+    console.error(`Error in fetchUserDeposit for token ${tokenAddress}:`, error);
+    throw error;
+  }
 }
 
 /**

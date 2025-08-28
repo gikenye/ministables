@@ -5,16 +5,27 @@
 
 export function registerServiceWorker() {
   if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      // Use our fixed service worker
-      const swUrl = "/sw-fix.js";
-
-      // Unregister any existing service workers first
+    // Don't use service workers in Metamask mobile browser or MiniPay
+    const isMobileWalletBrowser = 
+      (window.ethereum && window.ethereum.isMiniPay) ||
+      (window.ethereum && window.ethereum.isMetaMask && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+    
+    if (isMobileWalletBrowser) {
+      console.log("Skipping service worker registration in mobile wallet browser");
+      // Unregister any existing service workers to avoid issues
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         registrations.forEach((registration) => {
           registration.unregister();
         });
-        // Then register our fixed service worker
+      });
+      return;
+    }
+    
+    window.addEventListener("load", function () {
+      try {
+        // Use our fixed service worker
+        const swUrl = "/sw-fix.js";
+        
         navigator.serviceWorker
           .register(swUrl)
           .then(function (registration) {
@@ -33,7 +44,9 @@ export function registerServiceWorker() {
           .catch(function (error) {
             console.error("ServiceWorker registration failed: ", error);
           });
-      });
+      } catch (error) {
+        console.error("Error during service worker registration:", error);
+      }
     });
   }
 }

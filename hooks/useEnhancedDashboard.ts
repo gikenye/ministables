@@ -164,10 +164,12 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   // Fetch all data using the service functions with contract
   useEffect(() => {
     if (!address) {
+      console.log("useEnhancedDashboard: No address provided, skipping data fetch");
       setLoading(false);
       return;
     }
 
+    console.log("useEnhancedDashboard: Starting data fetch for address:", address);
     let isMounted = true; // Track component mount state for cleanup
     
     const loadAllDashboardData = async () => {
@@ -175,11 +177,28 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
       
       try {
         // Initialize contract - similar to BorrowMoneyModal implementation
+        console.log("useEnhancedDashboard: Initializing contract with address:", MINILEND_ADDRESS);
+        
+        // Make sure we have a valid contract address
+        if (!MINILEND_ADDRESS || MINILEND_ADDRESS === "0x0000000000000000000000000000000000000000") {
+          throw new Error("Invalid MINILEND_ADDRESS");
+        }
+        
+        // Log client and chain to make sure they're available
+        console.log("useEnhancedDashboard: Client and chain available:", 
+          { clientAvailable: !!client, chainAvailable: !!celo });
+          
         const contract = getContract({
           address: MINILEND_ADDRESS,
           chain: celo,
           client,
         });
+        
+        console.log("useEnhancedDashboard: Contract initialized:", JSON.stringify({
+          address: contract.address,
+          source: contract.source,
+          abi: contract.abi ? "ABI present" : "No ABI found"
+        }));
 
         // Fetch user data using the ThirdWeb function patterns
         const deposits: Record<string, string> = {};
@@ -189,34 +208,75 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
         const interest: Record<string, string> = {};
         const startTimes: Record<string, number> = {};
 
-        // Process each supported stablecoin
-        for (const token of SUPPORTED_STABLECOINS) {
-          try {
-            // Fetch deposit data
-            const depositResult = await fetchUserDeposit(contract, address, token, 0n);
-            if (depositResult) {
-              const [amount, lockEnd] = depositResult as [bigint, bigint];
-              deposits[token] = amount.toString();
-              lockEnds[token] = Number(lockEnd);
-            } else {
+        console.log("Using a reduced set of tokens for initial test");
+        
+        // Start with just a few tokens to test data fetching
+        const testTokens = [
+          "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
+          "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+        ];
+        
+        try {
+          // Try to fetch user deposit for cUSD as a simple test
+          console.log("Fetching test deposit for cUSD");
+          const testToken = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // cUSD
+          
+          const testDeposit = await fetchUserDeposit(contract, address, testToken, 0n);
+          console.log("Test deposit result:", testDeposit);
+          
+          // If the test worked, process all tokens
+          for (const token of testTokens) {
+            try {
+              console.log(`Processing token: ${token}`);
+              
+              // Fetch deposit data
+              const depositResult = await fetchUserDeposit(contract, address, token, 0n);
+              if (depositResult) {
+                const [amount, lockEnd] = depositResult as [bigint, bigint];
+                deposits[token] = amount.toString();
+                lockEnds[token] = Number(lockEnd);
+              } else {
+                deposits[token] = "0";
+                lockEnds[token] = 0;
+              }
+              
+              // Fetch borrow data
+              const borrowResult = await fetchUserBorrow(contract, address, token);
+              borrows[token] = borrowResult ? borrowResult.toString() : "0";
+              
+              // Fetch collateral data
+              const collateralResult = await fetchUserCollateral(contract, address, token);
+              collateral[token] = collateralResult ? collateralResult.toString() : "0";
+              
+              // Fetch borrow start times
+              const startTimeResult = await fetchBorrowStartTime(contract, address, token);
+              startTimes[token] = startTimeResult ? Number(startTimeResult) : 0;
+              
+            } catch (err) {
+              console.error(`Error processing data for token ${token}:`, err);
               deposits[token] = "0";
+              borrows[token] = "0";
+              collateral[token] = "0";
               lockEnds[token] = 0;
+              startTimes[token] = 0;
             }
-
-            // Fetch borrow data
-            const borrowResult = await fetchUserBorrow(contract, address, token);
-            borrows[token] = borrowResult ? borrowResult.toString() : "0";
-
-            // Fetch collateral data
-            const collateralResult = await fetchUserCollateral(contract, address, token);
-            collateral[token] = collateralResult ? collateralResult.toString() : "0";
-
-            // Fetch borrow start times
-            const startTimeResult = await fetchBorrowStartTime(contract, address, token);
-            startTimes[token] = startTimeResult ? Number(startTimeResult) : 0;
-
-          } catch (err) {
-            console.error(`Error processing data for token ${token}:`, err);
+          }
+          
+          // Fill in the rest of the tokens with zero values
+          for (const token of SUPPORTED_STABLECOINS) {
+            if (!testTokens.includes(token)) {
+              deposits[token] = "0";
+              borrows[token] = "0";
+              collateral[token] = "0";
+              lockEnds[token] = 0;
+              startTimes[token] = 0;
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch test deposit:", err);
+          
+          // Fill all tokens with zeros as fallback
+          for (const token of SUPPORTED_STABLECOINS) {
             deposits[token] = "0";
             borrows[token] = "0";
             collateral[token] = "0";

@@ -35,42 +35,91 @@ export function ConnectWallet({
 }: ConnectWalletButtonProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [hideConnectBtn, setHideConnectBtn] = useState(false);
   const { connect } = useConnect();
 
   useEffect(() => {
-    // Check initial theme preference
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    setIsDarkMode(mediaQuery.matches);
-
-    // Check if mobile - increased threshold for better mobile detection
-    const mobileQuery = window.matchMedia("(max-width: 768px)");
-    setIsMobile(mobileQuery.matches);
-
-    // MiniPay detection and auto-connection
-    if (window.ethereum && window.ethereum.isMiniPay) {
-      setHideConnectBtn(true);
-      connect(createWallet("io.metamask"),);
+    try {
+      // Check initial theme preference
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      setIsDarkMode(mediaQuery.matches);
+  
+      // Check if mobile - increased threshold for better mobile detection
+      const mobileQuery = window.matchMedia("(max-width: 768px)");
+      setIsMobile(mobileQuery.matches);
+  
+      // Detect mobile wallet browsers and handle connections
+      const detectAndConnectWallet = async () => {
+        try {
+          // Wait a bit for ethereum object to be injected
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // MiniPay detection
+          if (window.ethereum && window.ethereum.isMiniPay) {
+            console.log("MiniPay detected");
+          } 
+          // MetaMask mobile detection
+          else if (
+            window.ethereum && 
+            window.ethereum.isMetaMask && 
+            /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+          ) {
+            console.log("MetaMask mobile detected");
+          }
+        } catch (err) {
+          console.error("Error in wallet detection:", err);
+        }
+      };
+      
+      detectAndConnectWallet();
+  
+      // Listen for theme changes
+      const handleThemeChange = (e: MediaQueryListEvent) => {
+        setIsDarkMode(e.matches);
+      };
+  
+      // Listen for mobile changes
+      const handleMobileChange = (e: MediaQueryListEvent) => {
+        setIsMobile(e.matches);
+      }; 
+  
+      // Use safer event listener pattern for all browsers
+      try {
+        mediaQuery.addEventListener("change", handleThemeChange);
+        mobileQuery.addEventListener("change", handleMobileChange);
+      } catch (err) {
+        // Fallback for older browsers
+        console.warn("Using fallback for media query listeners");
+        try {
+          // @ts-ignore - older API
+          mediaQuery.addListener(handleThemeChange);
+          // @ts-ignore - older API
+          mobileQuery.addListener(handleMobileChange);
+        } catch (innerErr) {
+          console.error("Could not add media query listeners", innerErr);
+        }
+      }
+  
+      // Cleanup listeners on component unmount
+      return () => {
+        try {
+          mediaQuery.removeEventListener("change", handleThemeChange);
+          mobileQuery.removeEventListener("change", handleMobileChange);
+        } catch (err) {
+          // Fallback for older browsers
+          try {
+            // @ts-ignore - older API
+            mediaQuery.removeListener(handleThemeChange);
+            // @ts-ignore - older API
+            mobileQuery.removeListener(handleMobileChange);
+          } catch (innerErr) {
+            console.error("Could not remove media query listeners", innerErr);
+          }
+        }
+      };
+    } catch (err) {
+      console.error("Error in ConnectWallet useEffect:", err);
+      return () => {}; // Empty cleanup function
     }
-
-    // Listen for theme changes
-    const handleThemeChange = (e: MediaQueryListEvent) => {
-      setIsDarkMode(e.matches);
-    };
-
-    // Listen for mobile changes
-    const handleMobileChange = (e: MediaQueryListEvent) => {
-      setIsMobile(e.matches);
-    }; 
-
-    mediaQuery.addEventListener("change", handleThemeChange);
-    mobileQuery.addEventListener("change", handleMobileChange);
-
-    // Cleanup listeners on component unmount
-    return () => {
-      mediaQuery.removeEventListener("change", handleThemeChange);
-      mobileQuery.removeEventListener("change", handleMobileChange);
-    };
   }, [connect]);
 
   const getButtonStyle = () => {
@@ -174,7 +223,7 @@ export function ConnectWallet({
         }),
       }}
     >
-      {!hideConnectBtn && (
+      {
         <ConnectButton
           accountAbstraction={{
             chain: celo,
@@ -199,7 +248,29 @@ export function ConnectWallet({
           })}
           wallets={wallets}
         />
-      )}
+      }
+      <button
+        onClick={async () => {
+          try {
+            if (typeof window !== "undefined" && (window as any).ethereum) {
+              await (window as any).ethereum.request({ method: "eth_requestAccounts", params: [] });
+            }
+          } catch (e) {
+            console.error("Fallback connect failed", e);
+          }
+        }}
+        style={{
+          display: typeof window !== "undefined" && (window as any).ethereum ? "inline-block" : "none",
+          marginTop: 8,
+          backgroundColor: "#0e6037",
+          color: "white",
+          border: "none",
+          padding: "8px 16px",
+          borderRadius: 8,
+        }}
+      >
+        Connect
+      </button>
     </div>
   );
 }
