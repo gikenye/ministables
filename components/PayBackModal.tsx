@@ -7,13 +7,13 @@ import { formatAmount } from "@/lib/utils"
 import { useActiveAccount, TransactionButton, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
-import { useToast } from "@/hooks/use-toast"
+
 import { oracleService } from "@/lib/services/oracleService"
-import { getContract, prepareContractCall } from "thirdweb"
+import { getContract, prepareContractCall, sendTransaction, waitForReceipt } from "thirdweb"
 import { parseUnits } from "viem"
 import { celo } from "thirdweb/chains"
 import { client } from "@/lib/thirdweb/client"
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
+import { MINILEND_ADDRESS } from "@/lib/constants"
 import { LoanItem } from "./LoanItem"
 
 interface ActiveLoan {
@@ -46,7 +46,9 @@ export function PayBackModal({
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
-  const { toast } = useToast()
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [remainingBalance, setRemainingBalance] = useState<string | null>(null)
+
 
   const [form, setForm] = useState({
     token: "",
@@ -77,8 +79,20 @@ export function PayBackModal({
       setCurrentStep(1)
       setForm({ token: "", amount: "" })
       setSelectedLoan(null)
+      setPaymentSuccess(false)
+      setRemainingBalance(null)
     }
   }, [isOpen])
+
+  // Auto-close after 5 seconds on success
+  useEffect(() => {
+    if (paymentSuccess) {
+      const timer = setTimeout(() => {
+        onClose()
+      }, 7000)
+      return () => clearTimeout(timer)
+    }
+  }, [paymentSuccess, onClose])
 
   const handleLoanSelect = (loan: ActiveLoan) => {
     setSelectedLoan(loan)
@@ -102,77 +116,87 @@ export function PayBackModal({
     address,
   })
 
-  const preparePayBackTransaction = async () => {
+  const handleRepayment = async () => {
     if (!form.token || !form.amount || !account) {
       throw new Error("Missing required parameters")
     }
 
-    const isOracleValid = await oracleService.validatePriceData(form.token)
-    if (!isOracleValid) {
-      throw new Error("Unable to get current market prices. Please try again in a moment.")
-    }
+    try {
+      // Auto-wrap CELO if needed before repay
+      const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438"
+      const erc20Balance = Number.parseFloat(repayTokenBalance?.displayValue || "0")
+      const nativeBalance = Number.parseFloat(nativeBalanceData?.displayValue || "0")
+      const inputAmount = Number.parseFloat(form.amount)
 
-    // Auto-wrap CELO if needed before repay
-    const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438"
-    const erc20Balance = Number.parseFloat(repayTokenBalance?.displayValue || "0")
-    const nativeBalance = Number.parseFloat(nativeBalanceData?.displayValue || "0")
-    const inputAmount = Number.parseFloat(form.amount)
+      if (form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= inputAmount - erc20Balance) {
+        const amountToWrap = inputAmount - erc20Balance
+        const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 })
+        const wrapTx = prepareContractCall({
+          contract: celoContract,
+          method: "function deposit()",
+          params: [],
+          value: parseUnits(amountToWrap.toString(), 18),
+        })
+        
+        const wrapResult = await sendTransaction({ transaction: wrapTx, account })
+        if (wrapResult?.transactionHash) {
+          await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash })
+        }
+      }
 
-    if (form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= inputAmount - erc20Balance) {
-      const amountToWrap = inputAmount - erc20Balance
-      const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 })
-      const wrapTx = prepareContractCall({
-        contract: celoContract,
-        method: "function deposit()",
-        params: [],
-        value: parseUnits(amountToWrap.toString(), 18),
+      // Prepare and execute the repayment transaction
+      const decimals = tokenInfos[form.token]?.decimals || 18
+      const amountWei = parseUnits(form.amount, decimals)
+
+      // First approve the MiniLend contract to spend tokens
+      const erc20Contract = getContract({
+        client,
+        chain: celo,
+        address: form.token,
       })
-      return wrapTx
+
+      const approveTx = prepareContractCall({
+        contract: erc20Contract,
+        method: "function approve(address spender, uint256 amount)",
+        params: [MINILEND_ADDRESS, amountWei],
+      })
+
+      const approveResult = await sendTransaction({ account, transaction: approveTx })
+      if (approveResult?.transactionHash) {
+        await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash })
+      }
+
+      // Now execute the repay transaction
+      const repayTx = prepareContractCall({
+        contract,
+        method: "function repay(address token, uint256 amount)",
+        params: [form.token, amountWei],
+      })
+
+      const result = await sendTransaction({ account, transaction: repayTx })
+      
+      if (result?.transactionHash) {
+        await waitForReceipt({ client, chain: celo, transactionHash: result.transactionHash })
+        handleTransactionSuccess(result)
+      }
+    } catch (error) {
+      handleTransactionError(error)
+      throw error
     }
-
-    // Prepare the actual payback transaction
-    const decimals = tokenInfos[form.token]?.decimals || 18
-    const amountWei = parseUnits(form.amount, decimals)
-
-    const paybackTx = prepareContractCall({
-      contract,
-      method: "function repay(address,uint256)",
-      params: [form.token, amountWei],
-      erc20Value: {
-        tokenAddress: form.token,
-        amountWei,
-      },
-    })
-
-    return paybackTx
   }
 
   const handleTransactionSuccess = (receipt: any) => {
-    toast({
-      title: "Payment Successful",
-      description: "Your loan payment has been processed successfully.",
-    })
-    setForm({ token: "", amount: "" })
-    setSelectedLoan(null)
-    setCurrentStep(1)
-    onClose()
+    // Calculate remaining balance
+    if (selectedLoan) {
+      const remaining = Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) - Number(form.amount)
+      setRemainingBalance(remaining.toFixed(4))
+    }
+    setPaymentSuccess(true)
+    setCurrentStep(4)
   }
 
   const handleTransactionError = (error: any) => {
     console.error("Payment error:", error)
-    if (error.message?.includes("ERC20: insufficient allowance") || error.message?.includes("Approve contract first")) {
-      toast({
-        title: "Approval Required",
-        description: "Please approve the contract to spend your tokens first. This should happen automatically.",
-        variant: "destructive",
-      })
-    } else {
-      toast({
-        title: "Payment Failed",
-        description: error.message || "Failed to process payment. Please try again.",
-        variant: "destructive",
-      })
-    }
   }
 
   const nextStep = () => {
@@ -207,10 +231,6 @@ export function PayBackModal({
   }
 
   const handleOnrampSuccess = (transactionCode: string, amount: number) => {
-    toast({
-      title: "Deposit Initiated",
-      description: `${selectedLoan?.symbol} deposit processing`,
-    })
     setShowOnrampModal(false)
     setCurrentStep(2)
   }
@@ -393,7 +413,7 @@ export function PayBackModal({
                 </div>
               )}
 
-              {currentStep === 3 && (
+              {currentStep === 3 && !paymentSuccess && (
                 <div className="space-y-6">
                   <div className="text-center">
                     <h3 className="text-white text-lg font-medium mb-2">Confirm payment</h3>
@@ -435,16 +455,39 @@ export function PayBackModal({
                     </div>
                   </div>
 
-                  <TransactionButton
-                    transaction={preparePayBackTransaction}
-                    onTransactionConfirmed={handleTransactionSuccess}
-                    onError={handleTransactionError}
+                  <button
+                    onClick={handleRepayment}
                     disabled={!account || !form.token || !form.amount || Number(form.amount) <= 0}
                     className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    unstyled
                   >
                     Pay Back Loan
-                  </TransactionButton>
+                  </button>
+                </div>
+              )}
+
+              {currentStep === 4 && paymentSuccess && (
+                <div className="space-y-6 text-center">
+                  <div className="bg-[#21301c] rounded-xl p-6 space-y-4">
+                    <div className="w-16 h-16 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto">
+                      <svg className="w-8 h-8 text-[#162013]" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <h3 className="text-white text-xl font-bold">Payment Successful!</h3>
+                    <p className="text-[#a2c398] text-sm">
+                      Thanks for repaying {form.amount} {tokenInfos[form.token]?.symbol}.
+                      {remainingBalance && Number(remainingBalance) > 0 
+                        ? ` Your outstanding balance is ${remainingBalance} ${tokenInfos[form.token]?.symbol}.`
+                        : " Your loan is now fully paid off!"}
+                    </p>
+                  </div>
+                  <p className="text-[#a2c398] text-xs">This modal will close automatically in 5 seconds</p>
+                  <button
+                    onClick={onClose}
+                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
+                  >
+                    Close
+                  </button>
                 </div>
               )}
             </div>
