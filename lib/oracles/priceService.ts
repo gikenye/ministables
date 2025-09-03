@@ -13,6 +13,7 @@ const STABLE_SYMBOL_TO_FIAT: Record<string, string> = {
   cREAL: "BRL",
   eXOF: "XOF",
   cKES: "KES",
+  cNGN: "NGN",
   cAUD: "AUD",
   cCOP: "COP",
   cGHS: "GHS",
@@ -67,10 +68,17 @@ const CACHE_TTL = 300000; // 5 minutes in milliseconds
 async function getOrCreateMento(): Promise<any> {
   if (!mentoInstance) {
     if (!providerInstance) {
-      // Use Alfajores testnet by default, can be switched to mainnet in production
       providerInstance = new providers.JsonRpcProvider("https://forno.celo.org");
     }
     mentoInstance = await Mento.create(providerInstance);
+    
+    // Log all available trading pairs
+    try {
+      const pairs = await mentoInstance.getTradingPairs();
+      console.log("Available Mento trading pairs:", pairs.map((p: any) => `${p.token0}-${p.token1}`));
+    } catch (e) {
+      console.log("Could not fetch trading pairs:", e);
+    }
   }
   return mentoInstance;
 }
@@ -210,7 +218,7 @@ export async function calculateRequiredCollateral(
   collateralRatio: number = 1.5
 ): Promise<{amount: string, rate: number} | null> {
   try {
-    // Step 1: Get both token info
+    // Get token info
     const borrowTokenInfo = tokenCache.get(borrowToken) || {
       symbol: await getTokenSymbol(providerInstance!, borrowToken),
       decimals: await getTokenDecimals(providerInstance!, borrowToken)
@@ -229,29 +237,64 @@ export async function calculateRequiredCollateral(
       tokenCache.set(collateralToken, collateralTokenInfo);
     }
 
-    // Step 2: Find a common base token (use cUSD as intermediary if direct pair not found)
-    let exchangeRate: number;
-    let directRate = await getExchangeRate(collateralToken, borrowToken);
+    // Dollar-backed stables (USDC, USDT) have 1:1 rate with USD-pegged tokens
+    const dollarBackedTokens = [
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
+      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+    ];
     
-    if (directRate) {
-      // Using collateral->borrow direction gets us the proper exchange rate
-      // This represents how much collateral is worth in terms of borrow token
-      exchangeRate = directRate.price;
-    } else {
-      // Try using cUSD as intermediary
-      const cUsdAddress = "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1"; // cUSD token address
-      const collateralToCUsd = await getExchangeRate(collateralToken, cUsdAddress);
-      const cUsdToBorrow = await getExchangeRate(cUsdAddress, borrowToken);
+    const cUsdAddress = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // Correct cUSD mainnet address
+    
+    let exchangeRate: number;
+    
+    // Special handling for dollar-backed stables as collateral
+    if (dollarBackedTokens.includes(collateralToken)) {
+      console.log(`Using dollar-backed collateral: ${collateralTokenInfo.symbol}`);
       
-      if (collateralToCUsd && cUsdToBorrow) {
-        exchangeRate = collateralToCUsd.price * cUsdToBorrow.price;
+      if (borrowToken === cUsdAddress) {
+        exchangeRate = 1; // 1:1 for USDC/USDT to cUSD
+        console.log(`Direct 1:1 rate for ${collateralTokenInfo.symbol} to cUSD`);
+      } else if (borrowTokenInfo.symbol === "cNGN") {
+        // cNGN is not in Mento trading pairs, use approximate rate: 1 USD ≈ 1600 NGN
+        exchangeRate = 1580;
+        console.log(`Using hardcoded rate for cNGN: 1 ${collateralTokenInfo.symbol} = ${exchangeRate} cNGN`);
+      } else if (isMentoStable(borrowTokenInfo.symbol)) {
+        // Try cUSD to borrow token first
+        let cUsdToBorrow = await getExchangeRate(cUsdAddress, borrowToken);
+        
+        if (cUsdToBorrow) {
+          exchangeRate = cUsdToBorrow.price;
+          console.log(`Rate via cUSD: 1 ${collateralTokenInfo.symbol} = ${exchangeRate} ${borrowTokenInfo.symbol}`);
+        } else {
+          console.log(`No route found for ${borrowTokenInfo.symbol}`);
+          return null;
+        }
       } else {
-        // If no route available, return null
+        console.log(`Non-Mento borrow token: ${borrowTokenInfo.symbol}`);
         return null;
+      }
+    } else {
+      console.log(`Trying direct rate: ${collateralTokenInfo.symbol} to ${borrowTokenInfo.symbol}`);
+      const directRate = await getExchangeRate(collateralToken, borrowToken);
+      
+      if (directRate) {
+        exchangeRate = directRate.price;
+        console.log(`Direct rate found: 1 ${collateralTokenInfo.symbol} = ${exchangeRate} ${borrowTokenInfo.symbol}`);
+      } else {
+        console.log(`No direct rate, trying via cUSD`);
+        const collateralToCUsd = await getExchangeRate(collateralToken, cUsdAddress);
+        const cUsdToBorrow = await getExchangeRate(cUsdAddress, borrowToken);
+        
+        if (collateralToCUsd && cUsdToBorrow) {
+          exchangeRate = collateralToCUsd.price * cUsdToBorrow.price;
+          console.log(`Rate via cUSD: ${collateralToCUsd.price} * ${cUsdToBorrow.price} = ${exchangeRate}`);
+        } else {
+          console.log(`No route found via cUSD`);
+          return null;
+        }
       }
     }
     
-    // Step 3: Calculate required collateral with the collateral ratio
     const borrowAmountNum = parseFloat(borrowAmount);
     const requiredCollateral = borrowAmountNum * collateralRatio / exchangeRate;
     

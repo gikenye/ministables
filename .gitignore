@@ -26,3 +26,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 MINILEND_WHITEPAPER.txt
+THIRDWEB_INTEGRATION_SUMMARY.md
+THIRDWEB_MIGRATION.md
+minilend-thirdweb.txt
+thirdweb-api.json
+thirdweb-api.yaml
+ROADMAP.md

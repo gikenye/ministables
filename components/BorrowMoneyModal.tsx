@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, AlertCircle, CreditCard, CheckCircle2, RefreshCw } from "lucide-react"
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { parseUnits } from "viem"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
+import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
 import { 
@@ -38,6 +39,7 @@ interface BorrowMoneyModalProps {
   userCollaterals: Record<string, string>
   tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading: boolean
+  requiresAuth?: boolean
 }
 
 enum BorrowStep {
@@ -56,6 +58,7 @@ export function BorrowMoneyModal({
   userCollaterals,
   tokenInfos,
   loading,
+  requiresAuth = false,
 }: BorrowMoneyModalProps) {
   const { toast } = useToast()
   const account = useActiveAccount()
@@ -77,9 +80,12 @@ export function BorrowMoneyModal({
     [],
   )
 
-  // Only cKES available for borrowing for now
+  // cKES and cNGN available for borrowing
   const SUPPORTED_STABLECOINS = useMemo(() => {
-    return ["0x456a3D042C0DbD3db53D5489e98dFb038553B0d0"] // cKES only
+    return [
+      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+      "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+    ]
   }, [])
 
   const [currentStep, setCurrentStep] = useState<BorrowStep>(BorrowStep.SELECT_TOKEN)
@@ -236,7 +242,7 @@ export function BorrowMoneyModal({
             setExchangeRate(result.rate)
           }
       } catch (error) {
-        console.error("Failed to refresh rates:", error)
+        console.error("Failed to refresh rates:", error instanceof Error ? error.message.replace(/[\r\n]/g, ' ') : 'Unknown error')
         setTransactionStatus("Could not update market rates. Using previous values.")
       } finally {
         setFetchingRate(false)
@@ -245,7 +251,14 @@ export function BorrowMoneyModal({
   }
 
   const handleBorrowWithCollateral = async () => {
-    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral || !account) return
+    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return
+    
+    if (requiresAuth) {
+      alert('Please sign in to complete this transaction')
+      return
+    }
+    
+    if (!account) return
 
     if (isBorrowingPaused) {
       setTransactionStatus(`Borrowing ${tokenInfos[form.token]?.symbol} is currently paused. Please try again later or select another token.`)
@@ -336,6 +349,11 @@ export function BorrowMoneyModal({
         const depositResult = await sendTransaction({ transaction: depositTx, account })
         if (depositResult?.transactionHash) {
           await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash })
+          
+          // Report collateral deposit transaction to Divvi
+          reportTransactionToDivvi(depositResult.transactionHash, celo.id)
+            .then(() => console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash))
+            .catch(error => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
         }
         
         setTransactionStatus("Security added ✓")
@@ -346,6 +364,7 @@ export function BorrowMoneyModal({
       setTransactionStatus("Getting your cash...")
       const borrowAmount = parseUnits(form.amount, tokenInfos[form.token]?.decimals || 18)
       
+
       const borrowTx = prepareContractCall({
         contract,
         method: "function borrow(address token, uint256 amount, address collateralToken)",
@@ -356,6 +375,11 @@ export function BorrowMoneyModal({
       if (borrowResult?.transactionHash) {
         setTransactionStatus("Processing transaction...")
         await waitForReceipt({ client, chain: celo, transactionHash: borrowResult.transactionHash })
+        
+        // Report borrow transaction to Divvi
+        reportTransactionToDivvi(borrowResult.transactionHash, celo.id)
+          .then(() => console.log("[BorrowMoneyModal] Reported borrow transaction to Divvi:", borrowResult.transactionHash))
+          .catch(error => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
       }
 
       setTransactionStatus("Cash sent to your wallet ✓")
@@ -675,6 +699,10 @@ export function BorrowMoneyModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[90vw] max-w-md mx-auto bg-[#162013] border-[#426039] shadow-2xl">
         <DialogHeader className="pb-6">
+          <DialogTitle className="sr-only">Borrow Money</DialogTitle>
+          <DialogDescription className="sr-only">
+            Borrow stablecoins using your assets as collateral through a multi-step process.
+          </DialogDescription>
           <div className="flex items-center gap-3">
             {currentStep > BorrowStep.SELECT_TOKEN && (
               <Button

@@ -7,6 +7,7 @@ import { formatAmount } from "@/lib/utils"
 import { useActiveAccount, TransactionButton, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
+import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 
 import { oracleService } from "@/lib/services/oracleService"
 import { getContract, prepareContractCall, sendTransaction, waitForReceipt } from "thirdweb"
@@ -31,6 +32,7 @@ interface PayBackModalProps {
   tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading: boolean
   userBalances?: Record<string, string>
+  requiresAuth?: boolean
 }
 
 export function PayBackModal({
@@ -40,6 +42,7 @@ export function PayBackModal({
   tokenInfos,
   loading,
   userBalances = {},
+  requiresAuth = false,
 }: PayBackModalProps) {
   const account = useActiveAccount()
   const address = account?.address
@@ -117,7 +120,16 @@ export function PayBackModal({
   })
 
   const handleRepayment = async () => {
-    if (!form.token || !form.amount || !account) {
+    if (!form.token || !form.amount) {
+      throw new Error("Missing required parameters")
+    }
+    
+    if (requiresAuth) {
+      alert('Please sign in to complete this transaction')
+      return
+    }
+    
+    if (!account) {
       throw new Error("Missing required parameters")
     }
 
@@ -172,6 +184,9 @@ export function PayBackModal({
         method: "function repay(address token, uint256 amount)",
         params: [form.token, amountWei],
       })
+      
+      // We'll report to Divvi after transaction is complete
+      // The tag will be added by Divvi's backend when processing the transaction
 
       const result = await sendTransaction({ account, transaction: repayTx })
       
@@ -185,7 +200,7 @@ export function PayBackModal({
     }
   }
 
-  const handleTransactionSuccess = (receipt: any) => {
+  const handleTransactionSuccess = async (receipt: any) => {
     // Calculate remaining balance
     if (selectedLoan) {
       const remaining = Number(formatAmount(selectedLoan.totalOwed, selectedLoan.decimals)) - Number(form.amount)
@@ -193,6 +208,12 @@ export function PayBackModal({
     }
     setPaymentSuccess(true)
     setCurrentStep(4)
+    
+    // Report transaction to Divvi for referral tracking
+    if (receipt.transactionHash) {
+      await reportTransactionToDivvi(receipt.transactionHash, celo.id)
+      console.log("[PayBackModal] Reported transaction to Divvi:", receipt.transactionHash)
+    }
   }
 
   const handleTransactionError = (error: any) => {

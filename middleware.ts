@@ -2,30 +2,35 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// List of routes that require verification
-const PROTECTED_ROUTES = [
-  "/withdraw",
-  "/borrow",
-  "/save",
-  "/payback",
+// Routes that require wallet connection (but not necessarily verification)
+const WALLET_REQUIRED_ROUTES = [
+  "/dashboard",
+];
+
+// Routes that require full verification for transactions
+const VERIFICATION_REQUIRED_ROUTES = [
+  "/api/transactions",
+  "/api/borrow",
+  "/api/deposit",
+  "/api/withdraw",
+  "/api/repay",
 ];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Check if the route requires verification
-  const isProtectedRoute = PROTECTED_ROUTES.some(route => 
-    pathname.startsWith(route) || pathname === route
+  // Check if route requires verification for transactions
+  const requiresVerification = VERIFICATION_REQUIRED_ROUTES.some(route => 
+    pathname.startsWith(route)
   );
   
-  if (isProtectedRoute) {
-    // Get the session token
+  if (requiresVerification) {
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
     });
     
-    // If no token or not verified, redirect to verification page
+    // For transaction routes, require verification
     if (!token || !token.verified) {
       const url = new URL("/self", request.url);
       return NextResponse.redirect(url);

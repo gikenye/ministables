@@ -29,8 +29,21 @@ export const authOptions: NextAuthOptions = {
             identityData: credentials.verificationData ? JSON.parse(credentials.verificationData) : null,
           };
 
-          // Store the user data in MongoDB
-          const user = await UserService.upsertUser(credentials.address, userData);
+          // Store the user data in MongoDB (optional, graceful failure)
+          let user;
+          try {
+            user = await UserService.upsertUser(credentials.address, userData);
+          } catch (dbError) {
+            console.warn("Database error, proceeding with session-only auth:", dbError);
+            // Fallback to session-only authentication
+            user = {
+              address: credentials.address,
+              verified: !!credentials.verificationData,
+              identityData: credentials.verificationData ? JSON.parse(credentials.verificationData) : null,
+              username: undefined
+            };
+          }
+          
           return {
             id: user.address,
             address: user.address,
@@ -66,7 +79,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/self",
+    signIn: "/", // Redirect to home instead of forcing verification
     error: "/auth/error",
   },
   session: {

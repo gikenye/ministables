@@ -197,60 +197,59 @@ export default function DashboardPage() {
   }, [depositValue, borrowValue, totalInterestUsd, nearestUnlockTime]);
 
   useEffect(() => {
-    if (isConnected && address && !session?.user?.address) {
+    // Only auto-sign in if wallet is connected and user hasn't explicitly signed out
+    if (isConnected && address && !session?.user?.address && sessionStatus !== "loading") {
       signIn("self-protocol", {
         address,
         verificationData: "",
         redirect: false,
       });
     }
-  }, [isConnected, address, session]);
+  }, [isConnected, address, session, sessionStatus]);
 
-  // Check localStorage for verification skip state
+  // Remove verification skip state tracking
   useEffect(() => {
-    const skipped = localStorage.getItem("verification-skipped") === "true";
-    setVerificationSkipped(skipped);
+    setVerificationSkipped(true); // Always consider verification as skipped for better UX
   }, []);
 
-  // Remove forced verification - make it optional
+  // Make verification completely optional
   useEffect(() => {
     if (sessionStatus === "loading") return;
-    // Don't show verification if user has skipped it or is already verified
-    setNeedsVerification(
-      isConnected && !session?.user?.verified && !verificationSkipped
-    );
+    // Disable verification prompts for better UX
+    setNeedsVerification(false);
   }, [isConnected, session, sessionStatus, verificationSkipped]);
 
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-[#162013] flex items-center justify-center px-4">
-        <Card className="w-full max-w-md bg-[#21301c] border-[#426039]">
-          <CardContent className="p-6 text-center">
-            <Wallet className="w-12 h-12 mx-auto mb-4 text-[#54d22d]" />
-            <h2 className="text-lg font-semibold text-white mb-4">
-              Connect Your Wallet
-            </h2>
-            <p className="text-[#a2c398] mb-6">
-              Connect your wallet to view your financial dashboard
-            </p>
-            <div className="flex flex-col space-y-3">
-              <div className="w-full">
-                <ConnectWallet 
-                  size="lg"
-                  className="w-full" 
-                />
-              </div>
-              <Link href="/" className="w-full">
-                <Button className="bg-transparent border border-[#426039] hover:bg-[#2e4328] text-[#a2c398] font-medium w-full">
-                  Go to Home
-                </Button>
-              </Link>
+  // Show connect wallet prompt if not connected
+  const renderConnectWallet = () => (
+    <div className="min-h-screen bg-[#162013] flex items-center justify-center px-4">
+      <Card className="w-full max-w-md bg-[#21301c] border-[#426039]">
+        <CardContent className="p-6 text-center">
+          <Wallet className="w-12 h-12 mx-auto mb-4 text-[#54d22d]" />
+          <h2 className="text-lg font-semibold text-white mb-4">
+            Connect Your Wallet
+          </h2>
+          <p className="text-[#a2c398] mb-6">
+            Connect your wallet to view your financial dashboard
+          </p>
+          <div className="flex flex-col space-y-3">
+            <div className="w-full">
+              <ConnectWallet 
+                size="lg"
+                className="w-full" 
+              />
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+            <Link href="/" className="w-full">
+              <Button className="bg-transparent border border-[#426039] hover:bg-[#2e4328] text-[#a2c398] font-medium w-full">
+                Go to Home
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // Allow dashboard exploration without connection
 
   return (
     <div className="min-h-screen bg-[#162013]">
@@ -280,13 +279,14 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-4 py-6 max-w-lg mx-auto pb-24 space-y-6">
-        {needsVerification && isConnected && (
-          <div className="bg-[#2e4328] border border-[#426039] text-[#a2c398] rounded-xl p-4">
+        {/* Optional verification banner - only show if user wants to verify */}
+        {isConnected && !session?.user?.verified && (
+          <div className="bg-[#2e4328]/50 border border-[#426039] text-[#a2c398] rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Shield className="w-5 h-5 mr-3 text-[#54d22d]" />
                 <p className="text-sm">
-                  Verify your identity for a more personalized experience
+                  Optional: Verify your identity for enhanced features
                 </p>
               </div>
               <div className="flex gap-2 ml-4">
@@ -297,18 +297,6 @@ export default function DashboardPage() {
                 >
                   Verify
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    localStorage.setItem("verification-skipped", "true");
-                    setVerificationSkipped(true);
-                    setNeedsVerification(false);
-                  }}
-                  className="text-[#a2c398] hover:text-white hover:bg-[#2e4328] text-xs px-4 py-2"
-                >
-                  Skip
-                </Button>
               </div>
             </div>
           </div>
@@ -317,7 +305,7 @@ export default function DashboardPage() {
         <Card className="bg-[#21301c] border-[#426039]">
           <CardContent className="p-6">
             <h2 className="text-xl font-bold text-center text-white mb-6">
-              Your Money Overview
+              Your Account Overview
             </h2>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="text-center p-4 bg-[#2e4328] rounded-xl">
@@ -326,7 +314,7 @@ export default function DashboardPage() {
                   Money Saved
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardLoading ? "..." : `$${totals.saved}`}
+                  {!isConnected ? "--" : dashboardLoading ? "..." : `$${totals.saved}`}
                 </p>
                 {totals.nextUnlock && (
                   <p className="text-xs text-[#a2c398] mt-2">
@@ -340,7 +328,7 @@ export default function DashboardPage() {
                   Money Borrowed
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardLoading ? "..." : `$${totals.borrowed}`}
+                  {!isConnected ? "--" : dashboardLoading ? "..." : `$${totals.borrowed}`}
                 </p>
                 {parseFloat(totals.interest) > 0 && (
                   <p className="text-xs text-[#a2c398] mt-2">
@@ -352,7 +340,13 @@ export default function DashboardPage() {
             <div className="flex space-x-3">
               <Button
                 className="flex-1 h-12 text-sm font-medium bg-[#54d22d] hover:bg-[#426039] text-[#162013]"
-                onClick={() => setWithdrawOpen(true)}
+                onClick={() => {
+                  if (!isConnected) {
+                    alert('Please sign in to use this feature');
+                    return;
+                  }
+                  setWithdrawOpen(true);
+                }}
               >
                 Cash Out
               </Button>
@@ -375,10 +369,10 @@ export default function DashboardPage() {
 
         <Card className="bg-[#21301c] border-[#426039]">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="flex items-center justify-center text-lg text-white">
+            {/* <CardTitle className="flex items-center justify-center text-lg text-white">
               <Wallet className="w-5 h-5 mr-2 text-[#54d22d]" />
               Your Wallet Details
-            </CardTitle>
+            </CardTitle> */}
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="grid grid-cols-3 gap-4">

@@ -22,6 +22,7 @@ interface FundsWithdrawalModalProps {
   loading: boolean
   userAddress?: string
   getWithdrawableAmount?: (token: string) => Promise<string>
+  requiresAuth?: boolean
 }
 
 export function FundsWithdrawalModal({
@@ -34,6 +35,7 @@ export function FundsWithdrawalModal({
   loading,
   userAddress,
   getWithdrawableAmount: getActualWithdrawableAmount,
+  requiresAuth = false,
 }: FundsWithdrawalModalProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [form, setForm] = useState({
@@ -57,6 +59,11 @@ export function FundsWithdrawalModal({
 
   const handleWithdraw = async () => {
     if (!form.token || !form.amount) return
+    
+    if (requiresAuth) {
+      alert('Please sign in to complete this transaction')
+      return
+    }
 
     const withdrawableAmount = getWithdrawableAmount(form.token)
     const maxWithdrawable = Number.parseFloat(formatAmount(withdrawableAmount, tokenInfos[form.token]?.decimals || 18))

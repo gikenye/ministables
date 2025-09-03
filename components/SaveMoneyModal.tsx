@@ -6,6 +6,7 @@ import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react"
 import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
+import { appendDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 
 // Define the minilend contract ABI for deposit function
 export const minilendABI = [
@@ -33,19 +34,17 @@ import { parseUnits } from "viem"
 interface SaveMoneyModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (token: string, amount: string, lockPeriod: number) => Promise<void>
-  userBalances?: Record<string, string>
   tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading?: boolean
+  requiresAuth?: boolean
 }
 
 export function SaveMoneyModal({
   isOpen,
   onClose,
-  onSave,
-  userBalances,
   tokenInfos,
-  loading = false,
+  loading: _loading = false,
+  requiresAuth = false,
 }: SaveMoneyModalProps) {
   const account = useActiveAccount()
 
@@ -93,25 +92,31 @@ export function SaveMoneyModal({
       throw new Error("Missing required parameters")
     }
 
-    console.log("[SaveMoneyModal] Starting save with params:", {
-      tokenAddress: form.token,
-      tokenSymbol: tokenInfos[form.token]?.symbol,
-      amount: form.amount,
-      lockPeriod: form.lockPeriod,
-      MINILEND_ADDRESS
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[SaveMoneyModal] Starting save with params:", {
+        tokenAddress: form.token?.substring(0, 10) + '...',
+        tokenSymbol: tokenInfos[form.token]?.symbol,
+        amount: 'REDACTED',
+        lockPeriod: form.lockPeriod,
+        MINILEND_ADDRESS: MINILEND_ADDRESS?.substring(0, 10) + '...'
+      })
+    }
 
     const decimals = tokenInfos[form.token]?.decimals || 18
     const amountWei = parseUnits(form.amount, decimals)
 
-    console.log("[SaveMoneyModal] Calculated wei amount:", {
-      inputAmount: form.amount,
-      decimals,
-      amountWei: amountWei.toString()
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[SaveMoneyModal] Calculated wei amount:", {
+        inputAmount: 'REDACTED',
+        decimals,
+        amountWei: 'REDACTED'
+      })
+    }
 
     // Create Minilend contract instance
-    console.log("[SaveMoneyModal] Creating Minilend contract instance with address:", MINILEND_ADDRESS)
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[SaveMoneyModal] Creating Minilend contract instance")
+    }
     const minilendContract = getContract({
       client,
       chain: celo,
@@ -119,14 +124,19 @@ export function SaveMoneyModal({
       abi: minilendABI,
     })
 
-    // Prepare deposit transaction
-    console.log("[SaveMoneyModal] Preparing deposit transaction with params:", {
-      token: form.token,
-      amount: amountWei.toString(),
-      lockPeriod: form.lockPeriod
-    })
 
-    const depositTx = prepareContractCall({
+
+    // Prepare deposit transaction
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[SaveMoneyModal] Preparing deposit transaction with params:", {
+        token: form.token?.substring(0, 10) + '...',
+        amount: 'REDACTED',
+        lockPeriod: form.lockPeriod
+      })
+    }
+
+    // Create the deposit transaction
+    let depositTx = prepareContractCall({
       contract: minilendContract,
       method: "deposit",
       params: [
@@ -139,12 +149,24 @@ export function SaveMoneyModal({
         amountWei,
       },
     })
+    
+    // Append Divvi referral tag to the transaction using our helper function
+    if (account) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[SaveMoneyModal] Adding Divvi referral tag to transaction for address:", account.address?.substring(0, 10) + '...')
+      }
+      depositTx = appendDivviReferralTag(depositTx, account.address) as any;
+    }
+    
+    // We'll also report to Divvi after transaction is complete
 
     return depositTx
   }
 
   const handleTransactionError = (error: Error) => {
-    console.error("[SaveMoneyModal] Transaction error:", error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error("[SaveMoneyModal] Transaction error:", error?.message || 'Unknown error')
+    }
 
     let userMessage = "Transaction failed. Please try again."
 
@@ -168,8 +190,10 @@ export function SaveMoneyModal({
     setError(userMessage)
   }
 
-  const handleTransactionSuccess = (receipt: any, isApproval: boolean = false) => {
-    console.log("[SaveMoneyModal] Transaction successful:", receipt)
+  const handleTransactionSuccess = async (receipt: any, isApproval: boolean = false) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[SaveMoneyModal] Transaction successful:", receipt?.transactionHash || 'unknown')
+    }
 
     if (!isApproval) {
       // Set the success state with current form data and transaction hash
@@ -181,17 +205,38 @@ export function SaveMoneyModal({
       })
       // Move to success step
       setCurrentStep(5)
+      
+      // Report transaction to Divvi for referral tracking
+      if (receipt.transactionHash) {
+        reportTransactionToDivvi(receipt.transactionHash, celo.id)
+          .then(() => {
+            if (process.env.NODE_ENV === 'development') {
+              console.log("[SaveMoneyModal] Reported transaction to Divvi:", receipt.transactionHash)
+            }
+          })
+          .catch(error => {
+            if (process.env.NODE_ENV === 'development') {
+              console.error("[SaveMoneyModal] Error reporting to Divvi:", error?.message || 'Unknown error')
+            }
+          })
+      }
     }
   }
 
-  const handleTransactionSent = (result: any, isApproval: boolean = false) => {
-    console.log("[SaveMoneyModal] Transaction sent:", result)
+  const handleTransactionSent = (result: any, _isApproval: boolean = false) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[SaveMoneyModal] Transaction sent:", result?.transactionHash || 'unknown')
+    }
   }
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return
+    if (requiresAuth) {
+      setError('Please sign in to complete this transaction')
+      return
+    }
     if (!account) {
-      setError("Please connect your wallet first")
+      setError("Please sign in first")
       return
     }
 
@@ -210,21 +255,31 @@ export function SaveMoneyModal({
       const depositTx = await prepareDepositTransaction()
       
       // Check if approval is needed and handle it
-      console.log("[SaveMoneyModal] Checking if approval is needed for deposit transaction")
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[SaveMoneyModal] Checking if approval is needed for deposit transaction")
+      }
       const approveTx = await getApprovalForTransaction({
-        transaction: depositTx as PreparedTransaction,
-        account,
+        transaction: depositTx as any,
+        account: account!,
       })
       
+      // No need to add referral tag to approval transaction, as it's not a direct interaction with our contract
+      
       if (approveTx) {
-        console.log("[SaveMoneyModal] Approval required, sending approval transaction")
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[SaveMoneyModal] Approval required, sending approval transaction")
+        }
         const approveResult = await sendTransaction(approveTx)
-        console.log("[SaveMoneyModal] Approval transaction submitted:", approveResult?.transactionHash)
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[SaveMoneyModal] Approval transaction submitted:", approveResult?.transactionHash?.substring(0, 10) + '...')
+        }
         
         handleTransactionSent(approveResult, true)
         
         if (approveResult?.transactionHash) {
-          console.log("[SaveMoneyModal] Waiting for approval confirmation...")
+          if (process.env.NODE_ENV === 'development') {
+            console.log("[SaveMoneyModal] Waiting for approval confirmation...")
+          }
           const approvalReceipt = await waitForReceipt({
             client,
             chain: celo,
@@ -237,8 +292,9 @@ export function SaveMoneyModal({
       }
       
       // Execute deposit transaction
-      console.log("[SaveMoneyModal] Sending deposit transaction")
-      const depositResult = await sendTransaction(depositTx)
+      console.log("[SaveMoneyModal] Sending deposit transaction");
+      // Send the transaction normally, without trying to modify the data
+      const depositResult = await sendTransaction(depositTx as any);
       console.log("[SaveMoneyModal] Deposit result:", depositResult)
       
       handleTransactionSent(depositResult, false)
@@ -353,7 +409,7 @@ export function SaveMoneyModal({
     }
   }
 
-  const handleOnrampSuccess = (transactionCode: string, amount: number) => {
+  const handleOnrampSuccess = () => {
     setShowOnrampModal(false)
     // Optionally set the token and continue to amount step
     setForm((prev) => ({ ...prev, token: selectedTokenForOnramp }))
@@ -398,7 +454,7 @@ export function SaveMoneyModal({
             )}
             <div className="flex-1 text-center">
               <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">
-                {currentStep === 1 && "Select Asset"}
+                {currentStep === 1 && ""}
                 {currentStep === 2 && "Enter Amount"}
                 {currentStep === 3 && "Lock Period"}
                 {currentStep === 4 && "Review"}
@@ -435,9 +491,9 @@ export function SaveMoneyModal({
             </div>
           )}
 
-          {!account && (
+          {requiresAuth && (
             <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm mb-4">
-              Connect wallet to continue
+              Sign in required to complete transactions
             </div>
           )}
 
@@ -445,7 +501,7 @@ export function SaveMoneyModal({
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">Choose your token</h3>
+                  <h3 className="text-white text-lg font-medium mb-2">Choose asset to deposit</h3>
                   <p className="text-[#a2c398] text-sm">Select which token you'd like to deposit</p>
                 </div>
 
@@ -715,7 +771,7 @@ export function SaveMoneyModal({
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!account || !form.token || !form.amount || !form.lockPeriod || isSaving || isTransactionPending}
+                  disabled={requiresAuth || !account || !form.token || !form.amount || !form.lockPeriod || isSaving || isTransactionPending}
                   className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isSaving || isTransactionPending ? (
@@ -723,6 +779,8 @@ export function SaveMoneyModal({
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Processing...
                     </span>
+                  ) : requiresAuth ? (
+                    "Sign In Required"
                   ) : (
                     "proceed to deposit "
                   )}
