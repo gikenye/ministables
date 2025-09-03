@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, AlertCircle, CreditCard, CheckCircle2, RefreshCw } from "lucide-react"
@@ -80,9 +80,12 @@ export function BorrowMoneyModal({
     [],
   )
 
-  // Only cKES available for borrowing for now
+  // cKES and cNGN available for borrowing
   const SUPPORTED_STABLECOINS = useMemo(() => {
-    return ["0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71"] // cKES only
+    return [
+      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
+      "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+    ]
   }, [])
 
   const [currentStep, setCurrentStep] = useState<BorrowStep>(BorrowStep.SELECT_TOKEN)
@@ -127,16 +130,12 @@ export function BorrowMoneyModal({
             setRequiredCollateral(result.amount)
             setExchangeRate(result.rate)
           } else {
-            // Fallback to fixed ratio if oracle data is unavailable
-            const amountValue = Number(form.amount)
-            setRequiredCollateral((amountValue * 1.5).toFixed(4))
+            setRequiredCollateral(null)
             setExchangeRate(null)
           }
         } catch (error) {
           console.error("Error calculating collateral:", error)
-          // Fallback to fixed ratio
-          const amountValue = Number(form.amount)
-          setRequiredCollateral((amountValue * 1.5).toFixed(4))
+          setRequiredCollateral(null)
           setExchangeRate(null)
         } finally {
           setFetchingRate(false)
@@ -348,12 +347,9 @@ export function BorrowMoneyModal({
           await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash })
           
           // Report collateral deposit transaction to Divvi
-          try {
-            await reportTransactionToDivvi(depositResult.transactionHash, celo.id)
-            console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash)
-          } catch (error) {
-            console.error("[BorrowMoneyModal] Error reporting to Divvi:", error)
-          }
+          reportTransactionToDivvi(depositResult.transactionHash, celo.id)
+            .then(() => console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash))
+            .catch(error => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
         }
         
         setTransactionStatus("Security added ✓")
@@ -377,12 +373,9 @@ export function BorrowMoneyModal({
         await waitForReceipt({ client, chain: celo, transactionHash: borrowResult.transactionHash })
         
         // Report borrow transaction to Divvi
-        try {
-          await reportTransactionToDivvi(borrowResult.transactionHash, celo.id)
-          console.log("[BorrowMoneyModal] Reported borrow transaction to Divvi:", borrowResult.transactionHash)
-        } catch (error) {
-          console.error("[BorrowMoneyModal] Error reporting to Divvi:", error)
-        }
+        reportTransactionToDivvi(borrowResult.transactionHash, celo.id)
+          .then(() => console.log("[BorrowMoneyModal] Reported borrow transaction to Divvi:", borrowResult.transactionHash))
+          .catch(error => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
       }
 
       setTransactionStatus("Cash sent to your wallet ✓")
@@ -702,6 +695,10 @@ export function BorrowMoneyModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[90vw] max-w-md mx-auto bg-[#162013] border-[#426039] shadow-2xl">
         <DialogHeader className="pb-6">
+          <DialogTitle className="sr-only">Borrow Money</DialogTitle>
+          <DialogDescription className="sr-only">
+            Borrow stablecoins using your assets as collateral through a multi-step process.
+          </DialogDescription>
           <div className="flex items-center gap-3">
             {currentStep > BorrowStep.SELECT_TOKEN && (
               <Button
