@@ -221,8 +221,12 @@ export default function DashboardPage() {
 
   // Show connect wallet prompt if not connected
   const renderConnectWallet = () => (
-    <div className="min-h-screen bg-[#162013] flex items-center justify-center px-4">
-      <Card className="w-full max-w-md bg-[#21301c] border-[#426039]">
+    <div className="min-h-screen relative overflow-hidden flex items-center justify-center px-4">
+      {/* Safari Background */}
+      <div className="fixed inset-0 bg-[url('/african-safari-scene-2005.jpg')] bg-cover bg-center bg-no-repeat">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70"></div>
+      </div>
+      <Card className="w-full max-w-md bg-black/40 backdrop-blur-md border-white/20 relative z-10">
         <CardContent className="p-6 text-center">
           <Wallet className="w-12 h-12 mx-auto mb-4 text-[#54d22d]" />
           <h2 className="text-lg font-semibold text-white mb-4">
@@ -252,8 +256,12 @@ export default function DashboardPage() {
   // Allow dashboard exploration without connection
 
   return (
-    <div className="min-h-screen bg-[#162013]">
-      <header className="bg-[#21301c] border-b border-[#426039] px-4 py-3">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Safari Background */}
+      <div className="fixed inset-0 bg-[url('/african-safari-scene-2005.jpg')] bg-cover bg-center bg-no-repeat">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70"></div>
+      </div>
+      <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-4 py-3 relative z-40">
         <div className="flex items-center max-w-lg mx-auto">
           <Link href="/">
             <Button
@@ -278,10 +286,10 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="px-4 py-6 max-w-lg mx-auto pb-24 space-y-6">
+      <main className="px-4 py-6 max-w-lg mx-auto pb-24 space-y-6 relative z-10">
         {/* Optional verification banner - only show if user wants to verify */}
         {isConnected && !session?.user?.verified && (
-          <div className="bg-[#2e4328]/50 border border-[#426039] text-[#a2c398] rounded-xl p-4">
+          <div className="bg-yellow-600/30 backdrop-blur-sm border border-yellow-500/30 text-yellow-200 rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Shield className="w-5 h-5 mr-3 text-[#54d22d]" />
@@ -302,13 +310,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <Card className="bg-[#21301c] border-[#426039]">
+        <Card className="bg-black/40 backdrop-blur-md border-white/20">
           <CardContent className="p-6">
             <h2 className="text-xl font-bold text-center text-white mb-6">
               Your Account Overview
             </h2>
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <TrendingUp className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
                 <p className="text-sm font-medium mb-1 text-[#a2c398]">
                   Money Saved
@@ -322,7 +330,7 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <ArrowDownLeft className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
                 <p className="text-sm font-medium mb-1 text-[#a2c398]">
                   Money Borrowed
@@ -367,7 +375,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#21301c] border-[#426039]">
+        <Card className="bg-black/40 backdrop-blur-md border-white/20">
           <CardHeader className="p-4 pb-2">
             {/* <CardTitle className="flex items-center justify-center text-lg text-white">
               <Wallet className="w-5 h-5 mr-2 text-[#54d22d]" />
@@ -376,7 +384,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
                   <TrendingUp className="w-4 h-4 text-[#162013]" />
                 </div>
@@ -399,7 +407,7 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
                   <ArrowDownLeft className="w-4 h-4 text-[#162013]" />
                 </div>
@@ -420,7 +428,7 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="text-center p-4 bg-[#2e4328] rounded-xl">
+              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
                   <Shield className="w-4 h-4 text-[#162013]" />
                 </div>
@@ -442,7 +450,7 @@ export default function DashboardPage() {
         </Card>
       </main>
 
-      <footer className="bg-[#21301c] border-t border-[#426039] py-3 fixed bottom-0 left-0 right-0">
+      <footer className="bg-black/60 backdrop-blur-md border-t border-white/10 py-3 fixed bottom-0 left-0 right-0 z-40">
         <div className="flex justify-center max-w-lg mx-auto">
           <Link
             href="/"

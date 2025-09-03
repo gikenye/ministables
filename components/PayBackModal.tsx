@@ -259,7 +259,7 @@ export function PayBackModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden">
+        <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden [&>button]:text-white [&>button]:hover:text-[#a2c398]">
           <div className="flex h-5 w-full items-center justify-center bg-[#162013]">
             <div className="h-1 w-9 rounded-full bg-[#426039]"></div>
           </div>

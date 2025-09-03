@@ -697,7 +697,7 @@ export function BorrowMoneyModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[90vw] max-w-md mx-auto bg-[#162013] border-[#426039] shadow-2xl">
+      <DialogContent className="w-[90vw] max-w-md mx-auto bg-[#162013] border-[#426039] shadow-2xl [&>button]:text-white [&>button]:hover:text-[#a2c398]">
         <DialogHeader className="pb-6">
           <DialogTitle className="sr-only">Borrow Money</DialogTitle>
           <DialogDescription className="sr-only">
