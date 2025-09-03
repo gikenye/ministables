@@ -12,6 +12,13 @@ import {
   WifiOff,
   Shield,
   BarChart3,
+  Star,
+  Users,
+  DollarSign,
+  Lock,
+  Zap,
+  Globe,
+  CheckCircle,
   type LucideIcon,
 } from "lucide-react";
 // import FooterNavigation from "@/components/Footer"
@@ -59,6 +66,173 @@ interface TokenInfo {
   decimals: number;
 }
 
+// Hero Section Component
+const HeroSection = () => {
+  return (
+    <div className="text-center mb-12 animate-fade-in">
+      <div className="mb-6">
+        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 animate-slide-up">
+          Grow Your Money with
+          <span className="text-[#54d22d] block mt-2">Minilend</span>
+        </h1>
+        <p className="text-lg sm:text-xl text-[#a2c398] max-w-2xl mx-auto leading-relaxed animate-slide-up-delay">
+          The first decentralized lending protocol on Celo that lets you save, borrow, and earn with complete compliance and security.
+        </p>
+      </div>
+      
+      <div className="flex flex-wrap justify-center gap-4 mb-8 animate-slide-up-delay-2">
+        <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
+          <Shield className="w-5 h-5 text-[#54d22d] mr-2" />
+          <span className="text-white text-sm font-medium">zkSelf Verified</span>
+        </div>
+        <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
+          <Lock className="w-5 h-5 text-[#54d22d] mr-2" />
+          <span className="text-white text-sm font-medium">Secure & Compliant</span>
+        </div>
+        <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
+          <Globe className="w-5 h-5 text-[#54d22d] mr-2" />
+          <span className="text-white text-sm font-medium">Multi-Currency</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Features Showcase Component
+const FeaturesShowcase = () => {
+  const features = [
+    {
+      icon: DollarSign,
+      title: "Multi-Stablecoin Support",
+      description: "Save and borrow in USDC, cUSD, cKES, cNGN and more",
+    },
+    {
+      icon: Shield,
+      title: "Compliance First",
+      description: "zkSelf integration ensures regulatory compliance",
+    },
+    {
+      icon: Zap,
+      title: "Instant Transactions",
+      description: "Fast and low-cost transactions on Celo network",
+    },
+    {
+      icon: TrendingUp,
+      title: "Competitive Rates",
+      description: "Earn attractive interest on your savings",
+    },
+  ];
+
+  return (
+    <div className="mb-12">
+      <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-8 animate-fade-in">
+        Why Choose Minilend?
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {features.map((feature, index) => {
+          const IconComponent = feature.icon;
+          return (
+            <div
+              key={feature.title}
+              className={`bg-black/40 backdrop-blur-md rounded-xl p-6 border border-white/20 text-center hover:border-[#54d22d]/50 transition-all duration-300 hover:-translate-y-2 animate-slide-up`}
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <div className="w-12 h-12 bg-[#54d22d] rounded-lg flex items-center justify-center mx-auto mb-4">
+                <IconComponent className="w-6 h-6 text-[#162013]" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                {feature.title}
+              </h3>
+              <p className="text-sm text-[#a2c398]">{feature.description}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Stats Component
+const StatsSection = () => {
+  return (
+    <div className="bg-black/40 backdrop-blur-md rounded-xl p-6 border border-white/20 mb-12 animate-fade-in hover-glow">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+        <div className="animate-pulse-slow hover-lift">
+          <div className="text-2xl sm:text-3xl font-bold text-[#54d22d] mb-2">$1M+</div>
+          <div className="text-sm text-[#a2c398]">Total Value Locked</div>
+        </div>
+        <div className="animate-pulse-slow hover-lift" style={{ animationDelay: '0.2s' }}>
+          <div className="text-2xl sm:text-3xl font-bold text-[#54d22d] mb-2">500+</div>
+          <div className="text-sm text-[#a2c398]">Active Users</div>
+        </div>
+        <div className="animate-pulse-slow hover-lift" style={{ animationDelay: '0.4s' }}>
+          <div className="text-2xl sm:text-3xl font-bold text-[#54d22d] mb-2">7</div>
+          <div className="text-sm text-[#a2c398]">Supported Currencies</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Testimonials Component
+const TestimonialsSection = () => {
+  const testimonials = [
+    {
+      name: "Sarah K.",
+      location: "Nairobi, Kenya",
+      text: "Minilend helped me save for my business while earning great returns. The mobile money integration is seamless!",
+      rating: 5,
+    },
+    {
+      name: "David O.",
+      location: "Lagos, Nigeria",
+      text: "Finally, a DeFi platform that understands African markets. The compliance features give me peace of mind.",
+      rating: 5,
+    },
+    {
+      name: "Amina M.",
+      location: "Accra, Ghana",
+      text: "I've been earning 12% APY on my savings. Much better than traditional banks!",
+      rating: 5,
+    },
+  ];
+
+  return (
+    <div className="mb-12">
+      <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-8 animate-fade-in">
+        Trusted by Thousands Across Africa
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {testimonials.map((testimonial, index) => (
+          <div
+            key={testimonial.name}
+            className={`bg-black/40 backdrop-blur-md rounded-xl p-6 border border-white/20 hover-lift animate-slide-up`}
+            style={{ animationDelay: `${index * 0.2}s` }}
+          >
+            <div className="flex mb-4">
+              {[...Array(testimonial.rating)].map((_, i) => (
+                <Star key={i} className="w-4 h-4 text-[#54d22d] fill-current" />
+              ))}
+            </div>
+            <p className="text-[#a2c398] mb-4 italic">"{testimonial.text}"</p>
+            <div className="flex items-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-[#54d22d] to-[#426039] rounded-full flex items-center justify-center mr-3">
+                <span className="text-[#162013] font-bold text-sm">
+                  {testimonial.name.charAt(0)}
+                </span>
+              </div>
+              <div>
+                <div className="text-white font-semibold text-sm">{testimonial.name}</div>
+                <div className="text-[#a2c398] text-xs">{testimonial.location}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Action Cards Grid Component
 const ActionCardsGrid = ({
   actionCards,
@@ -68,31 +242,33 @@ const ActionCardsGrid = ({
   onCardClick: (id: string) => void;
 }) => {
   const renderCard = useCallback(
-    (card: ActionCard) => {
+    (card: ActionCard, index: number) => {
       const IconComponent = card.icon;
       const handleClick = () => onCardClick(card.id);
 
       return (
         <Card
           key={card.id}
-          className="group cursor-pointer border border-[#2e4328] shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-[#21301c]/80 backdrop-blur-sm overflow-hidden"
+          className={`group cursor-pointer border border-[#2e4328] shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 hover:scale-105 bg-[#21301c]/80 backdrop-blur-sm overflow-hidden animate-slide-up`}
+          style={{ animationDelay: `${index * 0.1}s` }}
           onClick={handleClick}
         >
-          <CardContent className="p-3 sm:p-6 text-center relative">
+          <CardContent className="p-4 sm:p-6 text-center relative">
             <div
-              className={`w-10 h-10 sm:w-16 sm:h-16 ${card.color} rounded-lg sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}
+              className={`w-12 h-12 sm:w-16 sm:h-16 ${card.color} rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}
             >
               <IconComponent
-                className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`}
+                className={`w-6 h-6 sm:w-8 sm:h-8 ${card.iconColor}`}
               />
             </div>
-            <h3 className="text-sm sm:text-lg font-semibold text-white mb-0.5 sm:mb-2">
+            <h3 className="text-sm sm:text-lg font-semibold text-white mb-1 sm:mb-2 group-hover:text-[#54d22d] transition-colors duration-300">
               {card.title}
             </h3>
-            <p className="text-xs sm:text-sm text-[#a2c398] line-clamp-2">
+            <p className="text-xs sm:text-sm text-[#a2c398] line-clamp-2 group-hover:text-white transition-colors duration-300">
               {card.description}
             </p>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#54d22d]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#54d22d]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
+            <div className="absolute top-2 right-2 w-2 h-2 bg-[#54d22d] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-ping" />
           </CardContent>
         </Card>
       );
@@ -101,17 +277,22 @@ const ActionCardsGrid = ({
   );
 
   return (
-    <DataAwareRender
-      lowBandwidthFallback={
-        <div className="grid grid-cols-2 gap-3 max-w-4xl mx-auto px-2 sm:px-0">
-          {actionCards.map(renderCard)}
+    <div className="mb-12">
+      <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-8 animate-fade-in">
+        Start Your Financial Journey
+      </h2>
+      <DataAwareRender
+        lowBandwidthFallback={
+          <div className="grid grid-cols-2 gap-3 max-w-4xl mx-auto px-2 sm:px-0">
+            {actionCards.map((card, index) => renderCard(card, index))}
+          </div>
+        }
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-4xl mx-auto px-2 sm:px-0">
+          {actionCards.map((card, index) => renderCard(card, index))}
         </div>
-      }
-    >
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-4xl mx-auto px-2 sm:px-0">
-        {actionCards.map(renderCard)}
-      </div>
-    </DataAwareRender>
+      </DataAwareRender>
+    </div>
   );
 };
 
@@ -649,33 +830,33 @@ export default function AppPage() {
       {
         id: "save",
         title: "Start Saving",
-        description: "From as low as 100KES or 2000NGN",
+        description: "Earn up to 12% APY on your stablecoins",
         icon: TrendingUp,
-        color: "bg-[#54d22d]",
+        color: "bg-gradient-to-br from-[#54d22d] to-[#4bc428]",
         iconColor: "text-[#162013]",
       },
       {
         id: "borrow",
-        title: "Borrow Cash",
-        description: "using your savings as security",
+        title: "Borrow Instantly",
+        description: "Get loans using your crypto as collateral",
         icon: ArrowDownLeft,
-        color: "bg-[#426039]",
+        color: "bg-gradient-to-br from-[#426039] to-[#54d22d]",
         iconColor: "text-white",
       },
       {
         id: "withdraw",
-        title: "Withdraw",
-        description: "directly to your mobile money wallet",
+        title: "Withdraw Anytime",
+        description: "Access your funds when you need them",
         icon: ArrowUpRight,
-        color: "bg-[#2e4328]",
+        color: "bg-gradient-to-br from-[#2e4328] to-[#426039]",
         iconColor: "text-white",
       },
       {
         id: "payback",
-        title: "Repay Loans",
-        description: "directly from your M-Pesa or Airtel Money",
-        icon: ArrowUpRight,
-        color: "bg-[#21301c]",
+        title: "Repay Easily",
+        description: "Flexible repayment options available",
+        icon: CheckCircle,
+        color: "bg-gradient-to-br from-[#21301c] to-[#2e4328]",
         iconColor: "text-white",
       },
     ],
@@ -684,30 +865,50 @@ export default function AppPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Safari Background */}
-      <div className="fixed inset-0 bg-[url('/african-safari-scene-2005.jpg')] bg-cover bg-center bg-no-repeat">
+      {/* Responsive Background */}
+      <div className="fixed inset-0">
+        {/* Mobile background - solid gradient */}
+        <div className="sm:hidden absolute inset-0 bg-gradient-to-br from-[#162013] via-[#21301c] to-[#2e4328]"></div>
+        {/* Desktop background - image with better positioning */}
+        <div className="hidden sm:block absolute inset-0 bg-[url('/african-safari-scene-2005.jpg')] bg-cover bg-center bg-no-repeat sm:bg-top lg:bg-center"></div>
+        {/* Overlay for all screens */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70"></div>
+        {/* Animated overlay particles */}
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-[#54d22d] rounded-full animate-float"></div>
+          <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-[#54d22d] rounded-full animate-float" style={{animationDelay: '1s'}}></div>
+          <div className="absolute bottom-1/4 left-1/3 w-1.5 h-1.5 bg-[#54d22d] rounded-full animate-float" style={{animationDelay: '2s'}}></div>
+          <div className="absolute top-1/2 right-1/4 w-1 h-1 bg-[#54d22d] rounded-full animate-float" style={{animationDelay: '0.5s'}}></div>
+        </div>
       </div>
       {/* Header */}
-      <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-3 py-4 sticky top-0 z-40 relative">
+      <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-3 py-4 sticky top-0 z-40 relative animate-slide-up">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <Link href="/landing" className="flex items-center space-x-3">
-            <div>
+          <Link href="/landing" className="flex items-center space-x-3 group hover-lift">
+            <div className="transition-all duration-300 group-hover:scale-105">
               <Logo size="md" />
-              <p className="text-xs sm:text-sm text-[#a2c398]">
+              <p className="text-xs sm:text-sm text-[#a2c398] group-hover:text-[#54d22d] transition-colors duration-300">
                 Grow Your Money
               </p>
             </div>
           </Link>
 
-          <div className="flex-shrink-0">
-            <ConnectWallet size="sm" />
+          <div className="flex items-center space-x-4">
+            {!isConnected && (
+              <div className="hidden sm:flex items-center space-x-2 text-sm text-[#a2c398]">
+                <div className="w-2 h-2 bg-[#54d22d] rounded-full animate-pulse"></div>
+                <span>Connect to start earning</span>
+              </div>
+            )}
+            <div className="flex-shrink-0">
+              <ConnectWallet size="sm" />
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto relative z-10">
+      <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto relative z-10 pb-16">
         {!isOnline && (
           <div className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm">
             <WifiOff className="w-4 h-4 mr-2" />
@@ -715,67 +916,135 @@ export default function AppPage() {
           </div>
         )}
 
+        {/* Hero Section */}
+        <HeroSection />
+        
+        {/* User Status */}
         {isConnected && (
-          <div className="text-center mb-6">
+          <div className="text-center mb-8 animate-fade-in">
             <div className="flex flex-wrap justify-center gap-2">
               {session?.user?.verified ? (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/30 text-green-300 backdrop-blur-sm">
-                  <Shield className="w-4 h-4 mr-1" />
+                <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-500/30 text-green-300 backdrop-blur-sm border border-green-500/30 animate-pulse-slow">
+                  <Shield className="w-4 h-4 mr-2" />
                   Verified Account
                 </div>
               ) : (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-600/30 text-yellow-300 backdrop-blur-sm">
-                  <Shield className="w-4 h-4 mr-1" />
+                <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-600/30 text-yellow-300 backdrop-blur-sm border border-yellow-600/30">
+                  <Shield className="w-4 h-4 mr-2" />
                   Unverified Account
                 </div>
               )}
               {isSDKLoaded && context && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/30 text-purple-300 backdrop-blur-sm">
+                <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-purple-500/30 text-purple-300 backdrop-blur-sm border border-purple-500/30">
                   🚀 Farcaster Mini App
                 </div>
               )}
             </div>
           </div>
         )}
-        <div className="mb-8">
-          <ActionCardsGrid
-            actionCards={actionCards}
-            onCardClick={handleCardClick}
-          />
-        </div>
-        <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/20 shadow-2xl">
-          <h3 className="text-lg font-semibold text-white mb-4 text-center">
-            Quick Actions
-          </h3>
-          <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-            <Link href="/dashboard" className="w-full sm:w-auto">
+        
+        {/* Stats Section */}
+        <StatsSection />
+        
+        {/* Features Showcase */}
+        <FeaturesShowcase />
+        
+        {/* Testimonials */}
+        <TestimonialsSection />
+        
+        {/* Action Cards */}
+        <ActionCardsGrid
+          actionCards={actionCards}
+          onCardClick={handleCardClick}
+        />
+        
+        {/* Call to Action */}
+        <div className="bg-gradient-to-r from-[#54d22d]/20 to-[#426039]/20 backdrop-blur-md rounded-2xl p-6 sm:p-8 border border-[#54d22d]/30 shadow-2xl animate-fade-in">
+          <div className="text-center">
+            <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">
+              Ready to Start Your DeFi Journey?
+            </h3>
+            <p className="text-[#a2c398] mb-6 max-w-2xl mx-auto">
+              Join thousands of users who trust Minilend for their decentralized finance needs. 
+              Start saving, borrowing, and earning today.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <Link href="/dashboard" className="w-full sm:w-auto">
+                <Button
+                  className="w-full bg-[#54d22d] hover:bg-[#4bc428] text-[#162013] font-semibold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                >
+                  <BarChart3 className="w-5 h-5 mr-2" />
+                  View Dashboard
+                </Button>
+              </Link>
               <Button
                 variant="outline"
-                className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
+                className="w-full sm:w-auto border-[#54d22d] text-[#54d22d] hover:bg-[#54d22d] hover:text-[#162013] py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105"
+                onClick={() => setActiveModal('save')}
               >
-                <BarChart3 className="w-4 h-4 mr-2" />
-                View Dashboard
+                <TrendingUp className="w-5 h-5 mr-2" />
+                Start Saving Now
               </Button>
-            </Link>
+            </div>
           </div>
         </div>
-
-        {/* <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-[#2e4328] shadow-lg">
-              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
-              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-                <Link href="/dashboard" className="w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    View Dashboard
-                  </Button>
-                </Link>
+        
+        {/* Footer Section */}
+        <footer className="mt-16 pt-12 border-t border-white/10 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div className="md:col-span-2">
+              <div className="flex items-center space-x-3 mb-4">
+                <Logo size="sm" />
+                <span className="text-white font-bold text-lg">Minilend</span>
               </div>
-            </div> */}
-
-        {/* <FooterNavigation currentPath="/" /> */}
+              <p className="text-[#a2c398] mb-4 max-w-md">
+                The first decentralized lending protocol on Celo, enabling compliant 
+                DeFi for African markets with zkSelf integration.
+              </p>
+              <div className="flex space-x-4">
+                <div className="flex items-center text-sm text-[#a2c398]">
+                  <Shield className="w-4 h-4 mr-2 text-[#54d22d]" />
+                  Audited & Secure
+                </div>
+                <div className="flex items-center text-sm text-[#a2c398]">
+                  <Globe className="w-4 h-4 mr-2 text-[#54d22d]" />
+                  Built on Celo
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-white font-semibold mb-4">Protocol</h4>
+              <ul className="space-y-2 text-sm text-[#a2c398]">
+                <li><Link href="/dashboard" className="hover:text-[#54d22d] transition-colors">Dashboard</Link></li>
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">Documentation</Link></li>
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">Governance</Link></li>
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">Security</Link></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="text-white font-semibold mb-4">Community</h4>
+              <ul className="space-y-2 text-sm text-[#a2c398]">
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">Discord</Link></li>
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">Twitter</Link></li>
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">Telegram</Link></li>
+                <li><Link href="#" className="hover:text-[#54d22d] transition-colors">GitHub</Link></li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center">
+            <div className="text-sm text-[#a2c398] mb-4 sm:mb-0">
+              © 2024 Minilend. All rights reserved.
+            </div>
+            <div className="flex space-x-6 text-sm text-[#a2c398]">
+              <Link href="#" className="hover:text-[#54d22d] transition-colors">Privacy Policy</Link>
+              <Link href="#" className="hover:text-[#54d22d] transition-colors">Terms of Service</Link>
+              <Link href="#" className="hover:text-[#54d22d] transition-colors">Risk Disclosure</Link>
+            </div>
+          </div>
+        </footer>
       </main>
 
       {/* Modals - Always available for exploration */}
