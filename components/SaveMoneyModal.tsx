@@ -6,6 +6,7 @@ import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react"
 import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
+import { appendDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 
 // Define the minilend contract ABI for deposit function
 export const minilendABI = [
@@ -37,6 +38,7 @@ interface SaveMoneyModalProps {
   userBalances?: Record<string, string>
   tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading?: boolean
+  requiresAuth?: boolean
 }
 
 export function SaveMoneyModal({
@@ -46,6 +48,7 @@ export function SaveMoneyModal({
   userBalances,
   tokenInfos,
   loading = false,
+  requiresAuth = false,
 }: SaveMoneyModalProps) {
   const account = useActiveAccount()
 
@@ -119,6 +122,8 @@ export function SaveMoneyModal({
       abi: minilendABI,
     })
 
+
+
     // Prepare deposit transaction
     console.log("[SaveMoneyModal] Preparing deposit transaction with params:", {
       token: form.token,
@@ -126,7 +131,8 @@ export function SaveMoneyModal({
       lockPeriod: form.lockPeriod
     })
 
-    const depositTx = prepareContractCall({
+    // Create the deposit transaction
+    let depositTx = prepareContractCall({
       contract: minilendContract,
       method: "deposit",
       params: [
@@ -139,6 +145,14 @@ export function SaveMoneyModal({
         amountWei,
       },
     })
+    
+    // Append Divvi referral tag to the transaction using our helper function
+    if (account) {
+      console.log("[SaveMoneyModal] Adding Divvi referral tag to transaction");
+      depositTx = appendDivviReferralTag(depositTx, account.address);
+    }
+    
+    // We'll also report to Divvi after transaction is complete
 
     return depositTx
   }
@@ -168,7 +182,7 @@ export function SaveMoneyModal({
     setError(userMessage)
   }
 
-  const handleTransactionSuccess = (receipt: any, isApproval: boolean = false) => {
+  const handleTransactionSuccess = async (receipt: any, isApproval: boolean = false) => {
     console.log("[SaveMoneyModal] Transaction successful:", receipt)
 
     if (!isApproval) {
@@ -181,6 +195,12 @@ export function SaveMoneyModal({
       })
       // Move to success step
       setCurrentStep(5)
+      
+      // Report transaction to Divvi for referral tracking
+      if (receipt.transactionHash) {
+        await reportTransactionToDivvi(receipt.transactionHash, celo.id)
+        console.log("[SaveMoneyModal] Reported transaction to Divvi:", receipt.transactionHash)
+      }
     }
   }
 
@@ -190,8 +210,12 @@ export function SaveMoneyModal({
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return
+    if (requiresAuth) {
+      alert('Please sign in to complete this transaction')
+      return
+    }
     if (!account) {
-      setError("Please connect your wallet first")
+      setError("Please sign in first")
       return
     }
 
@@ -216,6 +240,8 @@ export function SaveMoneyModal({
         account,
       })
       
+      // No need to add referral tag to approval transaction, as it's not a direct interaction with our contract
+      
       if (approveTx) {
         console.log("[SaveMoneyModal] Approval required, sending approval transaction")
         const approveResult = await sendTransaction(approveTx)
@@ -237,8 +263,9 @@ export function SaveMoneyModal({
       }
       
       // Execute deposit transaction
-      console.log("[SaveMoneyModal] Sending deposit transaction")
-      const depositResult = await sendTransaction(depositTx)
+      console.log("[SaveMoneyModal] Sending deposit transaction");
+      // Send the transaction normally, without trying to modify the data
+      const depositResult = await sendTransaction(depositTx);
       console.log("[SaveMoneyModal] Deposit result:", depositResult)
       
       handleTransactionSent(depositResult, false)
@@ -435,9 +462,9 @@ export function SaveMoneyModal({
             </div>
           )}
 
-          {!account && (
+          {requiresAuth && (
             <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm mb-4">
-              Connect wallet to continue
+              Sign in required to complete transactions
             </div>
           )}
 
@@ -715,7 +742,7 @@ export function SaveMoneyModal({
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!account || !form.token || !form.amount || !form.lockPeriod || isSaving || isTransactionPending}
+                  disabled={requiresAuth || !account || !form.token || !form.amount || !form.lockPeriod || isSaving || isTransactionPending}
                   className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isSaving || isTransactionPending ? (
@@ -723,6 +750,8 @@ export function SaveMoneyModal({
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Processing...
                     </span>
+                  ) : requiresAuth ? (
+                    "Sign In Required"
                   ) : (
                     "proceed to deposit "
                   )}

@@ -43,6 +43,7 @@ import { BorrowMoneyModal } from "@/components/BorrowMoneyModal"
 import { PayBackModal } from "@/components/PayBackModal"
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal"
 
+
 // Types
 interface ActionCard {
   id: string
@@ -103,7 +104,7 @@ const ActionCardsGrid = ({
   )
 }
 
-export default function HomePage() {
+export default function AppPage() {
   const router = useRouter()
   const { data: session, status: sessionStatus } = useSession()
   const account = useActiveAccount()
@@ -297,14 +298,15 @@ export default function HomePage() {
   }, [userBorrow0.isLoading, userDeposit0.isLoading])
 
   useEffect(() => {
-    if (isConnected && address && !session?.user?.address) {
+    // Only auto-sign in if wallet is connected and user hasn't explicitly signed out
+    if (isConnected && address && !session?.user?.address && sessionStatus !== "loading") {
       signIn("self-protocol", {
         address,
         verificationData: "",
         redirect: false,
       })
     }
-  }, [isConnected, address, session])
+  }, [isConnected, address, session, sessionStatus])
 
   // Check localStorage for verification skip state
   useEffect(() => {
@@ -312,11 +314,11 @@ export default function HomePage() {
     setVerificationSkipped(skipped)
   }, [])
 
-  // Remove forced verification - make it optional
+  // Make verification completely optional
   useEffect(() => {
     if (sessionStatus === "loading") return
-    // Don't show verification if user has skipped it or is already verified
-    setNeedsVerification(isConnected && !session?.user?.verified && !verificationSkipped)
+    // Only show verification prompt if user is connected and hasn't skipped it
+    setNeedsVerification(false) // Disable verification prompts for better UX
   }, [isConnected, session, sessionStatus, verificationSkipped])
 
   useEffect(() => {
@@ -554,7 +556,7 @@ export default function HomePage() {
       {/* Header */}
       <header className="bg-[#21301c]/80 backdrop-blur-sm border-b border-[#2e4328] px-3 py-4 sticky top-0 z-40">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <div className="flex items-center space-x-3">
+          <Link href="/landing" className="flex items-center space-x-3">
             <div className="w-10 h-10 flex items-center justify-center">
               <img src="/minilend-logo.png" alt="Minilend Logo" className="w-10 h-10 object-contain" />
             </div>
@@ -562,7 +564,7 @@ export default function HomePage() {
               <h1 className="text-xl sm:text-2xl font-bold text-[#54d22d]">MiniLend</h1>
               <p className="text-xs sm:text-sm text-[#a2c398]">Grow Your Money</p>
             </div>
-          </div>
+          </Link>
 
           <div className="flex-shrink-0">
             <ConnectWallet size="sm" />
@@ -579,98 +581,49 @@ export default function HomePage() {
           </div>
         )}
 
-        {!isConnected ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <Card className="bg-[#21301c]/80 backdrop-blur-sm border border-[#2e4328] shadow-xl max-w-md w-full mx-3">
-              <CardContent className="p-5 sm:p-8 text-center">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6">
-                  <Wallet className="w-8 h-8 sm:w-10 sm:h-10 text-[#162013]" />
+
+
+        <div className="mb-8">
+          <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />
+        </div>
+
+        {isConnected && (
+          <div className="text-center mb-6">
+            <div className="flex flex-wrap justify-center gap-2">
+              {session?.user?.verified ? (
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#54d22d]/20 text-[#54d22d]">
+                  <Shield className="w-4 h-4 mr-1" />
+                  Verified Account
                 </div>
-                <h2 className="text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3">Welcome to MiniLend</h2>
-                <p className="text-sm sm:text-base text-[#a2c398] mb-4 sm:mb-6">
-                  Start growing your money today. Save, earn, and access cash when you need it.
-                </p>
-
-                <ConnectWallet size="lg" />
-                {typeof window !== "undefined" && !window.ethereum && (
-                  <p className="text-[#a2c398] text-xs sm:text-sm mt-4">
-                    Don&apos;t have a wallet?{" "}
-                    <a
-                      href="https://metamask.io"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#54d22d] underline hover:text-[#426039]"
-                    >
-                      Get MetaMask
-                    </a>
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
-          <div className="space-y-6 sm:space-y-8">
-            {/* <div className="bg-[#21301c]/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-1 sm:p-6 max-w-1x1 mx-auto border border-[#2e4328] shadow-lg">
-              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
-              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-                <Link href="/dashboard" className="w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    View Dashboard
-                  </Button>
-                </Link>
-              </div>
-            </div> */}
-            
-            <div className="text-center">
-              {/* <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">What would you like to do?</h2> */}
-              <p className="text-[#a2c398] text-base sm:text-lg">Choose an option to get started</p>
-              <div className="mt-2 flex flex-wrap justify-center gap-2">
-                {session?.user?.verified ? (
-                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d]">
-                    <Shield className="w-3 h-3 mr-1" />
-                    Verified
-                  </div>
-                ) : (
-                  isConnected && (
-                    <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#2e4328] text-[#a2c398]">
-                      <Shield className="w-3 h-3 mr-1" />
-                      Unverified
-                    </div>
-                  )
-                )}
-                {isSDKLoaded && context && (
-                  <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300">
-                    🚀 Farcaster Mini App
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#2e4328] text-[#a2c398]">
+                  <Shield className="w-4 h-4 mr-1" />
+                  Unverified Account
+                </div>
+              )}
+              {isSDKLoaded && context && (
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/20 text-purple-300">
+                  🚀 Farcaster Mini App
+                </div>
+              )}
             </div>
-
-            <ActionCardsGrid actionCards={actionCards} onCardClick={handleCardClick} />
-            {/* Quick Stats */}
-            <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-[#2e4328] shadow-lg">
-              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
-              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
-                <Link href="/dashboard" className="w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    View Dashboard
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            
           </div>
-          
         )}
+
+        <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl p-4 border border-[#2e4328] shadow-lg">
+          <h3 className="text-lg font-semibold text-white mb-4 text-center">Quick Actions</h3>
+          <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
+            <Link href="/dashboard" className="w-full sm:w-auto">
+              <Button
+                variant="outline"
+                className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                View Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
 
         {/* <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-[#2e4328] shadow-lg">
               <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
@@ -690,7 +643,7 @@ export default function HomePage() {
         {/* <FooterNavigation currentPath="/" /> */}
       </main>
 
-      {/* Modals */}
+      {/* Modals - Always available for exploration */}
       <SaveMoneyModal
         isOpen={activeModal === "save"}
         onClose={() => setActiveModal(null)}
@@ -698,6 +651,7 @@ export default function HomePage() {
         userBalances={userBalances}
         tokenInfos={tokenInfos}
         loading={loading}
+        requiresAuth={!isConnected}
       />
       <BorrowMoneyModal
         isOpen={activeModal === "borrow"}
@@ -708,6 +662,7 @@ export default function HomePage() {
         userCollaterals={userCollaterals}
         tokenInfos={tokenInfos}
         loading={loading}
+        requiresAuth={!isConnected}
       />
       <PayBackModal
         isOpen={activeModal === "payback"}
@@ -716,6 +671,7 @@ export default function HomePage() {
         tokenInfos={tokenInfos}
         loading={loading}
         userBalances={userBalances}
+        requiresAuth={!isConnected}
       />
       <FundsWithdrawalModal
         isOpen={activeModal === "withdraw"}
@@ -725,6 +681,7 @@ export default function HomePage() {
         depositLockEnds={depositLockEnds}
         tokenInfos={tokenInfos}
         loading={loading}
+        requiresAuth={!isConnected}
       />
     </div>
   )

@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { parseUnits } from "viem"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
+import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
 import { 
@@ -38,6 +39,7 @@ interface BorrowMoneyModalProps {
   userCollaterals: Record<string, string>
   tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading: boolean
+  requiresAuth?: boolean
 }
 
 enum BorrowStep {
@@ -56,6 +58,7 @@ export function BorrowMoneyModal({
   userCollaterals,
   tokenInfos,
   loading,
+  requiresAuth = false,
 }: BorrowMoneyModalProps) {
   const { toast } = useToast()
   const account = useActiveAccount()
@@ -245,7 +248,14 @@ export function BorrowMoneyModal({
   }
 
   const handleBorrowWithCollateral = async () => {
-    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral || !account) return
+    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return
+    
+    if (requiresAuth) {
+      alert('Please sign in to complete this transaction')
+      return
+    }
+    
+    if (!account) return
 
     if (isBorrowingPaused) {
       setTransactionStatus(`Borrowing ${tokenInfos[form.token]?.symbol} is currently paused. Please try again later or select another token.`)
@@ -336,6 +346,14 @@ export function BorrowMoneyModal({
         const depositResult = await sendTransaction({ transaction: depositTx, account })
         if (depositResult?.transactionHash) {
           await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash })
+          
+          // Report collateral deposit transaction to Divvi
+          try {
+            await reportTransactionToDivvi(depositResult.transactionHash, celo.id)
+            console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash)
+          } catch (error) {
+            console.error("[BorrowMoneyModal] Error reporting to Divvi:", error)
+          }
         }
         
         setTransactionStatus("Security added ✓")
@@ -346,6 +364,7 @@ export function BorrowMoneyModal({
       setTransactionStatus("Getting your cash...")
       const borrowAmount = parseUnits(form.amount, tokenInfos[form.token]?.decimals || 18)
       
+
       const borrowTx = prepareContractCall({
         contract,
         method: "function borrow(address token, uint256 amount, address collateralToken)",
@@ -356,6 +375,14 @@ export function BorrowMoneyModal({
       if (borrowResult?.transactionHash) {
         setTransactionStatus("Processing transaction...")
         await waitForReceipt({ client, chain: celo, transactionHash: borrowResult.transactionHash })
+        
+        // Report borrow transaction to Divvi
+        try {
+          await reportTransactionToDivvi(borrowResult.transactionHash, celo.id)
+          console.log("[BorrowMoneyModal] Reported borrow transaction to Divvi:", borrowResult.transactionHash)
+        } catch (error) {
+          console.error("[BorrowMoneyModal] Error reporting to Divvi:", error)
+        }
       }
 
       setTransactionStatus("Cash sent to your wallet ✓")
