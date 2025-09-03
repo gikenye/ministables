@@ -135,7 +135,9 @@ export function BorrowMoneyModal({
           }
         } catch (error) {
           console.error("Error calculating collateral:", error)
-          setRequiredCollateral(null)
+          // Fallback to fixed ratio
+          const amountValue = Number(form.amount)
+          setRequiredCollateral((amountValue * 1.5).toFixed(4))
           setExchangeRate(null)
         } finally {
           setFetchingRate(false)
