@@ -130,7 +130,9 @@ export function BorrowMoneyModal({
             setRequiredCollateral(result.amount)
             setExchangeRate(result.rate)
           } else {
-            setRequiredCollateral(null)
+            // Fallback to fixed ratio if oracle data is unavailable
+            const amountValue = Number(form.amount)
+            setRequiredCollateral((amountValue * 1.5).toFixed(4))
             setExchangeRate(null)
           }
         } catch (error) {
@@ -240,7 +242,7 @@ export function BorrowMoneyModal({
             setExchangeRate(result.rate)
           }
       } catch (error) {
-        console.error("Failed to refresh rates:", error)
+        console.error("Failed to refresh rates:", error instanceof Error ? error.message.replace(/[\r\n]/g, ' ') : 'Unknown error')
         setTransactionStatus("Could not update market rates. Using previous values.")
       } finally {
         setFetchingRate(false)
