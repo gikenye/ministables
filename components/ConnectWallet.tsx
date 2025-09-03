@@ -5,6 +5,7 @@ import { inAppWallet, createWallet } from "thirdweb/wallets";
 import { base, celo, scroll } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/Logo";
 
 interface ConnectWalletButtonProps {
   className?: string;
@@ -181,12 +182,11 @@ export function ConnectWallet({
             sponsorGas: false,
           }}
           client={client}
-          connectButton={{ label: "Launch App" }}
+          connectButton={{ label: "sign in" }}
           connectModal={{
             showThirdwebBranding: false,
             size: "compact",
-            title: "Minilend :)",
-            titleIcon: "https://ministables.vercel.app/minilend-logo.png",
+            title: <Logo size="sm" />,
           }}
           theme={darkTheme({
             colors: {

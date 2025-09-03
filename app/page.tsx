@@ -14,7 +14,7 @@ import {
   BarChart3,
   type LucideIcon,
 } from "lucide-react"
-import FooterNavigation from "@/components/Footer"
+// import FooterNavigation from "@/components/Footer"
 import { useActiveAccount, useSendTransaction } from "thirdweb/react"
 import { ConnectWallet } from "@/components/ConnectWallet"
 import {
@@ -36,6 +36,7 @@ import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DataAwareRender } from "@/components/ui/loading-indicator"
+import { Logo } from "@/components/Logo"
 
 // thirdweb handles transaction modals; no custom tx modal
 import { SaveMoneyModal } from "@/components/SaveMoneyModal"
@@ -518,7 +519,7 @@ export default function AppPage() {
       {
         id: "save",
         title: "Start Saving",
-        description: "Grow your money with guaranteed returns",
+        description: "From as low as 100KES or 2000NGN",
         icon: TrendingUp,
         color: "bg-[#54d22d]",
         iconColor: "text-[#162013]",
@@ -526,23 +527,23 @@ export default function AppPage() {
       {
         id: "borrow",
         title: "Borrow Cash",
-        description: "Access funds when you need them",
+        description: "using your savings as security",
         icon: ArrowDownLeft,
         color: "bg-[#426039]",
         iconColor: "text-white",
       },
       {
         id: "withdraw",
-        title: "Cash Out",
-        description: "Withdraw your savings anytime",
+        title: "Withdraw",
+        description: "directly to your mobile money wallet",
         icon: ArrowUpRight,
         color: "bg-[#2e4328]",
         iconColor: "text-white",
       },
       {
         id: "payback",
-        title: "Pay Back",
-        description: "Repay your loans easily",
+        title: "Repay Loans",
+        description: "directly from your M-Pesa or Airtel Money",
         icon: ArrowUpRight,
         color: "bg-[#21301c]",
         iconColor: "text-white",
@@ -557,11 +558,8 @@ export default function AppPage() {
       <header className="bg-[#21301c]/80 backdrop-blur-sm border-b border-[#2e4328] px-3 py-4 sticky top-0 z-40">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <Link href="/landing" className="flex items-center space-x-3">
-            <div className="w-10 h-10 flex items-center justify-center">
-              <img src="/minilend-logo.png" alt="Minilend Logo" className="w-10 h-10 object-contain" />
-            </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-[#54d22d]">MiniLend</h1>
+              <Logo size="md" />
               <p className="text-xs sm:text-sm text-[#a2c398]">Grow Your Money</p>
             </div>
           </Link>

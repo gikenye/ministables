@@ -82,7 +82,7 @@ export function BorrowMoneyModal({
 
   // Only cKES available for borrowing for now
   const SUPPORTED_STABLECOINS = useMemo(() => {
-    return ["0x456a3D042C0DbD3db53D5489e98dFb038553B0d0"] // cKES only
+    return ["0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71"] // cKES only
   }, [])
 
   const [currentStep, setCurrentStep] = useState<BorrowStep>(BorrowStep.SELECT_TOKEN)
