@@ -1,12 +1,10 @@
 "use client";
-import { ConnectButton, useConnect } from "thirdweb/react";
+import { ConnectButton } from "thirdweb/react";
 import { darkTheme } from "thirdweb/react";
 import { inAppWallet, createWallet } from "thirdweb/wallets";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { useEffect, useState } from "react";
-
-
 
 interface ConnectWalletButtonProps {
   className?: string;
@@ -25,24 +23,22 @@ const wallets = [
   createWallet("walletConnect"),
 ];
 
-const miniPayWallet = createWallet("io.metamask");
+const metamaskWallet = createWallet("io.metamask");
 
 
 export function ConnectWallet({ className }: ConnectWalletButtonProps) {
-  const [hideConnectBtn, setHideConnectBtn] = useState(false);
+  const [isMiniPay, setIsMiniPay] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.ethereum && window.ethereum.isMiniPay) {
-      setHideConnectBtn(true);
-      miniPayWallet.connect({ client });
+    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
+      setIsMiniPay(true);
+      metamaskWallet.connect({ client });
     }
   }, []);
 
-
-
   return (
     <div className={className}>
-      {!hideConnectBtn && (
+      {!isMiniPay && (
         <ConnectButton
           accountAbstraction={{
             chain: celo,
