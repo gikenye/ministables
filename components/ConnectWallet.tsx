@@ -5,7 +5,7 @@ import { inAppWallet, createWallet } from "thirdweb/wallets";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { useEffect, useState } from "react";
-import { injected } from "thirdweb/wallets";
+
 
 
 interface ConnectWalletButtonProps {
@@ -13,32 +13,30 @@ interface ConnectWalletButtonProps {
 }
 
 const wallets = [
-  injected(),
+  createWallet("io.metamask"),
   inAppWallet({
     auth: {
       options: ["google", "facebook", "farcaster", "x", "phone"],
     },
   }),
   createWallet("com.valoraapp"),
-  createWallet("io.metamask"),
   createWallet("com.coinbase.wallet"),
   createWallet("com.trustwallet.app"),
   createWallet("walletConnect"),
 ];
 
+const miniPayWallet = createWallet("io.metamask");
+
 
 export function ConnectWallet({ className }: ConnectWalletButtonProps) {
-
   const [hideConnectBtn, setHideConnectBtn] = useState(false);
-  const { connect } = useConnect();
 
   useEffect(() => {
-    // MiniPay auto-connection
     if (typeof window !== "undefined" && window.ethereum && window.ethereum.isMiniPay) {
       setHideConnectBtn(true);
-      connect({ connector: injected() });
+      miniPayWallet.connect({ client });
     }
-  }, [connect]);
+  }, []);
 
 
 
