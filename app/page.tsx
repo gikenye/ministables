@@ -683,9 +683,13 @@ export default function AppPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#162013]">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Safari Background */}
+      <div className="fixed inset-0 bg-[url('/african-safari-scene-2005.jpg')] bg-cover bg-center bg-no-repeat">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70"></div>
+      </div>
       {/* Header */}
-      <header className="bg-[#21301c]/80 backdrop-blur-sm border-b border-[#2e4328] px-3 py-4 sticky top-0 z-40">
+      <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-3 py-4 sticky top-0 z-40 relative">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <Link href="/landing" className="flex items-center space-x-3">
             <div>
@@ -703,9 +707,9 @@ export default function AppPage() {
       </header>
 
       {/* Main Content */}
-      <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto">
+      <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto relative z-10">
         {!isOnline && (
-          <div className="bg-[#2e4328] border border-[#426039] text-[#a2c398] rounded-lg p-3 mb-4 text-sm flex items-center">
+          <div className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm">
             <WifiOff className="w-4 h-4 mr-2" />
             <p>You are currently offline. Some features may be limited.</p>
           </div>
@@ -715,18 +719,18 @@ export default function AppPage() {
           <div className="text-center mb-6">
             <div className="flex flex-wrap justify-center gap-2">
               {session?.user?.verified ? (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#54d22d]/20 text-[#54d22d]">
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/30 text-green-300 backdrop-blur-sm">
                   <Shield className="w-4 h-4 mr-1" />
                   Verified Account
                 </div>
               ) : (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#2e4328] text-[#a2c398]">
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-600/30 text-yellow-300 backdrop-blur-sm">
                   <Shield className="w-4 h-4 mr-1" />
                   Unverified Account
                 </div>
               )}
               {isSDKLoaded && context && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/20 text-purple-300">
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/30 text-purple-300 backdrop-blur-sm">
                   🚀 Farcaster Mini App
                 </div>
               )}
@@ -739,7 +743,7 @@ export default function AppPage() {
             onCardClick={handleCardClick}
           />
         </div>
-        <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl p-4 border border-[#2e4328] shadow-lg">
+        <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/20 shadow-2xl">
           <h3 className="text-lg font-semibold text-white mb-4 text-center">
             Quick Actions
           </h3>
@@ -778,8 +782,6 @@ export default function AppPage() {
       <SaveMoneyModal
         isOpen={activeModal === "save"}
         onClose={() => setActiveModal(null)}
-        onSave={handleSaveMoney}
-        userBalances={userBalances}
         tokenInfos={tokenInfos}
         loading={loading}
         requiresAuth={!isConnected}
