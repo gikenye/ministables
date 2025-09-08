@@ -151,7 +151,8 @@ export default function DashboardPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [displayCurrency, setDisplayCurrency] = useState<'USD' | 'KES'>('USD');
+  // Default to local currency (KES) for dashboard UX
+  const [displayCurrency, setDisplayCurrency] = useState<'USD' | 'KES'>('KES');
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
 
   // Use the typed hooks to read user-specific data from the contract
@@ -184,6 +185,9 @@ export default function DashboardPage() {
 
   // Accumulated interest (protocol-level) for the user
   const accumulatedInterest = useAccumulatedInterest(contract, address || "");
+
+  // Local token info reference (move above performance to avoid TDZ)
+  const tokenInfo = TOKEN_INFO;
 
   const performance = useMemo(() => {
     try {
@@ -250,7 +254,6 @@ export default function DashboardPage() {
   const borrows = borrowsState;
   const lockEnds = lockEndsState;
   const dashboardLoading = false;
-  const tokenInfo = TOKEN_INFO;
 
   // Use fixed exchange rate to avoid oracle issues
   useEffect(() => {
@@ -265,18 +268,42 @@ export default function DashboardPage() {
   // Calculate totals with proper error handling
   const totals = useMemo(() => {
     try {
-  const saved = parseFloat(formatAmount(Object.values(deposits)[0] || "0", 18));
-  const borrowed = parseFloat(formatAmount(Object.values(borrows)[0] || "0", 18));
-      
+      // Sum deposits and borrows and convert to USD where applicable.
+      let savedUSD = 0;
+      let borrowedUSD = 0;
+
+      const rate = exchangeRates.KES_USD || 0.0078; // KES -> USD
+
+      for (const [token, amtStr] of Object.entries(deposits)) {
+        const decimals = tokenInfo[token]?.decimals || 18;
+        const tokenAmount = parseFloat(formatAmount(amtStr || "0", decimals));
+        const symbol = tokenInfo[token]?.symbol || "";
+
+        // cKES is pegged to KES (1 cKES == 1 KES) so convert to USD via rate
+        if (symbol === "cKES") {
+          savedUSD += tokenAmount * rate;
+        } else {
+          // assume token amount is USD-pegged (USDC, USDT, cUSD) or treat as USD for now
+          savedUSD += tokenAmount;
+        }
+      }
+
+      for (const [token, amtStr] of Object.entries(borrows)) {
+        const decimals = tokenInfo[token]?.decimals || 18;
+        const tokenAmount = parseFloat(formatAmount(amtStr || "0", decimals));
+        const symbol = tokenInfo[token]?.symbol || "";
+
+        if (symbol === "cKES") {
+          borrowedUSD += tokenAmount * rate;
+        } else {
+          borrowedUSD += tokenAmount;
+        }
+      }
+
       return {
-        saved: saved.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }),
-        borrowed: borrowed.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }),
+        // keep raw numeric strings with extra precision; UI formatter will present final 2-decimal values
+        saved: savedUSD.toFixed(6),
+        borrowed: borrowedUSD.toFixed(6),
         interest: "0.00",
         nextUnlock: null,
       };
@@ -327,7 +354,7 @@ export default function DashboardPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70"></div>
       </div>
       <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-4 py-3 relative z-40">
-        <div className="flex items-center max-w-lg mx-auto">
+        <div className="flex items-center justify-between max-w-lg mx-auto">
           <Link href="/">
             <Button
               variant="ghost"
@@ -347,6 +374,10 @@ export default function DashboardPage() {
                 {formatAddress(address || "")}
               </div>
             </div>
+          </div>
+          <div className="flex-shrink-0 ml-3">
+            {/* Render the ConnectWallet button so thirdweb can rehydrate/persist the user's session on reload */}
+            <ConnectWallet size="sm" />
           </div>
         </div>
       </header>
@@ -466,7 +497,7 @@ export default function DashboardPage() {
         {/* Assets performance */}
         <Card className="bg-black/40 backdrop-blur-md border-white/20">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-lg text-white">Assets Performance</CardTitle>
+            <CardTitle className="text-lg text-white">Locked Savings</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             {performance.rows.length === 0 ? (
@@ -488,80 +519,6 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-black/40 backdrop-blur-md border-white/20">
-          <CardHeader className="p-4 pb-2">
-            {/* <CardTitle className="flex items-center justify-center text-lg text-white">
-              <Wallet className="w-5 h-5 mr-2 text-[#54d22d]" />
-              Your Wallet Details
-            </CardTitle> */}
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
-                <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
-                  <TrendingUp className="w-4 h-4 text-[#162013]" />
-                </div>
-                <p className="text-xs font-medium mb-1 text-[#a2c398]">
-                  Savings
-                </p>
-                {dashboardLoading || isProcessing ? (
-                  <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
-                ) : (
-                  <div>
-                    <p className="text-sm font-bold text-white">
-                      {displayCurrency === 'KES' ? 'KSh' : '$'}{convertAmount(totals.saved)}
-                    </p>
-                    {totals.nextUnlock && (
-                      <p className="text-[10px] text-[#a2c398] mt-1">
-                        Unlock: {totals.nextUnlock}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
-                <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
-                  <ArrowDownLeft className="w-4 h-4 text-[#162013]" />
-                </div>
-                <p className="text-xs font-medium mb-1 text-[#a2c398]">Loans</p>
-                {dashboardLoading || isProcessing ? (
-                  <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
-                ) : (
-                  <div>
-                    <p className="text-sm font-bold text-white">
-                      {displayCurrency === 'KES' ? 'KSh' : '$'}{convertAmount(totals.borrowed)}
-                    </p>
-                    {parseFloat(totals.interest) > 0 && (
-                      <p className="text-[10px] text-[#a2c398] mt-1">
-                        Int: {displayCurrency === 'KES' ? 'KSh' : '$'}{convertAmount(totals.interest)}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
-                <div className="w-8 h-8 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Shield className="w-4 h-4 text-[#162013]" />
-                </div>
-                <p className="text-xs font-medium mb-1 text-[#a2c398]">
-                  Assets
-                </p>
-                {dashboardLoading || isProcessing ? (
-                  <div className="animate-spin w-4 h-4 border border-[#54d22d] border-t-transparent rounded-full mx-auto"></div>
-                ) : (
-                  <p className="text-sm font-bold text-white">
-                    {Object.keys(deposits).filter(token => 
-                      deposits[token] !== "0"
-                    ).length || 0}
-                  </p>
-                )}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </main>
