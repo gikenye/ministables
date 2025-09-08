@@ -226,7 +226,9 @@ export function FundsWithdrawalModal({
                   {availableTokens.map((token) => {
                     const tokenInfo = tokenInfos[token]
                     const withdrawable = getWithdrawableAmount(token)
+                    const totalDeposit = userDeposits[token] || "0"
                     const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18)
+                    const formattedTotal = formatAmount(totalDeposit, tokenInfo?.decimals || 18)
                     const iconUrl = getTokenIcon(tokenInfo?.symbol || "")
                     const isTokenLocked = isLocked(depositLockEnds[token])
 
@@ -235,16 +237,17 @@ export function FundsWithdrawalModal({
                         key={token}
                         onClick={() => {
                           setForm({ ...form, token })
+                          // allow opening details for locked tokens too, but only auto-advance when available
                           if (!isTokenLocked && withdrawable !== "0") {
                             goToNextStep()
                           }
                         }}
-                        disabled={isTokenLocked || withdrawable === "0"}
+                        disabled={false}
                         className={`w-full p-4 rounded-xl border transition-all ${
                           form.token === token
                             ? "border-[#54d22d] bg-[#54d22d]/10"
                             : isTokenLocked || withdrawable === "0"
-                              ? "border-[#426039] bg-[#21301c]/50 opacity-50 cursor-not-allowed"
+                              ? "border-[#426039] bg-[#21301c]/50"
                               : "border-[#426039] bg-[#21301c] hover:border-[#54d22d] hover:bg-[#2e4328]"
                         }`}
                       >
@@ -265,9 +268,14 @@ export function FundsWithdrawalModal({
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-white font-semibold">{formattedWithdrawable}</div>
-                            {isTokenLocked && (
-                              <div className="text-red-400 text-xs">Until {formatDate(depositLockEnds[token])}</div>
+                            <div className="text-white font-semibold">{formattedTotal}</div>
+                            {isTokenLocked ? (
+                              <>
+                                <div className="text-red-400 text-xs">Locked • Available: {formattedWithdrawable}</div>
+                                <div className="text-red-400 text-xs">Until {formatDate(depositLockEnds[token])}</div>
+                              </>
+                            ) : (
+                              <div className="text-xs text-[#a2c398]">Available: {formattedWithdrawable}</div>
                             )}
                           </div>
                         </div>
