@@ -30,6 +30,24 @@ import {
   useWalletBalance 
 } from "thirdweb/react"
 
+// Helper to safely log thirdweb responses (avoid throwing on circular objects)
+const logThirdweb = (label: string, obj: any) => {
+  try {
+    // Primary dump
+    console.debug(`[thirdweb:${label}]`, obj)
+
+    // Try to stringify for easier server-side capture; ignore stringify errors
+    try {
+      const json = JSON.stringify(obj, Object.getOwnPropertyNames(obj))
+      console.debug(`[thirdweb:${label}:json]`, json)
+    } catch (e) {
+      // ignore
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 interface BorrowMoneyModalProps {
   isOpen: boolean
   onClose: () => void
@@ -113,44 +131,19 @@ export function BorrowMoneyModal({
     }
   }, [isOpen])
 
-  // Calculate required collateral using oracle price data when amount/tokens change
+  // Calculate required collateral with fallback
   useEffect(() => {
-    const updateCollateralRequirement = async () => {
-      if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
-        setFetchingRate(true)
-        try {
-          const result = await calculateRequiredCollateral(
-            form.token,
-            form.collateralToken,
-            form.amount,
-            1.5 // 150% collateralization ratio
-          )
-          
-          if (result) {
-            setRequiredCollateral(result.amount)
-            setExchangeRate(result.rate)
-          } else {
-            // Fallback to fixed ratio if oracle data is unavailable
-            const amountValue = Number(form.amount)
-            setRequiredCollateral((amountValue * 1.5).toFixed(4))
-            setExchangeRate(null)
-          }
-        } catch (error) {
-          console.error("Error calculating collateral:", error)
-          // Fallback to fixed ratio
-          const amountValue = Number(form.amount)
-          setRequiredCollateral((amountValue * 1.5).toFixed(4))
-          setExchangeRate(null)
-        } finally {
-          setFetchingRate(false)
-        }
-      } else {
-        setRequiredCollateral(null)
-        setExchangeRate(null)
-      }
+    if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
+      setFetchingRate(true)
+      // Use simple 1.5x ratio fallback to avoid oracle issues
+      const amountValue = Number(form.amount)
+      setRequiredCollateral((amountValue * 1.5).toFixed(4))
+      setExchangeRate(1.5)
+      setFetchingRate(false)
+    } else {
+      setRequiredCollateral(null)
+      setExchangeRate(null)
     }
-
-    updateCollateralRequirement()
   }, [form.token, form.collateralToken, form.amount])
 
   const hasCollateral = (token: string) => {
@@ -297,6 +290,7 @@ export function BorrowMoneyModal({
             })
             
             const wrapResult = await sendTransaction({ transaction: wrapTx, account })
+            logThirdweb('wrapResult', wrapResult)
             if (wrapResult?.transactionHash) {
               setTransactionStatus("Waiting for CELO conversion...")
               await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash })
@@ -333,6 +327,7 @@ export function BorrowMoneyModal({
         // Execute approval transaction
         setTransactionStatus("Approving collateral use...")
         const allowanceResult = await sendTransaction({ transaction: allowanceTx, account })
+  logThirdweb('allowanceResult', allowanceResult)
         if (allowanceResult?.transactionHash) {
           await waitForReceipt({ client, chain: celo, transactionHash: allowanceResult.transactionHash })
         }
@@ -347,6 +342,7 @@ export function BorrowMoneyModal({
         // Execute deposit transaction
         setTransactionStatus("Depositing your security...")
         const depositResult = await sendTransaction({ transaction: depositTx, account })
+  logThirdweb('depositResult', depositResult)
         if (depositResult?.transactionHash) {
           await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash })
           
@@ -372,6 +368,7 @@ export function BorrowMoneyModal({
       })
       
       const borrowResult = await sendTransaction({ transaction: borrowTx, account })
+  logThirdweb('borrowResult', borrowResult)
       if (borrowResult?.transactionHash) {
         setTransactionStatus("Processing transaction...")
         await waitForReceipt({ client, chain: celo, transactionHash: borrowResult.transactionHash })
@@ -393,7 +390,9 @@ export function BorrowMoneyModal({
         // Don't automatically close - let the user close the modal when ready
       }, 2000)
     } catch (error: any) {
-      setTransactionStatus("Something went wrong")
+  setTransactionStatus("Something went wrong")
+  // Log full error for debugging
+  logThirdweb('error', error)
 
       if (error.message?.includes("insufficient reserves") || error.message?.includes("E5")) {
         setTransactionStatus("Not enough funds available. Please try a smaller amount.")

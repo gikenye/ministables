@@ -60,6 +60,7 @@ export function SaveMoneyModal({
   const [showOnrampModal, setShowOnrampModal] = useState(false)
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [transactionStatus, setTransactionStatus] = useState<string | null>(null)
   const [depositSuccess, setDepositSuccess] = useState<{
     token: string
     amount: string
@@ -83,6 +84,7 @@ export function SaveMoneyModal({
       setCurrentStep(1)
       setError(null)
       setIsSaving(false)
+      setTransactionStatus(null)
       setDepositSuccess(null)
     }
   }, [isOpen])
@@ -250,6 +252,7 @@ export function SaveMoneyModal({
 
     setIsSaving(true)
     setError(null)
+    setTransactionStatus("Setting up your deposit...")
 
     try {
       const depositTx = await prepareDepositTransaction()
@@ -269,6 +272,7 @@ export function SaveMoneyModal({
         if (process.env.NODE_ENV === 'development') {
           console.log("[SaveMoneyModal] Approval required, sending approval transaction")
         }
+        setTransactionStatus("Authorizing transaction...")
         const approveResult = await sendTransaction(approveTx)
         if (process.env.NODE_ENV === 'development') {
           console.log("[SaveMoneyModal] Approval transaction submitted:", approveResult?.transactionHash?.substring(0, 10) + '...')
@@ -280,6 +284,7 @@ export function SaveMoneyModal({
           if (process.env.NODE_ENV === 'development') {
             console.log("[SaveMoneyModal] Waiting for approval confirmation...")
           }
+          setTransactionStatus("Processing authorization...")
           const approvalReceipt = await waitForReceipt({
             client,
             chain: celo,
@@ -293,6 +298,7 @@ export function SaveMoneyModal({
       
       // Execute deposit transaction
       console.log("[SaveMoneyModal] Sending deposit transaction");
+      setTransactionStatus("Completing your deposit...")
       // Send the transaction normally, without trying to modify the data
       const depositResult = await sendTransaction(depositTx as any);
       console.log("[SaveMoneyModal] Deposit result:", depositResult)
@@ -301,16 +307,19 @@ export function SaveMoneyModal({
       
       if (depositResult?.transactionHash) {
         console.log("[SaveMoneyModal] Deposit transaction submitted with hash:", depositResult.transactionHash)
+        setTransactionStatus("Almost done...")
         // Wait for deposit confirmation
         const depositReceipt = await waitForReceipt({
           client,
           chain: celo,
           transactionHash: depositResult.transactionHash,
         })
+        setTransactionStatus("Success!")
         handleTransactionSuccess(depositReceipt, false)
       }
 
     } catch (err: any) {
+      setTransactionStatus(null)
       handleTransactionError(err)
     } finally {
       setIsSaving(false)
@@ -326,6 +335,7 @@ export function SaveMoneyModal({
       lockPeriod: "2592000",
     })
     setError(null)
+    setTransactionStatus(null)
   }
 
   const handleCloseSuccess = () => {
@@ -777,12 +787,12 @@ export function SaveMoneyModal({
                   {isSaving || isTransactionPending ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
+                      {transactionStatus || "Processing..."}
                     </span>
                   ) : requiresAuth ? (
                     "Sign In Required"
                   ) : (
-                    "proceed to deposit "
+                    "Complete Deposit"
                   )}
                 </button>
               </div>

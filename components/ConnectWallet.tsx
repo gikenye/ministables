@@ -1,7 +1,8 @@
 "use client";
-import { ConnectButton } from "thirdweb/react";
+import { ConnectButton, useConnect } from "thirdweb/react";
 import { darkTheme } from "thirdweb/react";
-import { inAppWallet, createWallet } from "thirdweb/wallets";
+import { createWallet } from "thirdweb/wallets";
+import { inAppWallet } from "thirdweb/wallets/in-app";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { useEffect, useState } from "react";
@@ -13,36 +14,46 @@ interface ConnectWalletButtonProps {
 const wallets = [
   createWallet("io.metamask"),
   inAppWallet({
+    // Celo does not support EIP-7702 — use EIP-4337 smart accounts instead.
+    // Note: EIP-4337 creates a smart contract account (different address from EOA).
+    executionMode: {
+      mode: "EIP4337",
+      smartAccount: {
+        chain: celo,
+        sponsorGas: true,
+      },
+    },
     auth: {
-      options: ["google", "facebook", "farcaster", "x", "phone"],
+      options: ["google", "farcaster", "phone", "email"],
     },
   }),
   createWallet("com.valoraapp"),
   createWallet("com.coinbase.wallet"),
-  createWallet("com.trustwallet.app"),
   createWallet("walletConnect"),
 ];
 
-const metamaskWallet = createWallet("io.metamask");
+const miniPayWallet = createWallet("io.metamask");
 
 
 export function ConnectWallet({ className }: ConnectWalletButtonProps) {
-  const [isMiniPay, setIsMiniPay] = useState(false);
+  const [hideConnectBtn, setHideConnectBtn] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
-      setIsMiniPay(true);
-      metamaskWallet.connect({ client });
+    if (typeof window !== "undefined" && window.ethereum && window.ethereum.isMiniPay) {
+      setHideConnectBtn(true);
+      miniPayWallet.connect({ client });
     }
   }, []);
 
+
+
   return (
     <div className={className}>
-      {!isMiniPay && (
+      {!hideConnectBtn && (
         <ConnectButton
           accountAbstraction={{
             chain: celo,
-            sponsorGas: false,
+            sponsorGas: true,
           }}
           client={client}
           connectButton={{ label: "sign in" }}

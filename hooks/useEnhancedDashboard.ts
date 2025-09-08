@@ -1,18 +1,10 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import { getContract, prepareContractCall, readContract } from "thirdweb";
+import { getContract } from "thirdweb";
+import { useReadContract } from "thirdweb/react";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
-import { calculateEquivalentValue } from "@/lib/oracles/priceService";
-import { 
-  fetchUserDeposit, 
-  fetchUserBorrow, 
-  fetchUserCollateral,
-  fetchAccumulatedInterest,
-  fetchBorrowStartTime,
-  fetchTotalSupply
-} from "@/lib/services/dashboardService";
 
 // Standard stablecoin reference for value comparison
 const USD_REFERENCE_TOKEN = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // cUSD
@@ -120,6 +112,13 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   const [borrowValue, setBorrowValue] = useState("0");
   const [loading, setLoading] = useState(true);
 
+  // Create contract instance like the working modals
+  const contract = getContract({
+    client,
+    chain: celo,
+    address: MINILEND_ADDRESS,
+  });
+
   // Format big integers with proper decimal precision
   const bigIntPow10 = (n: number) => {
     let result = BigInt(1);
@@ -161,181 +160,79 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
     return futureUnlockTimes.length > 0 ? futureUnlockTimes[0] : null;
   }, [dashboardData.lockEnds]);
 
-  // Fetch all data using the service functions with contract
+  // Get user data for all supported tokens
+  const userDataQueries = SUPPORTED_STABLECOINS.map(token => {
+    const { data: deposit } = useReadContract({
+      contract,
+      method: "function deposits(address, address) view returns (uint256)",
+      params: [address || "0x0000000000000000000000000000000000000000", token],
+      queryOptions: { enabled: !!address },
+    });
+    
+    const { data: borrow } = useReadContract({
+      contract,
+      method: "function borrows(address, address) view returns (uint256)",
+      params: [address || "0x0000000000000000000000000000000000000000", token],
+      queryOptions: { enabled: !!address },
+    });
+    
+    const { data: collateral } = useReadContract({
+      contract,
+      method: "function collaterals(address, address) view returns (uint256)",
+      params: [address || "0x0000000000000000000000000000000000000000", token],
+      queryOptions: { enabled: !!address },
+    });
+    
+    return { token, deposit, borrow, collateral };
+  });
+
   useEffect(() => {
     if (!address) {
       setLoading(false);
       return;
     }
 
-    let isMounted = true; // Track component mount state for cleanup
-    
-    const loadAllDashboardData = async () => {
-      setLoading(true);
+    const newData = {
+      deposits: {} as Record<string, string>,
+      borrows: {} as Record<string, string>,
+      collateral: {} as Record<string, string>,
+      lockEnds: {} as Record<string, number>,
+      interest: {} as Record<string, string>,
+      interestUsd: {} as Record<string, string>,
+      borrowStartTimes: {} as Record<string, number>,
+    };
+
+    let totalDepositValue = 0;
+    let totalBorrowValue = 0;
+
+    // Process all token data
+    userDataQueries.forEach(({ token, deposit, borrow, collateral }) => {
+      const depositAmount = deposit?.toString() || "0";
+      const borrowAmount = borrow?.toString() || "0";
+      const collateralAmount = collateral?.toString() || "0";
       
-      try {
-        // Initialize contract - similar to BorrowMoneyModal implementation
-        const contract = getContract({
-          address: MINILEND_ADDRESS,
-          chain: celo,
-          client,
-        });
+      newData.deposits[token] = depositAmount;
+      newData.borrows[token] = borrowAmount;
+      newData.collateral[token] = collateralAmount;
+      newData.lockEnds[token] = 0;
+      newData.interest[token] = "0";
+      newData.interestUsd[token] = "0";
+      newData.borrowStartTimes[token] = 0;
 
-        // Fetch user data using the ThirdWeb function patterns
-        const deposits: Record<string, string> = {};
-        const borrows: Record<string, string> = {};
-        const collateral: Record<string, string> = {};
-        const lockEnds: Record<string, number> = {};
-        const interest: Record<string, string> = {};
-        const startTimes: Record<string, number> = {};
+      // Calculate values (assuming 1:1 USD for simplicity)
+      const depositValue = parseFloat(formatAmount(depositAmount, token));
+      const borrowValue = parseFloat(formatAmount(borrowAmount, token));
+      totalDepositValue += depositValue;
+      totalBorrowValue += borrowValue;
+    });
 
-        // Process each supported stablecoin
-        for (const token of SUPPORTED_STABLECOINS) {
-          try {
-            // Fetch deposit data
-            const depositResult = await fetchUserDeposit(contract, address, token, 0n);
-            if (depositResult) {
-              const [amount, lockEnd] = depositResult as [bigint, bigint];
-              deposits[token] = amount.toString();
-              lockEnds[token] = Number(lockEnd);
-            } else {
-              deposits[token] = "0";
-              lockEnds[token] = 0;
-            }
-
-            // Fetch borrow data
-            const borrowResult = await fetchUserBorrow(contract, address, token);
-            borrows[token] = borrowResult ? borrowResult.toString() : "0";
-
-            // Fetch collateral data
-            const collateralResult = await fetchUserCollateral(contract, address, token);
-            collateral[token] = collateralResult ? collateralResult.toString() : "0";
-
-            // Fetch borrow start times
-            const startTimeResult = await fetchBorrowStartTime(contract, address, token);
-            startTimes[token] = startTimeResult ? Number(startTimeResult) : 0;
-
-          } catch (err) {
-            console.error(`Error processing data for token ${token}:`, err);
-            deposits[token] = "0";
-            borrows[token] = "0";
-            collateral[token] = "0";
-            lockEnds[token] = 0;
-            startTimes[token] = 0;
-          }
-        }
-
-        // Fetch accumulated interest (once for user)
-        let accumulatedInterest = "0";
-        try {
-          const interestResult = await fetchAccumulatedInterest(contract, address);
-          accumulatedInterest = interestResult ? interestResult.toString() : "0";
-        } catch (err) {
-          console.error("Error fetching accumulated interest:", err);
-        }
-
-        // Fill interest data for all tokens
-        for (const token of SUPPORTED_STABLECOINS) {
-          interest[token] = accumulatedInterest;
-        }
-
-        if (isMounted) {
-          setDashboardData({
-            deposits,
-            borrows,
-            collateral,
-            lockEnds,
-            interest,
-            interestUsd: {}, // Will calculate below
-            borrowStartTimes: startTimes
-          });
-          
-          // Calculate USD values
-          await calculateUsdValues(deposits, borrows, interest);
-        }
-      } catch (error) {
-        console.error("Error loading enhanced dashboard data:", error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-    
-    loadAllDashboardData();
-    
-    // Cleanup function to prevent state updates after unmount
-    return () => {
-      isMounted = false;
-    };
-  }, [address]);
+    setDashboardData(newData);
+    setDepositValue(totalDepositValue.toFixed(2));
+    setBorrowValue(totalBorrowValue.toFixed(2));
+    setLoading(false);
+  }, [address, userDataQueries]);
   
-  // Calculate USD values for all tokens
-  const calculateUsdValues = async (
-    deposits: Record<string, string>, 
-    borrows: Record<string, string>,
-    interest: Record<string, string>
-  ) => {
-    try {
-      let depositTotal = 0;
-      let borrowTotal = 0;
-      const interestUsdValues: Record<string, string> = {};
-      
-      for (const token of SUPPORTED_STABLECOINS) {
-        // Calculate deposit value
-        if (deposits[token] && deposits[token] !== "0") {
-          try {
-            const equivalentValue = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, deposits[token]);
-            if (equivalentValue) {
-              depositTotal += parseFloat(equivalentValue.value);
-            }
-          } catch (error) {
-            console.error(`Error converting deposit value for ${token}:`, error);
-          }
-        }
-        
-        // Calculate borrow value
-        if (borrows[token] && borrows[token] !== "0") {
-          try {
-            const equivalentValue = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, borrows[token]);
-            if (equivalentValue) {
-              borrowTotal += parseFloat(equivalentValue.value);
-            }
-          } catch (error) {
-            console.error(`Error converting borrow value for ${token}:`, error);
-          }
-        }
-        
-        // Calculate interest USD value
-        if (interest[token] && interest[token] !== "0") {
-          try {
-            const equivalentValue = await calculateEquivalentValue(token, USD_REFERENCE_TOKEN, interest[token]);
-            if (equivalentValue) {
-              interestUsdValues[token] = equivalentValue.value;
-            } else {
-              interestUsdValues[token] = "0";
-            }
-          } catch (error) {
-            console.error(`Error converting interest value for ${token}:`, error);
-            interestUsdValues[token] = "0";
-          }
-        } else {
-          interestUsdValues[token] = "0";
-        }
-      }
-      
-      setDepositValue(depositTotal.toFixed(2));
-      setBorrowValue(borrowTotal.toFixed(2));
-      
-      setDashboardData(prev => ({
-        ...prev,
-        interestUsd: interestUsdValues
-      }));
-      
-    } catch (error) {
-      console.error("Error calculating USD values:", error);
-    }
-  };
+
 
   return {
     deposits: dashboardData.deposits,
