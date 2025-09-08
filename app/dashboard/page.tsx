@@ -24,6 +24,7 @@ import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { useActiveAccount, useReadContract, useConnect, useSendTransaction, useWalletBalance } from "thirdweb/react";
 import { useUserDeposits, useUserBorrows, useAccumulatedInterest, useGetUserBalance } from "@/lib/thirdweb/minilend-contract";
+import { thirdwebService } from "@/lib/services/thirdwebService";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 
@@ -202,6 +203,63 @@ export default function DashboardPage() {
       setBorrowsState((p) => ({ ...p, [C_KES]: cKESUserBorrow.data?.toString?.() || "0" }));
     }
   }, [cKESUserDeposit?.data, cKESUserBorrow?.data, address]);
+
+  // Fetch all deposits for supported tokens and compute aggregate totals + sensible lockEnds
+  useEffect(() => {
+    if (!address) return;
+
+    let mounted = true;
+
+    const fetchAll = async () => {
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        // Parallelize per-token fetches
+        const promises = SUPPORTED_STABLECOINS.map(async (token) => {
+          const deposits = await thirdwebService.getAllUserDeposits(address, token);
+          if (!deposits || deposits.length === 0) return { token, total: "0", anyUnlocked: false, nextUnlock: 0 };
+
+          // Sum amounts
+          let total = BigInt(0);
+          for (const d of deposits) {
+            total += BigInt(d.amount || "0");
+          }
+
+          // Determine unlocks: if any deposit is unlocked, mark anyUnlocked true
+          const anyUnlocked = deposits.some((d) => (d.lockEnd || 0) <= now);
+
+          // If none unlocked, pick the earliest future lockEnd as nextUnlock
+          const futureLockEnds = deposits.map((d) => d.lockEnd || 0).filter((t) => t > now);
+          const nextUnlock = futureLockEnds.length > 0 ? Math.min(...futureLockEnds) : 0;
+
+          return { token, total: total.toString(), anyUnlocked, nextUnlock };
+        });
+
+        const results = await Promise.all(promises);
+
+        if (!mounted) return;
+
+        const newDeposits: Record<string, string> = {};
+        const newLockEnds: Record<string, number> = {};
+
+        for (const r of results) {
+          newDeposits[r.token] = r.total;
+          // If any deposit is unlocked, set lockEnd to 0 so modal logic treats token as available
+          newLockEnds[r.token] = r.anyUnlocked ? 0 : r.nextUnlock || 0;
+        }
+
+        setDepositsState((p) => ({ ...p, ...newDeposits }));
+        setLockEndsState((p) => ({ ...p, ...newLockEnds }));
+      } catch (err) {
+        console.error('[dashboard] error fetching all deposits', err);
+      }
+    };
+
+    fetchAll();
+
+    return () => {
+      mounted = false;
+    };
+  }, [address]);
 
   // Accumulated interest (protocol-level) for the user
   const accumulatedInterest = useAccumulatedInterest(contract, address || "");
