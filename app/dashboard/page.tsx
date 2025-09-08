@@ -23,7 +23,7 @@ import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { useActiveAccount, useReadContract, useConnect, useSendTransaction, useWalletBalance } from "thirdweb/react";
-import { useUserDeposits, useUserBorrows, useAccumulatedInterest } from "@/lib/thirdweb/minilend-contract";
+import { useUserDeposits, useUserBorrows, useAccumulatedInterest, useGetUserBalance } from "@/lib/thirdweb/minilend-contract";
 import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 
@@ -158,6 +158,8 @@ export default function DashboardPage() {
   // Use the typed hooks to read user-specific data from the contract
   const C_KES = "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0";
   const cKESUserDeposit = useUserDeposits(contract, address || "", C_KES, BigInt(0));
+  // Use contract helper to get the user's total balance (deposits + yield) for the token
+  const cKESUserBalance = useGetUserBalance(contract, address || "", C_KES);
   const cKESUserBorrow = useUserBorrows(contract, address || "", C_KES);
 
   // Local state for UI usage
@@ -168,16 +170,34 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!address) return;
     // Update when hook data arrives
-    if (cKESUserDeposit?.data) {
+    if (cKESUserBalance?.data) {
+      try {
+        // getUserBalance returns balance + yield (contract returns uint256)
+        const total = cKESUserBalance.data?.toString?.() || "0";
+        setDepositsState((p) => ({ ...p, [C_KES]: total }));
+      } catch (err) {
+        console.error('[dashboard] parsing cKESUserBalance', err, cKESUserBalance.data);
+      }
+    } else if (cKESUserDeposit?.data) {
+      // fallback: use first deposit entry if balance helper not available
       try {
         const amount = cKESUserDeposit.data[0]?.toString?.() || "0";
-        const lockEnd = Number(cKESUserDeposit.data[1]) || 0;
         setDepositsState((p) => ({ ...p, [C_KES]: amount }));
-        setLockEndsState((p) => ({ ...p, [C_KES]: lockEnd }));
       } catch (err) {
         console.error('[dashboard] parsing cKESUserDeposit', err, cKESUserDeposit.data);
       }
     }
+
+    if (cKESUserDeposit?.data) {
+      // preserve lock end from the first deposit entry (best-effort)
+      try {
+        const lockEnd = Number(cKESUserDeposit.data[1]) || 0;
+        setLockEndsState((p) => ({ ...p, [C_KES]: lockEnd }));
+      } catch (err) {
+        console.error('[dashboard] parsing cKESUserDeposit lockEnd', err, cKESUserDeposit.data);
+      }
+    }
+
     if (cKESUserBorrow?.data) {
       setBorrowsState((p) => ({ ...p, [C_KES]: cKESUserBorrow.data?.toString?.() || "0" }));
     }
@@ -440,7 +460,7 @@ export default function DashboardPage() {
                   Money Saved
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KSh' : '$'}${convertAmount(totals.saved)}`}
+                  {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KES' : '$'}${convertAmount(totals.saved)}`}
                 </p>
                 {totals.nextUnlock && (
                   <p className="text-xs text-[#a2c398] mt-2">
@@ -454,7 +474,7 @@ export default function DashboardPage() {
                   Money Borrowed
                 </p>
                 <p className="text-2xl font-bold text-white">
-                  {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KSh' : '$'}${convertAmount(totals.borrowed)}`}
+                  {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KES' : '$'}${convertAmount(totals.borrowed)}`}
                 </p>
                 {parseFloat(totals.interest) > 0 && (
                   <p className="text-xs text-[#a2c398] mt-2">
