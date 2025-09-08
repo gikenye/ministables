@@ -1,6 +1,6 @@
 "use client";
 
-import { prepareContractCall, readContract } from "thirdweb";
+import { readContract } from "thirdweb";
 
 /**
  * Fetch user balance for a specific token
@@ -10,12 +10,16 @@ export async function fetchUserBalance(
   userAddress: string,
   tokenAddress: string,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function getUserBalance(address user, address token)",
-    params: [userAddress, tokenAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function getUserBalance(address user, address token) view returns (uint256)",
+      params: [userAddress, tokenAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching user balance:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -25,12 +29,16 @@ export async function fetchAccumulatedInterest(
   contract,
   userAddress: string
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function accumulatedInterest(address)",
-    params: [userAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function accumulatedInterest(address) view returns (uint256)",
+      params: [userAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching accumulated interest:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -41,12 +49,16 @@ export async function fetchBorrowStartTime(
   userAddress: string,
   tokenAddress: string,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function borrowStartTime(address,address)",
-    params: [userAddress, tokenAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function borrowStartTime(address,address) view returns (uint256)",
+      params: [userAddress, tokenAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching borrow start time:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -57,12 +69,16 @@ export async function fetchContractReserves(
   tokenAddress: string,
   userAddress: string,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function contractReserves(address,address)",
-    params: [tokenAddress, userAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function contractReserves(address,address) view returns (uint256)",
+      params: [tokenAddress, userAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching contract reserves:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -74,12 +90,16 @@ export async function fetchUserDeposit(
   tokenAddress: string,
   depositIndex: bigint,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function userDeposits(address,address,uint256)",
-    params: [userAddress, tokenAddress, depositIndex],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function userDeposits(address,address,uint256) view returns (uint256,uint256)",
+      params: [userAddress, tokenAddress, depositIndex],
+    });
+  } catch (error) {
+    console.error("Error fetching user deposit:", error);
+    return [BigInt(0), BigInt(0)];
+  }
 }
 
 /**
@@ -89,12 +109,16 @@ export async function fetchDefaultLockPeriod(
   contract,
   index: bigint
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function defaultLockPeriods(uint256)",
-    params: [index],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function defaultLockPeriods(uint256) view returns (uint256)",
+      params: [index],
+    });
+  } catch (error) {
+    console.error("Error fetching default lock period:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -105,12 +129,16 @@ export async function fetchUserBorrow(
   userAddress: string,
   tokenAddress: string,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function userBorrows(address,address)",
-    params: [userAddress, tokenAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function userBorrows(address,address) view returns (uint256)",
+      params: [userAddress, tokenAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching user borrow:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -121,12 +149,16 @@ export async function fetchUserCollateral(
   userAddress: string,
   tokenAddress: string,
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function userCollateral(address,address)",
-    params: [userAddress, tokenAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function userCollateral(address,address) view returns (uint256)",
+      params: [userAddress, tokenAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching user collateral:", error);
+    return BigInt(0);
+  }
 }
 
 /**
@@ -136,10 +168,14 @@ export async function fetchTotalSupply(
   contract,
   tokenAddress: string
 ) {
-  const tx = prepareContractCall({
-    contract,
-    method: "function totalSupply(address)",
-    params: [tokenAddress],
-  });
-  return await readContract(tx);
+  try {
+    return await readContract({
+      contract,
+      method: "function totalSupply(address) view returns (uint256)",
+      params: [tokenAddress],
+    });
+  } catch (error) {
+    console.error("Error fetching total supply:", error);
+    return BigInt(0);
+  }
 }
