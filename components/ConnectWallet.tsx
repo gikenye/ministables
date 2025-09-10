@@ -5,7 +5,7 @@ import { createWallet } from "thirdweb/wallets";
 import { inAppWallet } from "thirdweb/wallets/in-app";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 
 
@@ -34,25 +34,31 @@ const wallets = [
 export function ConnectWallet({ className }) {
   const { connect } = useConnect();
   const account = useActiveAccount();
+  const [hideConnectBtn, setHideConnectBtn] = useState(false);
 
   useEffect(() => {
-    // Detect injected provider (MiniPay or similar)
-    const isInjectedProvider = typeof window !== "undefined" && !!window.ethereum;
+    // Detect if we're in MiniPay environment
+    const isMiniPay = typeof window !== "undefined" && 
+                      window.ethereum && 
+                      window.ethereum.isMiniPay;
 
-    // If injected provider is present and no account is active, connect automatically
-    if (isInjectedProvider && !account) {
+    // Auto-connect only in MiniPay environment
+    if (isMiniPay && !account) {
       connect(async () => {
         const injected = createWallet("io.metamask");
         await injected.connect({ client });
         return injected;
       });
     }
+
+    // Hide connect button only in MiniPay when wallet is connected
+    setHideConnectBtn(isMiniPay && !!account);
   }, [connect, account]);
 
-  // Hide connect button only in Minipay (injected provider), show in normal environments
+  // Show connect button unless we're in MiniPay with connected wallet
   return (
     <div className={className}>
-      {!account && (
+      {!hideConnectBtn && (
         <ConnectButton
           accountAbstraction={{
             chain: celo,
