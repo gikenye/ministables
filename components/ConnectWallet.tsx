@@ -1,4 +1,4 @@
-use client";
+"use client";
 import { useConnect, useActiveAccount } from "thirdweb/react";
 import { ConnectButton, darkTheme } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
