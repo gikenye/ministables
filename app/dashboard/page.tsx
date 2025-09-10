@@ -22,6 +22,7 @@ import { formatAddress } from "@/lib/utils";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
 import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
+import { parseUnits } from "viem";
 import { useActiveAccount, useReadContract, useConnect, useSendTransaction, useWalletBalance } from "thirdweb/react";
 import { useUserDeposits, useUserBorrows, useAccumulatedInterest, useGetUserBalance } from "@/lib/thirdweb/minilend-contract";
 import { thirdwebService } from "@/lib/services/thirdwebService";
@@ -333,6 +334,28 @@ export default function DashboardPage() {
   const lockEnds = lockEndsState;
   const dashboardLoading = false;
 
+  // Normalize deposit and lock keys to match tokenInfo address casing so the modal's
+  // tokenInfos lookup and the deposits object use the same keys (case-insensitive match).
+  const normalizedDeposits = useMemo(() => {
+    const out: Record<string, string> = {};
+    const infoKeys = Object.keys(tokenInfo || {});
+    for (const [k, v] of Object.entries(depositsState || {})) {
+      const match = infoKeys.find((t) => t.toLowerCase() === k.toLowerCase());
+      out[match || k] = v;
+    }
+    return out;
+  }, [depositsState, tokenInfo]);
+
+  const normalizedLockEnds = useMemo(() => {
+    const out: Record<string, number> = {};
+    const infoKeys = Object.keys(tokenInfo || {});
+    for (const [k, v] of Object.entries(lockEndsState || {})) {
+      const match = infoKeys.find((t) => t.toLowerCase() === k.toLowerCase());
+      out[match || k] = Number(v || 0);
+    }
+    return out;
+  }, [lockEndsState, tokenInfo]);
+
   // Use fixed exchange rate to avoid oracle issues
   useEffect(() => {
     if (address) {
@@ -578,23 +601,25 @@ export default function DashboardPage() {
             <CardTitle className="text-lg text-white">Locked Savings</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            {performance.rows.length === 0 ? (
+            {performance.rows.filter(r => BigInt(r.depositWei) > 0).length === 0 ? (
               <p className="text-sm text-[#a2c398]">No deposited assets found.</p>
             ) : (
               <div className="space-y-3">
-                {performance.rows.map((r) => (
-                  <div key={r.token} className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
-                    <div>
-                      <div className="text-sm text-[#a2c398]">{r.symbol}</div>
-                      <div className="text-xs text-[#cfe6c8]">{formatAddress(r.token)}</div>
+                {performance.rows
+                  .filter(r => BigInt(r.depositWei) > 0)
+                  .map((r) => (
+                    <div key={r.token} className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
+                      <div>
+                        <div className="text-sm text-[#a2c398]">{r.symbol}</div>
+                        <div className="text-xs text-[#cfe6c8]">{formatAddress(r.token)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-white">{formatAmount(r.depositWei, r.decimals)} {r.symbol}</div>
+                        <div className="text-xs text-[#a2c398]">Accrued: {formatAmount(r.interestWei, r.decimals)} {r.symbol}</div>
+                        <div className="text-xs text-[#a2c398]">{r.lockEnd && r.lockEnd > Math.floor(Date.now()/1000) ? `Unlocks: ${new Date(r.lockEnd*1000).toLocaleString()}` : "Available"}</div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-white">{formatAmount(r.depositWei, r.decimals)} {r.symbol}</div>
-                      <div className="text-xs text-[#a2c398]">Accrued: {formatAmount(r.interestWei, r.decimals)} {r.symbol}</div>
-                      <div className="text-xs text-[#a2c398]">{r.lockEnd && r.lockEnd > Math.floor(Date.now()/1000) ? `Unlocks: ${new Date(r.lockEnd*1000).toLocaleString()}` : "Available"}</div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </CardContent>
@@ -620,7 +645,7 @@ export default function DashboardPage() {
         </div>
       </footer>
 
-      <FundsWithdrawalModal
+  <FundsWithdrawalModal
         isOpen={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
         onWithdraw={async (token: string, amount: string) => {
@@ -634,10 +659,48 @@ export default function DashboardPage() {
 
           try {
             const decimals = tokenInfo[token]?.decimals || 18;
-            const amountWei = BigInt(amount) * BigInt(Math.pow(10, decimals));
+            // Use parseUnits to convert decimal string amounts (e.g. "0.10") to wei-safe bigint
+            const amountWei = parseUnits(amount, decimals);
 
             if (process.env.NODE_ENV === 'development') {
               console.log('[dashboard] withdraw requested', { token, amount, decimals, amountWei: amountWei.toString(), account: account?.address, contractAddress: MINILEND_ADDRESS });
+            }
+
+            // Check for outstanding borrows across supported stablecoins (contract will revert with E2 if any exist)
+            try {
+              const outstanding: string[] = [];
+              for (const s of SUPPORTED_STABLECOINS) {
+                try {
+                  const b = await thirdwebService.getUserBorrows(account.address, s);
+                  if (BigInt(b || "0") > BigInt(0)) {
+                    const sym = tokenInfo[s]?.symbol || s.slice(0, 6);
+                    outstanding.push(`${sym}: ${formatAmount(b || "0", tokenInfo[s]?.decimals || 18)}`);
+                  }
+                } catch (innerErr) {
+                  console.warn('[dashboard] failed to read borrow for', s, innerErr);
+                }
+              }
+              if (outstanding.length > 0) {
+                setError(`You must repay outstanding loans before withdrawing. Outstanding: ${outstanding.join(', ')}`);
+                setIsProcessing(false);
+                return;
+              }
+            } catch (checkErr) {
+              console.warn('[dashboard] borrow check failed, continuing to attempt tx', checkErr);
+            }
+
+            // Verify requested amount is withdrawable to avoid an on-chain revert during gas estimation
+            try {
+              const withdrawableStr = await thirdwebService.getWithdrawableAmount(account.address, token);
+              const withdrawableWei = BigInt(withdrawableStr || "0");
+              if (amountWei > withdrawableWei) {
+                const availReadable = formatAmount(withdrawableStr || "0", decimals);
+                setError(`Requested amount exceeds withdrawable balance (${availReadable} ${tokenInfo[token]?.symbol || ''})`);
+                setIsProcessing(false);
+                return;
+              }
+            } catch (checkErr) {
+              console.warn('[dashboard] withdrawable check failed, continuing to attempt tx', checkErr);
             }
 
             // Prepare withdrawal transaction
@@ -671,18 +734,18 @@ export default function DashboardPage() {
             setIsProcessing(false);
           }
         }}
-        userDeposits={deposits}
-        depositLockEnds={lockEnds}
+        userDeposits={normalizedDeposits}
+        depositLockEnds={normalizedLockEnds}
         tokenInfos={tokenInfo}
         loading={dashboardLoading || isProcessing}
         userAddress={address}
         getWithdrawableAmount={async (token: string) => {
           try {
-            if (!deposits[token] || deposits[token] === "0") return "0";
-            if (lockEnds[token] && lockEnds[token] > Math.floor(Date.now() / 1000)) {
+            if (!normalizedDeposits[token] || normalizedDeposits[token] === "0") return "0";
+            if (normalizedLockEnds[token] && normalizedLockEnds[token] > Math.floor(Date.now() / 1000)) {
               return "0"; // Still locked
             }
-            return deposits[token]; // Available for withdrawal
+            return normalizedDeposits[token]; // Available for withdrawal
           } catch (error) {
             console.error("Error calculating withdrawable amount:", error);
             return "0";

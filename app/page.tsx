@@ -635,7 +635,10 @@ export default function AppPage() {
 
   const handleCardClick = useCallback(
     (cardId: string) => {
-      if (cardId === "history") {
+      // The dashboard has the corrected withdrawal modal and full deposit aggregation.
+      // Route "withdraw" and "history" to the dashboard to avoid opening the homepage modal
+      // which can show incomplete deposit data.
+      if (cardId === "history" || cardId === "withdraw") {
         router.push("/dashboard");
       } else {
         setActiveModal(cardId);

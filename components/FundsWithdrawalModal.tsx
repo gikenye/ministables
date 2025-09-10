@@ -11,6 +11,7 @@ import { formatAmount } from "@/lib/utils"
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal"
 import { offrampService } from "@/lib/services/offrampService"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
+import { thirdwebService } from "@/lib/services/thirdwebService"
 
 interface FundsWithdrawalModalProps {
   isOpen: boolean
@@ -46,6 +47,10 @@ export function FundsWithdrawalModal({
   const [error, setError] = useState<string | null>(null)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
   const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false)
+  const [perDeposits, setPerDeposits] = useState<Array<{ amount: string; lockEnd: number }>>([])
+  const [collateralAmount, setCollateralAmount] = useState<string>("0")
+  const [loadingDeposits, setLoadingDeposits] = useState(false)
+  const [withdrawableMap, setWithdrawableMap] = useState<Record<string, string>>({})
 
   const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction()
 
@@ -56,6 +61,62 @@ export function FundsWithdrawalModal({
       setError(null)
     }
   }, [isOpen])
+
+  // Fetch per-deposit rows and collateral amount whenever a token is selected
+  useEffect(() => {
+    const fetchDetails = async () => {
+      if (!form.token || !userAddress) {
+        setPerDeposits([])
+        setCollateralAmount("0")
+        setWithdrawableMap({})
+        return
+      }
+
+      setLoadingDeposits(true)
+      try {
+        const deps = await thirdwebService.getAllUserDeposits(userAddress, form.token)
+        setPerDeposits(deps || [])
+
+        const coll = await thirdwebService.getUserCollateral(userAddress, form.token)
+        setCollateralAmount(coll || "0")
+        // compute withdrawable for this token using prop or per-deposits
+        if (getActualWithdrawableAmount) {
+          try {
+            const w = await getActualWithdrawableAmount(form.token)
+            setWithdrawableMap((p) => ({ ...p, [form.token]: w }))
+          } catch (err) {
+            console.error('getActualWithdrawableAmount failed', err)
+            // fallback to per-deposits sum
+            const now = Math.floor(Date.now() / 1000)
+            const sum = (deps || []).reduce((acc, d) => {
+              try {
+                if ((d.lockEnd || 0) <= now) return acc + BigInt(d.amount || "0")
+              } catch {}
+              return acc
+            }, BigInt(0))
+            setWithdrawableMap((p) => ({ ...p, [form.token]: sum.toString() }))
+          }
+        } else {
+          const now = Math.floor(Date.now() / 1000)
+          const sum = (deps || []).reduce((acc, d) => {
+            try {
+              if ((d.lockEnd || 0) <= now) return acc + BigInt(d.amount || "0")
+            } catch {}
+            return acc
+          }, BigInt(0))
+          setWithdrawableMap((p) => ({ ...p, [form.token]: sum.toString() }))
+        }
+      } catch (err) {
+        console.error('Error fetching deposits/collateral for', form.token, err)
+        setPerDeposits([])
+        setCollateralAmount("0")
+      } finally {
+        setLoadingDeposits(false)
+      }
+    }
+
+    fetchDetails()
+  }, [form.token, userAddress])
 
   const handleWithdraw = async () => {
     if (!form.token || !form.amount) return
@@ -126,15 +187,28 @@ export function FundsWithdrawalModal({
 
   const getWithdrawableAmount = useCallback(
     (tokenAddress: string) => {
-      const deposit = userDeposits[tokenAddress] || "0"
-      const lockEnd = depositLockEnds[tokenAddress] || 0
+      // Case-insensitive lookup helpers
+      const lookup = (m: Record<string, any>, key: string) => {
+        if (!m) return undefined
+        if (m[key]) return m[key]
+        const foundKey = Object.keys(m).find((k) => k.toLowerCase() === key.toLowerCase())
+        return foundKey ? m[foundKey] : undefined
+      }
+
+      // Prefer precomputed withdrawableMap (populated via prop or per-deposits)
+      const w = lookup(withdrawableMap, tokenAddress)
+      if (w !== undefined) return w
+
+      // fallback: prefer provided async prop if available (not ideal sync) - try to read cached map
+      const deposit = lookup(userDeposits, tokenAddress) || "0"
+      const lockEnd = Number(lookup(depositLockEnds, tokenAddress) || 0)
 
       if (deposit === "0") return "0"
       if (isLocked(lockEnd)) return "0"
 
       return deposit
     },
-    [userDeposits, depositLockEnds],
+    [userDeposits, depositLockEnds, withdrawableMap],
   )
 
   const hasPotentialMixedLocks = useCallback(
@@ -146,10 +220,36 @@ export function FundsWithdrawalModal({
     [userDeposits, depositLockEnds],
   )
 
-  const availableTokens = useMemo(
-    () => supportedStablecoins.filter((token) => userDeposits[token] && userDeposits[token] !== "0"),
-    [supportedStablecoins, userDeposits],
-  )
+  // Build available tokens from the userDeposits keys (fallback to tokenInfos keys).
+  // This is robust to address casing differences and ensures any token the user
+  // actually has a non-zero deposit for will be shown.
+  const availableTokens = useMemo(() => {
+    const tokens = new Set<string>()
+    const infoKeys = Object.keys(tokenInfos || {})
+
+    // prefer tokenInfos key when it matches case-insensitively
+    for (const k of Object.keys(userDeposits || {})) {
+      try {
+        if (BigInt(userDeposits[k] || "0") === BigInt(0)) continue
+      } catch {
+        continue
+      }
+      const match = infoKeys.find((t) => t.toLowerCase() === k.toLowerCase())
+      tokens.add(match || k)
+    }
+
+    // also include any tokenInfos entries that have deposits (defensive)
+    for (const t of infoKeys) {
+      const amt = userDeposits[t] || userDeposits[t.toLowerCase()] || userDeposits[t.toUpperCase()]
+      try {
+        if (amt && BigInt(amt) > BigInt(0)) tokens.add(t)
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    return Array.from(tokens)
+  }, [userDeposits, tokenInfos])
 
   const goToNextStep = () => {
     if (currentStep < 3) {
@@ -293,6 +393,75 @@ export function FundsWithdrawalModal({
                       </button>
                     )
                   })}
+                </div>
+              )}
+
+              {/* Per-deposit details for selected token */}
+              {form.token && (
+                <div className="mt-3 bg-[#0f1a12] rounded-xl p-3 border border-[#21301c]">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-white font-medium">{tokenInfos[form.token]?.symbol || form.token}</div>
+                    <div className="text-xs text-[#a2c398]">Deposit details</div>
+                  </div>
+
+                  {loadingDeposits ? (
+                    <div className="text-sm text-[#a2c398]">Loading deposits...</div>
+                  ) : perDeposits.length === 0 ? (
+                    <div className="text-sm text-[#a2c398]">No individual deposits found.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {perDeposits.map((d, idx) => {
+                        const isMature = Math.floor(Date.now() / 1000) >= (d.lockEnd || 0)
+                        const formatted = formatAmount(d.amount, tokenInfos[form.token]?.decimals || 18)
+                        return (
+                          <div key={idx} className="flex items-center justify-between bg-black/10 p-2 rounded">
+                            <div>
+                              <div className="text-sm text-white">{formatted} {tokenInfos[form.token]?.symbol}</div>
+                              <div className="text-xs text-[#a2c398]">{d.lockEnd && d.lockEnd > 0 ? `Unlocks: ${formatDate(d.lockEnd)}` : "No lock"}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isMature ? (
+                                <button
+                                  className="text-[#54d22d] text-sm font-medium"
+                                  onClick={() => {
+                                    // Quick withdraw full deposit
+                                    setForm({ token: form.token, amount: formatAmount(d.amount, tokenInfos[form.token]?.decimals || 18) })
+                                    goToNextStep()
+                                  }}
+                                >
+                                  Withdraw Full
+                                </button>
+                              ) : (
+                                <div className="text-xs text-[#a2c398]">Locked</div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Collateral withdraw row */}
+                  {collateralAmount && BigInt(collateralAmount || "0") > BigInt(0) && (
+                    <div className="mt-3 p-3 bg-black/20 rounded flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-white">Collateral deposited</div>
+                        <div className="text-xs text-[#a2c398]">{formatAmount(collateralAmount, tokenInfos[form.token]?.decimals || 18)} {tokenInfos[form.token]?.symbol}</div>
+                      </div>
+                      <div>
+                        <button
+                          className="bg-[#54d22d] text-[#162013] px-3 py-1 rounded text-sm font-medium"
+                          onClick={() => {
+                            // Prefill withdrawal amount with collateral and proceed
+                            setForm({ token: form.token, amount: formatAmount(collateralAmount, tokenInfos[form.token]?.decimals || 18) })
+                            goToNextStep()
+                          }}
+                        >
+                          Withdraw Collateral
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
