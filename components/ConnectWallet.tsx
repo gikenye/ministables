@@ -1,19 +1,15 @@
-"use client";
+use client";
 import { useConnect, useActiveAccount } from "thirdweb/react";
 import { ConnectButton, darkTheme } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { inAppWallet } from "thirdweb/wallets/in-app";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
-import { useEffect } from "react";
-
-
+import { useEffect, useState } from "react";
 
 const wallets = [
   createWallet("io.metamask"),
   inAppWallet({
-    // Celo does not support EIP-7702 — use EIP-4337 smart accounts instead.
-    // Note: EIP-4337 creates a smart contract account (different address from EOA).
     executionMode: {
       mode: "EIP4337",
       smartAccount: {
@@ -30,16 +26,19 @@ const wallets = [
   createWallet("walletConnect"),
 ];
 
-
 export function ConnectWallet({ className }) {
   const { connect } = useConnect();
   const account = useActiveAccount();
+  const [isMiniPay, setIsMiniPay] = useState(false);
 
   useEffect(() => {
-    // Detect injected provider (MiniPay or similar)
-    const isInjectedProvider = typeof window !== "undefined" && !!window.ethereum;
+    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
+      setIsMiniPay(true);
+    }
+  }, []);
 
-    // If injected provider is present and no account is active, connect automatically
+  useEffect(() => {
+    const isInjectedProvider = typeof window !== "undefined" && !!window.ethereum;
     if (isInjectedProvider && !account) {
       connect(async () => {
         const injected = createWallet("io.metamask");
@@ -49,10 +48,12 @@ export function ConnectWallet({ className }) {
     }
   }, [connect, account]);
 
-  // Hide connect button only in Minipay (injected provider), show in normal environments
+  // Only hide the button if in MiniPay and account is connected
+  const shouldShowButton = !account || !isMiniPay;
+
   return (
     <div className={className}>
-      {!account && (
+      {shouldShowButton && (
         <ConnectButton
           accountAbstraction={{
             chain: celo,
@@ -80,4 +81,5 @@ export function ConnectWallet({ className }) {
     </div>
   );
 }
+
 
