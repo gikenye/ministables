@@ -36,8 +36,12 @@ const isMiniPayEnvironment = (): boolean => {
   return !!(window.ethereum?.isMiniPay);
 };
 
+interface ConnectWalletProps {
+  className?: string;
+  size?: string;
+}
 
-export function ConnectWallet({ className }) {
+export function ConnectWallet({ className, size }: ConnectWalletProps) {
   const { connect } = useConnect();
   const account = useActiveAccount();
 
