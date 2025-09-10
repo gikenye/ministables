@@ -30,8 +30,18 @@ const wallets = [
   createWallet("walletConnect"),
 ];
 
+// Function to detect if the environment is MiniPay
+const isMiniPayEnvironment = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return !!(window.ethereum?.isMiniPay);
+};
 
-export function ConnectWallet({ className }) {
+interface ConnectWalletProps {
+  className?: string;
+  size?: string;
+}
+
+export function ConnectWallet({ className, size }: ConnectWalletProps) {
   const { connect } = useConnect();
   const account = useActiveAccount();
 
@@ -49,10 +59,13 @@ export function ConnectWallet({ className }) {
     }
   }, [connect, account]);
 
-  // Hide connect button only in Minipay (injected provider), show in normal environments
+  // Hide connect button only in MiniPay when a wallet is connected
+  // In normal browsers, always show the button to allow switching/disconnecting
+  const shouldShowConnectButton = !account || !isMiniPayEnvironment();
+
   return (
     <div className={className}>
-      {!account && (
+      {shouldShowConnectButton && (
         <ConnectButton
           accountAbstraction={{
             chain: celo,
