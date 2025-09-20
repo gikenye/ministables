@@ -37,16 +37,7 @@ export function ConnectWallet({ className }) {
     }
   }, []);
 
-  useEffect(() => {
-    const isInjectedProvider = typeof window !== "undefined" && !!window.ethereum;
-    if (isInjectedProvider && !account) {
-      connect(async () => {
-        const injected = createWallet("io.metamask");
-        await injected.connect({ client });
-        return injected;
-      });
-    }
-  }, [connect, account]);
+
 
   // Only hide the button if in MiniPay and account is connected
   const shouldShowButton = !account || !isMiniPay;
