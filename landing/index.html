@@ -106,7 +106,18 @@
                   <p>Earn 4-10% APY on your stablecoin deposits with transparent, algorithmic interest rates</p>
                 </div>
               </div>
-              
+              <div class="value-item">
+                <div class="icon-circle">
+                  <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M12 1v22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <path d="M17 5H9.5a3 3 0 0 0 0 6H15a3 3 0 0 1 0 6H6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="value-content">
+                  <h3>Collateral Loans</h3>
+                  <p>Minilend allows you to use your USDC savings as collateral for a local currency loan</p>
+                </div>
+              </div>
               <div class="value-item">
                 <div class="icon-circle">
                   <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -134,6 +145,8 @@
                   <p>Non-custodial protocol ensures you maintain complete control over your assets</p>
                 </div>
               </div>
+              
+              
             </div>
             
             <!-- Stats Section -->
@@ -165,7 +178,7 @@
       <section id="currencies" class="page">
         <div class="page-content">
           <div class="currencies-container">
-            <h2 class="section-title">Supported <span class="accent">Currencies</span></h2>
+            <h2 class="section-title">Supported <span class="accent">Assets</span></h2>
             
             <p class="currency-intro">Minilend supports a variety of stablecoins and local currency tokens, allowing you to save in dollars while borrowing in your local currency.</p>
             
@@ -211,6 +224,14 @@
                 <div class="token-details">
                   <h4>cNGN</h4>
                   <!-- <p>Celo Nigerian Naira</p> -->
+                  <span class="token-badge">Borrow</span>
+                </div>
+              </div>
+              
+              <div class="token">
+                <img src="./static/bpesa.jpg" alt="bPESA" class="token-icon"/> 
+                <div class="token-details">
+                  <h4>B-pesa</h4>
                   <span class="token-badge">Borrow</span>
                 </div>
               </div>
@@ -455,6 +476,21 @@
           link.addEventListener('click', function() {
             hamburger.classList.remove('active');
             mobileNav.classList.remove('active');
+          });
+        });
+        
+        // Make entire FAQ details element clickable
+        document.querySelectorAll('.faq-container details').forEach(details => {
+          details.addEventListener('click', function(e) {
+            // Only toggle if clicking on the details element itself, not the content
+            if (e.target === this || e.target.tagName === 'SUMMARY') {
+              // Let the default behavior handle the toggle
+              return;
+            }
+            // If clicking elsewhere in the details, toggle it
+            if (!this.open) {
+              this.open = true;
+            }
           });
         });
       });
