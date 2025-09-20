@@ -478,6 +478,21 @@
             mobileNav.classList.remove('active');
           });
         });
+        
+        // Make entire FAQ details element clickable
+        document.querySelectorAll('.faq-container details').forEach(details => {
+          details.addEventListener('click', function(e) {
+            // Only toggle if clicking on the details element itself, not the content
+            if (e.target === this || e.target.tagName === 'SUMMARY') {
+              // Let the default behavior handle the toggle
+              return;
+            }
+            // If clicking elsewhere in the details, toggle it
+            if (!this.open) {
+              this.open = true;
+            }
+          });
+        });
       });
     </script>
   </body>
