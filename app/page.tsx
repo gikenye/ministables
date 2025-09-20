@@ -409,21 +409,7 @@ export default function AppPage() {
     return userBorrow0.isLoading || userDeposit0.isLoading;
   }, [userBorrow0.isLoading, userDeposit0.isLoading]);
 
-  useEffect(() => {
-    // Only auto-sign in if wallet is connected and user hasn't explicitly signed out
-    if (
-      isConnected &&
-      address &&
-      !session?.user?.address &&
-      sessionStatus !== "loading"
-    ) {
-      signIn("self-protocol", {
-        address,
-        verificationData: "",
-        redirect: false,
-      });
-    }
-  }, [isConnected, address, session, sessionStatus]);
+
 
   // Check localStorage for verification skip state
   useEffect(() => {
@@ -635,10 +621,8 @@ export default function AppPage() {
 
   const handleCardClick = useCallback(
     (cardId: string) => {
-      // The dashboard has the corrected withdrawal modal and full deposit aggregation.
-      // Route "withdraw" and "history" to the dashboard to avoid opening the homepage modal
-      // which can show incomplete deposit data.
-      if (cardId === "history" || cardId === "withdraw") {
+      // Only route "history" to the dashboard
+      if (cardId === "history") {
         router.push("/dashboard");
       } else {
         setActiveModal(cardId);
@@ -694,12 +678,10 @@ export default function AppPage() {
       {/* Header */}
       <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-3 py-4 sticky top-0 z-40 relative">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <Link href="/landing" className="flex items-center space-x-3">
+          <Link href="https://minilend.xyz" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-3">
             <div>
-              <Logo size="md" />
-              <p className="text-xs sm:text-sm text-[#a2c398]">
-                Grow Your Money
-              </p>
+              <img src="/new-logo.png" alt="Minilend Logo" style={{height: "50px", width: "auto"}} />
+
             </div>
           </Link>
 
@@ -720,24 +702,29 @@ export default function AppPage() {
 
         {isConnected && (
           <div className="text-center mb-6">
-            <div className="flex flex-wrap justify-center gap-2">
+            {/* <div className="flex flex-wrap justify-center gap-2">
               {session?.user?.verified ? (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/30 text-green-300 backdrop-blur-sm">
-                  <Shield className="w-4 h-4 mr-1" />
-                  Verified Account
-                </div>
+                // <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/30 text-green-300 backdrop-blur-sm">
+                //   <Shield className="w-4 h-4 mr-1" />
+                //   Verified Account
+                // </div>
               ) : (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-600/30 text-yellow-300 backdrop-blur-sm">
-                  <Shield className="w-4 h-4 mr-1" />
-                  Unverified Account
-                </div>
+                // <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-600/30 text-yellow-300 backdrop-blur-sm">
+                  
+                //   <Button
+                //   onClick={() => router.push("/self")}
+                // >
+                //   <Shield className="w-4 h-4 mr-1" />
+                //   Unverified Account
+                // </Button>
+                // </div>
               )}
               {isSDKLoaded && context && (
                 <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/30 text-purple-300 backdrop-blur-sm">
                   🚀 Farcaster Mini App
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
         )}
         <div className="mb-8">

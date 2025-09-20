@@ -17,7 +17,27 @@
       <div class="site-bg-overlay"></div>
     </div>
     
-    <!-- Navigation menu -->
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+      <button class="hamburger" id="hamburger">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </header>
+    
+    <!-- Mobile Menu Dropdown -->
+    <nav class="mobile-nav" id="mobile-nav">
+      <ul>
+        <li><a href="#intro" class="mobile-nav-link">Intro</a></li>
+        <li><a href="#value-prop" class="mobile-nav-link">Why Us</a></li>
+        <li><a href="#currencies" class="mobile-nav-link">Currencies</a></li>
+        <li><a href="#features" class="mobile-nav-link">Features</a></li>
+        <li><a href="#cta" class="mobile-nav-link">Launch</a></li>
+      </ul>
+    </nav>
+    
+    <!-- Desktop Navigation menu -->
     <nav class="main-nav">
       <ul>
         <li><a href="#intro" class="active">Intro</a></li>
@@ -27,16 +47,14 @@
         <li><a href="#cta">Launch</a></li>
       </ul>
     </nav>
-
+    
+    
     <main>
       <!-- Page 1: Introduction -->
       <section id="intro" class="page">
         <div class="page-content">
           <div class="hero-inner">
-              <!-- <h1 class="logo-text">Minilend</h1> -->
-            
-            <h1 id="headline">Mini<span class="accent">Lend</span></h1>
-            <h2>Grow your Money</h2>
+            <img src="./static/new-logo.png" alt="Minilend Logo" style="position: relative; top: 50px; left: 20px; height: 200px; width: auto; z-index: 10; margin-bottom: 40px;" />
             <div>
                 
             </div>
@@ -85,7 +103,7 @@
                 </div>
                 <div class="value-content">
                   <h3>Competitive Returns</h3>
-                  <p>Earn 2-10% APY on your stablecoin deposits with transparent, algorithmic interest rates</p>
+                  <p>Earn 4-10% APY on your stablecoin deposits with transparent, algorithmic interest rates</p>
                 </div>
               </div>
               
@@ -157,7 +175,7 @@
                 <div class="token-details">
                   <h4>USDC</h4>
                   <!-- <p>USD Coin</p> -->
-                  <span class="token-badge">Deposit & Borrow</span>
+                  <span class="token-badge">collateral</span>
                 </div>
               </div>
               
@@ -166,7 +184,7 @@
                 <div class="token-details">
                   <h4>USDT</h4>
                   <!-- <p>Tether</p> -->
-                  <span class="token-badge">Deposit & Borrow</span>
+                  <span class="token-badge">collateral</span>
                 </div>
               </div>
               
@@ -175,7 +193,7 @@
                 <div class="token-details">
                   <h4>cUSD</h4>
                   <!-- <p>Celo Dollar</p> -->
-                  <span class="token-badge">Deposit & Borrow</span>
+                  <span class="token-badge">collateral</span>
                 </div>
               </div>
               
@@ -184,7 +202,7 @@
                 <div class="token-details">
                   <h4>cKES</h4>
                   <!-- <p>Celo Kenyan Shilling</p> -->
-                  <span class="token-badge">Borrow Only</span>
+                  <span class="token-badge">Borrow</span>
                 </div>
               </div>
               
@@ -193,7 +211,7 @@
                 <div class="token-details">
                   <h4>cNGN</h4>
                   <!-- <p>Celo Nigerian Naira</p> -->
-                  <span class="token-badge">Borrow Only</span>
+                  <span class="token-badge">Borrow</span>
                 </div>
               </div>
             </div>
@@ -219,7 +237,7 @@
                     <path d="M17 5H9.5a3 3 0 0 0 0 6H15a3 3 0 0 1 0 6H6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </div>
-                <h3>Earn 2-10% APY</h3>
+                <h3>Earn 4-10% APY</h3>
                 <p>Competitive returns on your stablecoin deposits with flexible lock periods.</p>
                 <div class="highlight">Starting at 2% base rate</div>
               </div>
@@ -259,6 +277,19 @@
                 <h3>Flexible Terms</h3>
                 <p>Choose from 30, 60, or 120-day lock periods to maximize your earnings.</p>
                 <div class="highlight">Up to 365 days available</div>
+              </div>
+              
+              <div class="feature-card">
+                <div class="icon-circle">
+                  <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <polyline points="7,10 12,15 17,10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <h3>Withdraw funds anytime</h3>
+                <p>Access your funds whenever you need them with flexible withdrawal options.</p>
+                <div class="highlight">No penalties</div>
               </div>
             </div>
           </div>
@@ -408,6 +439,23 @@
           if (!button.getAttribute('href') || button.getAttribute('href') === '#') {
             button.setAttribute('href', 'https://app.minilend.xyz');
           }
+        });
+        
+        // Mobile hamburger menu functionality
+        const hamburger = document.getElementById('hamburger');
+        const mobileNav = document.getElementById('mobile-nav');
+        
+        hamburger.addEventListener('click', function() {
+          hamburger.classList.toggle('active');
+          mobileNav.classList.toggle('active');
+        });
+        
+        // Close mobile menu when clicking on a link
+        document.querySelectorAll('.mobile-nav-link').forEach(link => {
+          link.addEventListener('click', function() {
+            hamburger.classList.remove('active');
+            mobileNav.classList.remove('active');
+          });
         });
       });
     </script>

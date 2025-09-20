@@ -33,12 +33,7 @@ export default function Home() {
   // Use useMemo to cache the array to avoid creating a new array on each render
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
 
-  // Check if user is already verified and redirect if needed
-  useEffect(() => {
-    if (session?.user?.verified) {
-      router.push("/");
-    }
-  }, [session, router]);
+
 
   // Update userId when wallet address changes
   useEffect(() => {

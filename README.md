@@ -1,5 +1,6 @@
+
 <p align="center">
-  <img src="public/minilend-logo.png" alt="Minilend Logo" width="200"/>
+  <img src="public/new-logo.png" alt="Minilend Logo" width="200"/>
 </p>
 
 # Minilend
@@ -84,26 +85,26 @@ Minilend integrates zkSelf for regulatory compliance, allowing:
 
 1. Clone the repository:
 ---
+---
 ```bash
 git clone https://github.com/gikenye/ministables.git
 cd ministables
 ```
 ---
-
 2. Install dependencies:
+---
 ---
 ```bash
 yarn install
 ```
 ---
-
 3. Run the development server:
+---
 ---
 ```bash
 yarn dev
 ```
 ---
-
 ### Smart Contract Development
 
 To work with the smart contracts:
@@ -115,21 +116,20 @@ yarn install
 yarn compile
 ```
 ---
-
 To run tests:
+---
 ---
 ```bash
 yarn test
 ```
 ---
-
 To deploy to Celo mainnet (requires proper configuration):
+---
 ---
 ```bash
 yarn deploy
 ```
 ---
-
 ## License
 
 ISC
