@@ -261,12 +261,14 @@ h1{font-size:4rem;margin:0;}
 
 .faq-container {margin:50px auto;max-width:800px;text-align:left;}
 .faq-container h3 {text-align:center;margin-bottom:30px;}
-.faq-container details {background:rgba(0,0,0,.4);padding:16px;border-radius:10px;margin:10px 0;border:1px solid rgba(255,255,255,0.1);transition: all var(--transition-speed) ease;}
-.faq-container details:hover {transform:translateY(-3px);border-color:var(--accent);}
+.faq-container details {background:rgba(0,0,0,.4);padding:16px;border-radius:10px;margin:10px 0;border:1px solid rgba(255,255,255,0.1);transition: all var(--transition-speed) ease;cursor:pointer;}
+.faq-container details:hover {transform:translateY(-3px);border-color:var(--accent);background:rgba(0,0,0,0.6);}
+.faq-container details:hover div {display:block;}
 .faq-container summary {cursor:pointer;padding:8px;font-weight:600;}
 .faq-container summary:hover {color:var(--accent);}
 .faq-container details[open] {background:rgba(0,0,0,0.6);border-color:var(--accent);}
-.faq-container details div {padding:15px 10px 5px;color:var(--muted);line-height:1.6;}
+.faq-container details div {padding:15px 10px 5px;color:var(--muted);line-height:1.6;display:none;}
+.faq-container details[open] div {display:block;}
 
 .community-showcase {margin:40px auto;max-width:800px;padding:30px;background:rgba(0,0,0,0.4);border-radius:14px;border:1px solid rgba(255,255,255,0.1);transition: all var(--transition-speed) ease;}
 .community-showcase:hover {transform:translateY(-5px);border-color:var(--accent);box-shadow: 0 10px 20px rgba(0,0,0,0.2);}
