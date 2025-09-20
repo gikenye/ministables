@@ -210,9 +210,9 @@ h1{font-size:4rem;margin:0;}
 /* Section 2: Value Proposition */
 .value-prop-container {max-width:1100px;margin:0 auto;padding:20px;text-align:center;background-color:rgba(0,0,0,0.4);border-radius:15px;box-shadow: 0 15px 30px rgba(0,0,0,0.2);}
 .section-title {font-size:2.5rem;margin-bottom:40px;text-align:center;}
-.value-grid {display:flex;flex-wrap:wrap;gap:30px;margin-bottom:40px;justify-content:space-between;}
+.value-grid {display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:15px;margin-bottom:40px;}
 .value-left {flex:1;min-width:300px;}
-.value-item {display:flex;align-items:flex-start;gap:16px;margin-bottom:25px;text-align:left;padding:16px;background:rgba(0,0,0,0.3);border-radius:12px;border:1px solid rgba(255,255,255,0.05);transition:all var(--transition-speed) ease;}
+.value-item {display:flex;align-items:flex-start;gap:16px;text-align:left;padding:16px;background:rgba(0,0,0,0.3);border-radius:12px;border:1px solid rgba(255,255,255,0.05);transition:all var(--transition-speed) ease;}
 .value-item:hover {transform:translateY(-5px);border-color:var(--accent);box-shadow: 0 10px 20px rgba(0,0,0,0.2);}
 .value-content {flex:1;}
 .value-content h3 {margin:0 0 8px 0;font-size:1.2rem;}
