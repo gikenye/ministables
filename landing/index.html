@@ -54,7 +54,7 @@
       <section id="intro" class="page">
         <div class="page-content">
           <div class="hero-inner">
-            <img src="./static/new-logo.png" alt="Minilend Logo" style="position: relative; top: 50px; left: 20px; height: 120px; width: auto; z-index: 10; margin-bottom: 40px;" />
+            <img src="./static/new-logo.png" alt="Minilend Logo" class="hero-logo" />
             <div>
                 
             </div>
@@ -118,34 +118,6 @@
                   <p>Minilend allows you to use your USDC savings as collateral for a local currency loan</p>
                 </div>
               </div>
-              <div class="value-item">
-                <div class="icon-circle">
-                  <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <div class="value-content">
-                  <h3>Global Access</h3>
-                  <p>Access financial services from anywhere with just a smartphone and internet connection</p>
-                </div>
-              </div>
-              
-              <div class="value-item">
-                <div class="icon-circle">
-                  <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                    <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <div class="value-content">
-                  <h3>Full Custody Control</h3>
-                  <p>Non-custodial protocol ensures you maintain complete control over your assets</p>
-                </div>
-              </div>
-              
               
             </div>
             
@@ -479,18 +451,22 @@
           });
         });
         
-        // Make entire FAQ details element clickable
+        // FAQ accordion functionality
         document.querySelectorAll('.faq-container details').forEach(details => {
-          details.addEventListener('click', function(e) {
-            // Only toggle if clicking on the details element itself, not the content
-            if (e.target === this || e.target.tagName === 'SUMMARY') {
-              // Let the default behavior handle the toggle
-              return;
-            }
-            // If clicking elsewhere in the details, toggle it
-            if (!this.open) {
-              this.open = true;
-            }
+          const summary = details.querySelector('summary');
+          
+          summary.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Close all other details
+            document.querySelectorAll('.faq-container details').forEach(otherDetails => {
+              if (otherDetails !== details && otherDetails.open) {
+                otherDetails.open = false;
+              }
+            });
+            
+            // Toggle current details
+            details.open = !details.open;
           });
         });
       });
