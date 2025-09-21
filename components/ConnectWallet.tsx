@@ -1,33 +1,35 @@
 "use client";
 import { useConnect, useActiveAccount } from "thirdweb/react";
 import { ConnectButton, darkTheme } from "thirdweb/react";
-import { createWallet } from "thirdweb/wallets";
-import { inAppWallet } from "thirdweb/wallets/in-app";
-import { celo } from "thirdweb/chains";
+import { createWallet, inAppWallet } from "thirdweb/wallets";
+import { celo, scroll } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
 import { useEffect, useState } from "react";
 
+// You can pass supported chains to the ConnectButton as the `chains` prop.
+// If you want Scroll (L2 mainnet) and Celo, import both.
+const supportedChains = [celo, scroll];
+
+// Define wallets, including inAppWallet with smart account config for the default chain (e.g. Celo).
 const wallets = [
   createWallet("io.metamask"),
   inAppWallet({
     executionMode: {
       mode: "EIP4337",
       smartAccount: {
+        // You can optionally prompt user to choose a chain, here set Celo as the default for smart AA.
         chain: celo,
         sponsorGas: true,
       },
     },
-    auth: {
-      options: ["google", "farcaster", "phone", "email"],
-    },
+    auth: { options: ["google", "farcaster", "phone", "email"] },
   }),
   createWallet("com.valoraapp"),
   createWallet("com.coinbase.wallet"),
   createWallet("walletConnect"),
 ];
 
-export function ConnectWallet({ className }) {
-  const { connect } = useConnect();
+export function ConnectWallet({ className }: { className?: string }) {
   const account = useActiveAccount();
   const [isMiniPay, setIsMiniPay] = useState(false);
 
@@ -37,21 +39,21 @@ export function ConnectWallet({ className }) {
     }
   }, []);
 
-
-
-  // Only hide the button if in MiniPay and account is connected
   const shouldShowButton = !account || !isMiniPay;
 
   return (
     <div className={className}>
       {shouldShowButton && (
         <ConnectButton
+          client={client}
+          chains={supportedChains}
+          wallets={wallets}
+          connectButton={{ label: "sign in" }}
           accountAbstraction={{
+            // Set the preferred chain for account abstraction
             chain: celo,
             sponsorGas: true,
           }}
-          client={client}
-          connectButton={{ label: "sign in" }}
           connectModal={{
             showThirdwebBranding: false,
             size: "compact",
@@ -66,11 +68,8 @@ export function ConnectWallet({ className }) {
               primaryButtonText: "hsl(0, 0%, 100%)",
             },
           })}
-          wallets={wallets}
         />
       )}
     </div>
   );
 }
-
-
