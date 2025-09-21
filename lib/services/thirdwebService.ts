@@ -2,11 +2,11 @@ import { getContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
 import { readContract } from "thirdweb";
-import { MINILEND_ADDRESS as MINILEND_ADDRESS_CONST } from "../constants";
+import { MINILEND_CELO as MINILEND_ADDRESS_CONST } from "../constants";
 // Removed unused imports that were causing linting errors
 
 // Contract configuration
-export const MINILEND_ADDRESS = MINILEND_ADDRESS_CONST;
+export const MINILEND_CELO = MINILEND_ADDRESS_CONST;
 // Use env-configured oracle for Celo; default to the provided BackendPriceOracle
 export const ORACLE_ADDRESS =
   (process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS as string | undefined)?.trim() ||
@@ -130,7 +130,7 @@ class ThirdwebService {
     this.contract = getContract({
       client,
       chain: celo,
-      address: MINILEND_ADDRESS,
+      address: MINILEND_CELO,
     });
 
     this.oracleContract = getContract({

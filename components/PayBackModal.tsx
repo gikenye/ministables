@@ -14,7 +14,7 @@ import { getContract, prepareContractCall, sendTransaction, waitForReceipt } fro
 import { parseUnits } from "viem"
 import { celo } from "thirdweb/chains"
 import { client } from "@/lib/thirdweb/client"
-import { MINILEND_ADDRESS } from "@/lib/constants"
+import { MINILEND_CELO } from "@/lib/constants"
 import { LoanItem } from "./LoanItem"
 
 interface ActiveLoan {
@@ -64,7 +64,7 @@ export function PayBackModal({
       getContract({
         client,
         chain: celo,
-        address: MINILEND_ADDRESS,
+        address: MINILEND_CELO,
       }),
     [],
   )
@@ -170,7 +170,7 @@ export function PayBackModal({
       const approveTx = prepareContractCall({
         contract: erc20Contract,
         method: "function approve(address spender, uint256 amount)",
-        params: [MINILEND_ADDRESS, amountWei],
+        params: [MINILEND_CELO, amountWei],
       })
 
       const approveResult = await sendTransaction({ account, transaction: approveTx })

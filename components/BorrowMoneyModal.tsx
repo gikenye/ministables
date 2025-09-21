@@ -11,7 +11,7 @@ import { parseUnits } from "viem"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
 import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
+import { MINILEND_CELO } from "@/lib/services/thirdwebService"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
 import { 
   getContract, 
@@ -85,7 +85,7 @@ export function BorrowMoneyModal({
   const contract = getContract({
     client,
     chain: celo,
-    address: MINILEND_ADDRESS,
+    address: MINILEND_CELO,
   })
 
   // Valid collateral assets from deployment config
@@ -321,7 +321,7 @@ export function BorrowMoneyModal({
         const allowanceTx = prepareContractCall({
           contract: tokenContract,
           method: "function approve(address spender, uint256 amount)",
-          params: [MINILEND_ADDRESS, amount]
+          params: [MINILEND_CELO, amount]
         })
         
         // Execute approval transaction

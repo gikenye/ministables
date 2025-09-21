@@ -31,7 +31,7 @@ import { client } from "@/lib/thirdweb/client";
 import { celo } from "thirdweb/chains";
 import { parseUnits } from "viem";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+import { MINILEND_CELO } from "@/lib/services/thirdwebService";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -130,7 +130,7 @@ export default function AppPage() {
   const contract = getContract({
     client,
     chain: celo,
-    address: MINILEND_ADDRESS,
+    address: MINILEND_CELO,
   });
 
   // Contract functions (no longer needed with direct sendTransaction)
@@ -469,14 +469,14 @@ export default function AppPage() {
       const currentAllowance = await allowance({
         contract: tokenContract,
         owner: account.address,
-        spender: MINILEND_ADDRESS,
+        spender: MINILEND_CELO,
       });
 
       // 2. Approve if needed and wait for receipt per v5 docs
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
-          spender: MINILEND_ADDRESS,
+          spender: MINILEND_CELO,
           amount: amountWei.toString(),
         });
         const result = await sendTransaction(approveTx);
@@ -540,13 +540,13 @@ export default function AppPage() {
       const currentAllowance = await allowance({
         contract: tokenContract,
         owner: account.address,
-        spender: MINILEND_ADDRESS,
+        spender: MINILEND_CELO,
       });
 
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
-          spender: MINILEND_ADDRESS,
+          spender: MINILEND_CELO,
           amount: amountWei.toString(),
         });
         await sendTransaction(approveTx);
@@ -578,13 +578,13 @@ export default function AppPage() {
       const currentAllowance = await allowance({
         contract: tokenContract,
         owner: account.address,
-        spender: MINILEND_ADDRESS,
+        spender: MINILEND_CELO,
       });
 
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
-          spender: MINILEND_ADDRESS,
+          spender: MINILEND_CELO,
           amount: amountWei.toString(),
         });
         await sendTransaction(approveTx);

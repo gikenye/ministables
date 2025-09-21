@@ -20,7 +20,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAddress } from "@/lib/utils";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+import { MINILEND_CELO } from "@/lib/services/thirdwebService";
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { parseUnits } from "viem";
 import { useActiveAccount, useReadContract, useConnect, useSendTransaction, useWalletBalance } from "thirdweb/react";
@@ -63,10 +63,6 @@ const SUPPORTED_COLLATERAL = [
 ];
 
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
-  "0x471EcE3750Da237f93B8E339c536989b8978a438": {
-    symbol: "CELO",
-    decimals: 18,
-  },
   "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
     symbol: "cUSD",
     decimals: 18,
@@ -132,7 +128,7 @@ export default function DashboardPage() {
   }, [address, isConnected, account]);
 
   const contract = getContract({
-    address: MINILEND_ADDRESS,
+    address: MINILEND_CELO,
     chain: celo,
     client,
   });
@@ -141,7 +137,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log("[dashboard] contract info:", {
-        minilendAddress: MINILEND_ADDRESS,
+        minilendAddress: MINILEND_CELO,
         accountAddress: address,
         contractInstance: contract,
       });
@@ -663,7 +659,7 @@ export default function DashboardPage() {
             const amountWei = parseUnits(amount, decimals);
 
             if (process.env.NODE_ENV === 'development') {
-              console.log('[dashboard] withdraw requested', { token, amount, decimals, amountWei: amountWei.toString(), account: account?.address, contractAddress: MINILEND_ADDRESS });
+              console.log('[dashboard] withdraw requested', { token, amount, decimals, amountWei: amountWei.toString(), account: account?.address, contractAddress: MINILEND_CELO });
             }
 
             // Check for outstanding borrows across supported stablecoins (contract will revert with E2 if any exist)

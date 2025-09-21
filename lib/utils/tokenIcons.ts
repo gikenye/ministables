@@ -6,6 +6,7 @@ export const TOKEN_ICONS: Record<string, string> = {
   CELO: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6807f9a4185658fa6e759a27_Tokens.avif",
   cKES: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/68094e158b4206fbeba352aa_Tokens-3.avif",
   cNGN: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6818d1976757a7c20485226f_Tokens%20(2).avif",
+  Bkes: "/bpesa.jpg",
 
   // cEUR: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/68094dba7f0b2df3128d32b9_Tokens-1.avif",
   // cJPY: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6818d1808fb46021b183d514_Tokens.avif",

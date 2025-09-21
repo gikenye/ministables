@@ -4,7 +4,7 @@ import { getContract } from "thirdweb";
 import { useReadContract } from "thirdweb/react";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+import { MINILEND_CELO } from "@/lib/services/thirdwebService";
 
 // Standard stablecoin reference for value comparison
 const USD_REFERENCE_TOKEN = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // cUSD
@@ -116,7 +116,7 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   const contract = getContract({
     client,
     chain: celo,
-    address: MINILEND_ADDRESS,
+    address: MINILEND_CELO,
   });
 
   // Format big integers with proper decimal precision

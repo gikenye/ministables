@@ -3,7 +3,7 @@ import { useSendTransaction } from "thirdweb/react";
 import { prepareContractCall, getContract } from "thirdweb";
 import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+import { MINILEND_CELO } from "@/lib/services/thirdwebService";
 
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
   "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
@@ -27,7 +27,7 @@ export function useWithdraw(onSuccess?: () => void) {
     const contract = getContract({
       client,
       chain: celo,
-      address: MINILEND_ADDRESS,
+      address: MINILEND_CELO,
     });
 
     const tx = prepareContractCall({

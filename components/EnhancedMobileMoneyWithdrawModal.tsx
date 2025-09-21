@@ -240,11 +240,21 @@ export function MobileMoneyWithdrawModal({
       return false
     }
 
+    // Validate against Pretium limits
     const limits = enhancedOfframpService.getWithdrawalLimits(form.fiatCurrency)
     if (quote && Number.parseFloat(quote.outputAmount) < limits.min) {
       toast({
         title: "Amount Too Small",
         description: `Minimum withdrawal is ${formatEnhancedCurrencyAmount(limits.min, form.fiatCurrency)}`,
+        variant: "destructive",
+      })
+      return false
+    }
+
+    if (quote && Number.parseFloat(quote.outputAmount) > limits.max) {
+      toast({
+        title: "Amount Too Large",
+        description: `Maximum withdrawal is ${formatEnhancedCurrencyAmount(limits.max, form.fiatCurrency)}`,
         variant: "destructive",
       })
       return false

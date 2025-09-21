@@ -28,7 +28,7 @@ import { getApprovalForTransaction } from "thirdweb/extensions/erc20"
 import { client } from "@/lib/thirdweb/client"
 import { celo } from "thirdweb/chains"
 import { getTokenIcon } from "@/lib/utils/tokenIcons"
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
+import { MINILEND_CELO } from "@/lib/services/thirdwebService"
 import { parseUnits } from "viem"
 
 interface SaveMoneyModalProps {
@@ -100,7 +100,7 @@ export function SaveMoneyModal({
         tokenSymbol: tokenInfos[form.token]?.symbol,
         amount: 'REDACTED',
         lockPeriod: form.lockPeriod,
-        MINILEND_ADDRESS: MINILEND_ADDRESS?.substring(0, 10) + '...'
+        MINILEND_CELO: MINILEND_CELO?.substring(0, 10) + '...'
       })
     }
 
@@ -122,7 +122,7 @@ export function SaveMoneyModal({
     const minilendContract = getContract({
       client,
       chain: celo,
-      address: MINILEND_ADDRESS,
+      address: MINILEND_CELO,
       abi: minilendABI,
     })
 
