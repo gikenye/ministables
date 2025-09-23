@@ -13,26 +13,7 @@ export const EXPLORERS = {
 };
 
 export const TOKENS = {
-  [scroll.id]: [
-    {
-      address: "0xd62fBDd984241BcFdEe96915b43101912a9fcE69",
-      symbol: "BKES",
-      decimals: 18,
-      icon: "/bpesa.jpg",
-    },
-    {
-      address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4",
-      symbol: "USDC",
-      decimals: 6,
-      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
-    },
-    {
-      address: "0x5300000000000000000000000000000000000004",
-      symbol: "WETH",
-      decimals: 18,
-      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
-    },
-  ],
+
   [celo.id]: [
     {
       address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
@@ -63,6 +44,26 @@ export const TOKENS = {
       symbol: "CNGN",
       decimals: 18,
       icon: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6818d1976757a7c20485226f_Tokens%20(2).avif",
+    },
+  ],
+    [scroll.id]: [
+    {
+      address: "0xd62fBDd984241BcFdEe96915b43101912a9fcE69",
+      symbol: "BKES",
+      decimals: 18,
+      icon: "/bpesa.jpg",
+    },
+    {
+      address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4",
+      symbol: "USDC",
+      decimals: 6,
+      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
+    },
+    {
+      address: "0x5300000000000000000000000000000000000004",
+      symbol: "WETH",
+      decimals: 18,
+      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
     },
   ],
 };
