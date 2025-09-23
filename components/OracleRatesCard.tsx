@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { formatUnits } from "viem";
 import { oracleService } from "@/lib/services/oracleService";
+import { TOKENS, CHAINS, getTokenInfoMap } from "@/config/chainConfig";
 
 interface TokenRate {
   address: string;
@@ -16,33 +17,32 @@ interface TokenRate {
 
 // No hardcoded rates; fetch from on-chain backend oracle
 
-const TOKEN_INFO: Record<string, { symbol: string; flag: string }> = {
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { symbol: "cKES", flag: "🇰🇪" },
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", flag: "🇺🇸" },
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a": { symbol: "cUSD", flag: "🇺🇸" },
-  "0x471EcE3750Da237f93B8E339c536989b8978a438": { symbol: "CELO", flag: "🇳🇬" },
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", flag: "🇺🇸" },
+// Build token metadata from central TOKENS config for the default chain
+const defaultChain = CHAINS[0];
+const tokenList = (TOKENS as any)[defaultChain.id] || [];
+const TOKEN_INFO: Record<string, { symbol: string; flag: string }> = (() => {
+  const map = defaultChain ? getTokenInfoMap(defaultChain.id) : {} as Record<string, any>;
+  const out: Record<string, { symbol: string; flag: string }> = {};
+  for (const addr of Object.keys(map)) {
+    out[addr.toLowerCase()] = { symbol: (map[addr].symbol || '').toUpperCase(), flag: '' };
+  }
+  return out;
+})();
 
-  // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", flag: "🇪🇺" },
-  // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", flag: "🇧🇷" },
-  // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", flag: "🌍" },
-  // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", flag: "🇵🇭" },
-  // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", flag: "🇨🇴" },
-  // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", flag: "🇬🇭" },
-  // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", flag: "🌍" },
-};
-
-const DEFAULT_DISPLAY_TOKENS = [
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
+const DEFAULT_DISPLAY_TOKENS = tokenList.length > 0 ? tokenList.slice(0, 4).map((t: any) => t.address) : [
+  '0x456a3D042C0DbD3db53D5489e98dFb038553B0d0',
+  '0xcebA9300f2b948710d2653dD7B07f33A8B32118C',
+  '0x765DE816845861e75A25fCA122bb6898B8B1282a',
+  '0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71',
 ];
 
-const LOCAL_META: Record<string, { code: string; symbol: string }> = {
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": { code: "KES", symbol: "KSh" },
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": { code: "NGN", symbol: "₦" },
-};
+// Derive local fiat metadata for known stable/local tokens
+const LOCAL_META: Record<string, { code: string; symbol: string }> = {};
+for (const t of tokenList) {
+  const sym = (t.symbol || '').toUpperCase();
+  if (sym === 'CKES' || sym === 'BKES') LOCAL_META[t.address.toLowerCase()] = { code: 'KES', symbol: 'KSh' };
+  if (sym === 'CNGN') LOCAL_META[t.address.toLowerCase()] = { code: 'NGN', symbol: '₦' };
+}
 
 export interface OracleRatesCardProps {
   tokens?: string[];
@@ -58,24 +58,24 @@ export function OracleRatesCard({ tokens, localTokenAddress }: OracleRatesCardPr
     const run = async () => {
       try {
         // Fetch USD prices for all tokens to display
-        const results = await Promise.all(
-          displayTokens.map(async (addr) => {
+        const results: TokenRate[] = await Promise.all(
+          displayTokens.map(async (addr: string): Promise<TokenRate> => {
             try {
-              const { rate } = await oracleService.getMedianRate(addr);
-              const usdValue = Number(formatUnits(rate, 18));
+              const { rate }: { rate: bigint } = await oracleService.getMedianRate(addr);
+              const usdValue: number = Number(formatUnits(rate, 18));
               const base: TokenRate = {
-                address: addr,
-                symbol: TOKEN_INFO[addr]?.symbol || "UNKNOWN",
-                rate: rate.toString(),
-                usdValue: usdValue.toFixed(6),
+          address: addr,
+          symbol: TOKEN_INFO[addr]?.symbol || "UNKNOWN",
+          rate: rate.toString(),
+          usdValue: usdValue.toFixed(6),
               };
               return base;
             } catch {
               return {
-                address: addr,
-                symbol: TOKEN_INFO[addr]?.symbol || "UNKNOWN",
-                rate: "0",
-                usdValue: "0.000000",
+          address: addr,
+          symbol: TOKEN_INFO[addr]?.symbol || "UNKNOWN",
+          rate: "0",
+          usdValue: "0.000000",
               } as TokenRate;
             }
           })

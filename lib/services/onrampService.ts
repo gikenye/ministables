@@ -61,17 +61,21 @@ export const SUPPORTED_COUNTRIES = {
 } as const;
 
 // Supported assets by chain for onramp
+import { CHAINS } from "@/config/chainConfig";
+
+const defaultChainName = (CHAINS && CHAINS.length > 0 && CHAINS[0].name) ? (CHAINS[0].name as string) : "CELO";
+
 export const ONRAMP_SUPPORTED_ASSETS =  {
-  CELO: ["cUSD", "USDC", "USDT"],
+  [defaultChainName.toUpperCase()]: ["cUSD", "USDC", "USDT"],
   BASE: ["USDC"],
   STELLAR: ["USDC"], 
 } as const;
 
 // Asset to chain mapping (default chains for each asset)
 export const ASSET_CHAIN_MAPPING = {
-  USDC: "CELO", // Default to CELO for USDC
-  USDT: "CELO", // Default to CELO for USDT
-  cUSD: "CELO",
+  USDC: defaultChainName.toUpperCase(),
+  USDT: defaultChainName.toUpperCase(),
+  cUSD: defaultChainName.toUpperCase(),
 } as const;
 
 // Limits by country
@@ -205,14 +209,14 @@ class OnrampService {
   }
 
   // Helper method to determine if an asset is supported for onramp
-  isAssetSupportedForOnramp(asset: string, chain: string = "CELO"): boolean {
+  isAssetSupportedForOnramp(asset: string, chain: string = defaultChainName.toUpperCase()): boolean {
     const supportedAssets = ONRAMP_SUPPORTED_ASSETS[chain as keyof typeof ONRAMP_SUPPORTED_ASSETS];
     return supportedAssets?.includes(asset as any) || false;
   }
 
   // Helper method to get the appropriate chain for an asset
   getChainForAsset(asset: string): string {
-    return ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] || "CELO";
+    return ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] || defaultChainName.toUpperCase();
   }
 
   // Helper method to get country limits

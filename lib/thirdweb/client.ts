@@ -1,7 +1,6 @@
 "use client";
 import { createThirdwebClient, getContract } from "thirdweb";
 import { celo, scroll } from "thirdweb/chains";
-import { MINILEND_CELO } from "../constants";
 
 const clientID = process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
 
@@ -14,8 +13,10 @@ export const client = createThirdwebClient({
   clientId: clientID,
 });
 
-export const contract = getContract({ 
-  client,
-  chain: celo,
-  address: MINILEND_CELO,
-});
+export function getClientContract(chain: any, address: string) {
+  return getContract({
+    client,
+    chain,
+    address,
+  })
+}

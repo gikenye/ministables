@@ -283,8 +283,8 @@ export function FundsWithdrawalModal({
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             )}
-            <div className="flex-1 text-center">
-              <DialogTitle className="text-white text-xl font-semibold">Cash Out</DialogTitle>
+              <div className="flex-1 text-center">
+              <DialogTitle className="text-white text-lg font-normal">Cash Out</DialogTitle>
               <DialogDescription className="text-[#a2c398] text-sm">
                 {currentStep === 1 && "Select your savings to withdraw"}
                 {currentStep === 2 && "How much would you like?"}
@@ -379,7 +379,7 @@ export function FundsWithdrawalModal({
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-white font-semibold">{formattedTotal}</div>
+                            <div className="text-white font-normal">{formattedTotal}</div>
                             {isTokenLocked ? (
                               <>
                                 <div className="text-red-400 text-xs">Locked • Available: {formattedWithdrawable}</div>
@@ -480,7 +480,7 @@ export function FundsWithdrawalModal({
               <div className="bg-[#21301c] rounded-xl p-4 border border-[#426039]">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[#a2c398] text-sm">Available to withdraw</span>
-                  <span className="text-[#54d22d] font-semibold text-lg">
+                  <span className="text-[#54d22d] font-normal text-base">
                     {formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18)}{" "}
                     {tokenInfos[form.token]?.symbol}
                   </span>
@@ -550,18 +550,18 @@ export function FundsWithdrawalModal({
               </div>
 
               <div className="bg-[#21301c] rounded-xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center">
                   <span className="text-[#a2c398]">Asset</span>
-                  <span className="text-white font-medium">{tokenInfos[form.token]?.symbol}</span>
+                  <span className="text-white font-normal">{tokenInfos[form.token]?.symbol}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[#a2c398]">Amount</span>
-                  <span className="text-white font-semibold text-lg">{form.amount}</span>
+                  <span className="text-white font-normal text-base">{form.amount}</span>
                 </div>
                 <div className="border-t border-[#426039] pt-3">
                   <div className="flex justify-between items-center">
                     <span className="text-[#a2c398]">You'll receive</span>
-                    <span className="text-[#54d22d] font-bold text-lg">
+                    <span className="text-[#54d22d] font-normal text-base">
                       {form.amount} {tokenInfos[form.token]?.symbol}
                     </span>
                   </div>

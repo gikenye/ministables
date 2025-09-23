@@ -3,6 +3,7 @@ import { Mento } from "@mento-protocol/mento-sdk";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
+import { TOKENS, CHAINS } from "@/config/chainConfig";
 
 dotenv.config();
 
@@ -16,14 +17,17 @@ const ORACLE_ABI = [
 // All normalized to 1e18
 
 // Provide token addresses you want to maintain on-chain
-let TOKEN_ADDRESSES: string[] = [
-  "0x471EcE3750Da237f93B8E339c536989b8978a438", //CELO
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", //cKES
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", //cUSD
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", //USDC
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", //USDT
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", //cNGN
-];
+let TOKEN_ADDRESSES: string[] = [];
+
+// Populate default token addresses from config for the default chain, if available
+try {
+  const defaultChain = CHAINS && CHAINS.length > 0 ? CHAINS[0] : undefined;
+  if (defaultChain && TOKENS && TOKENS[defaultChain.id]) {
+    TOKEN_ADDRESSES = TOKENS[defaultChain.id].map((t: any) => t.address).filter(Boolean);
+  }
+} catch (e) {
+  // ignore and allow env/deployment fallback
+}
 
 const ERC20_ABI = [
   "function decimals() view returns (uint8)",

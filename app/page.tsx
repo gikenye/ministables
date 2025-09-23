@@ -28,21 +28,22 @@ import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { allowance, approve } from "thirdweb/extensions/erc20";
 import { getWalletBalance } from "thirdweb/wallets";
 import { client } from "@/lib/thirdweb/client";
-import { celo } from "thirdweb/chains";
 import { parseUnits } from "viem";
 import { isDataSaverEnabled, enableDataSaver } from "@/lib/serviceWorker";
-import { MINILEND_CELO } from "@/lib/services/thirdwebService";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataAwareRender } from "@/components/ui/loading-indicator";
 import { Logo } from "@/components/Logo";
 
+
 // thirdweb handles transaction modals; no custom tx modal
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
+import { useChain } from "@/components/ChainProvider";
+import { ChainSwitchTest } from "@/components/ChainSwitchTest";
 
 // Types
 interface ActionCard {
@@ -125,13 +126,7 @@ export default function AppPage() {
     payModal: false,
   });
   const { isSDKLoaded, context } = useMiniApp();
-
-  // Get contract instance
-  const contract = getContract({
-    client,
-    chain: celo,
-    address: MINILEND_CELO,
-  });
+  const { chain, contract, contractAddress, tokens, tokenInfos } = useChain();  
 
   // Contract functions (no longer needed with direct sendTransaction)
   // const borrowFn = useBorrow();
@@ -140,39 +135,13 @@ export default function AppPage() {
   // const repayFn = useRepay();
   // const withdrawFn = useWithdraw();
 
-  // Supported stablecoins from deployment config
-  const ALL_SUPPORTED_TOKENS = [
-    "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-    // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-    // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-    // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-    // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-    // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
-    "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-    "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-    "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-    // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-    "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
-    "0x471EcE3750Da237f93B8E339c536989b8978a438", // CELO (GoldToken)
-  ];
+  // Supported token addresses for the active chain from config
+  const ALL_SUPPORTED_TOKENS = tokens.map((t) => t.address);
 
-  const FALLBACK_STABLECOINS = useMemo(
-    () => ALL_SUPPORTED_TOKENS.slice(0, 4),
-    []
-  );
+  const FALLBACK_STABLECOINS = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 4), [ALL_SUPPORTED_TOKENS]);
 
-  // Valid collateral assets from deployment config
-  const FALLBACK_COLLATERAL = useMemo(
-    () => [
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-      "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-      // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-    ],
-    []
-  );
+  // Fallback collateral: first few tokens from config
+  const FALLBACK_COLLATERAL = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 5), [ALL_SUPPORTED_TOKENS]);
 
   // Read supported tokens from contract (first few indices)
   const stablecoin0 = useSupportedStablecoins(contract, BigInt(0));
@@ -224,20 +193,19 @@ export default function AppPage() {
       for (const token of allTokens) {
         if (!token) continue;
         try {
-          // CELO native balance if token is CELO address; else ERC20 balance
-          if (
-            token.toLowerCase() === "0x471ece3750da237f93b8e339c536989b8978a438"
-          ) {
+          // If token equals the native/wrapped token in config use native balance
+          const nativeWrapped = tokens.find((t) => (t.symbol || "").toUpperCase() === "CELO")?.address;
+          if (nativeWrapped && token.toLowerCase() === nativeWrapped.toLowerCase()) {
             const native = await getWalletBalance({
               client,
-              chain: celo,
+              chain: chain,
               address,
             });
             balances[token] = native.value.toString();
           } else {
             const erc20 = await getWalletBalance({
               client,
-              chain: celo,
+              chain: chain,
               address,
               tokenAddress: token,
             });
@@ -358,44 +326,7 @@ export default function AppPage() {
     return lockEnds;
   }, [userDeposit0.data, userDeposit1.data, userDeposit2.data, allTokens]);
 
-  // Token info mapping
-  const tokenInfos = useMemo((): Record<string, TokenInfo> => {
-    const tokenMap: Record<string, TokenInfo> = {
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": {
-        symbol: "USDC",
-        decimals: 6,
-      },
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": {
-        symbol: "USDT",
-        decimals: 6,
-      },
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
-        symbol: "cUSD",
-        decimals: 18,
-      },
-      "0x471EcE3750Da237f93B8E339c536989b8978a438": {
-        symbol: "CELO",
-        decimals: 18,
-      },
-      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": {
-        symbol: "cKES",
-        decimals: 18,
-      },
-      "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": {
-        symbol: "cNGN",
-        decimals: 18,
-      },
-
-      // "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": { symbol: "cEUR", decimals: 18 },
-      // "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": { symbol: "cREAL", decimals: 18 },
-      // "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": { symbol: "eXOF", decimals: 18 },
-      // "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": { symbol: "PUSO", decimals: 18 },
-      // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": { symbol: "cCOP", decimals: 18 },
-      // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": { symbol: "cGHS", decimals: 18 },
-      // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": { symbol: "USDGLO", decimals: 18 },
-    };
-    return tokenMap;
-  }, []);
+  // Token info from chain context
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   // removed custom tx modal state
@@ -463,27 +394,27 @@ export default function AppPage() {
       // 1. Check allowance
       const tokenContract = getContract({
         client,
-        chain: celo,
+        chain: chain,
         address: token,
       });
       const currentAllowance = await allowance({
         contract: tokenContract,
         owner: account.address,
-        spender: MINILEND_CELO,
+        spender: contractAddress,
       });
 
       // 2. Approve if needed and wait for receipt per v5 docs
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
-          spender: MINILEND_CELO,
+          spender: contractAddress,
           amount: amountWei.toString(),
         });
         const result = await sendTransaction(approveTx);
         if (result?.transactionHash) {
           await waitForReceipt({
             client,
-            chain: celo,
+            chain: chain,
             transactionHash: result.transactionHash,
           });
         }
@@ -534,19 +465,19 @@ export default function AppPage() {
     try {
       const tokenContract = getContract({
         client,
-        chain: celo,
+        chain: chain,
         address: token,
       });
       const currentAllowance = await allowance({
         contract: tokenContract,
         owner: account.address,
-        spender: MINILEND_CELO,
+        spender: contractAddress,
       });
 
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
-          spender: MINILEND_CELO,
+          spender: contractAddress,
           amount: amountWei.toString(),
         });
         await sendTransaction(approveTx);
@@ -572,19 +503,19 @@ export default function AppPage() {
     try {
       const tokenContract = getContract({
         client,
-        chain: celo,
+        chain: chain,
         address: token,
       });
       const currentAllowance = await allowance({
         contract: tokenContract,
         owner: account.address,
-        spender: MINILEND_CELO,
+        spender: contractAddress,
       });
 
       if (currentAllowance < amountWei) {
         const approveTx = approve({
           contract: tokenContract,
-          spender: MINILEND_CELO,
+          spender: contractAddress,
           amount: amountWei.toString(),
         });
         await sendTransaction(approveTx);
@@ -686,7 +617,7 @@ export default function AppPage() {
           </Link>
 
           <div className="flex-shrink-0">
-            <ConnectWallet size="sm" />
+            <ConnectWallet />
           </div>
         </div>
       </header>
@@ -699,6 +630,10 @@ export default function AppPage() {
             <p>You are currently offline. Some features may be limited.</p>
           </div>
         )}
+{/* 
+        {process.env.NODE_ENV === 'development' && (
+          <ChainSwitchTest />
+        )} */}
 
         {isConnected && (
           <div className="text-center mb-6">
@@ -772,7 +707,6 @@ export default function AppPage() {
       <SaveMoneyModal
         isOpen={activeModal === "save"}
         onClose={() => setActiveModal(null)}
-        tokenInfos={tokenInfos}
         loading={loading}
         requiresAuth={!isConnected}
       />
@@ -786,12 +720,13 @@ export default function AppPage() {
         tokenInfos={tokenInfos}
         loading={loading}
         requiresAuth={!isConnected}
+        chain={chain}
+        contractAddress={contractAddress}
       />
       <PayBackModal
         isOpen={activeModal === "payback"}
         onClose={() => setActiveModal(null)}
         onPayBack={handlePayBack}
-        tokenInfos={tokenInfos}
         loading={loading}
         userBalances={userBalances}
         requiresAuth={!isConnected}

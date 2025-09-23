@@ -397,7 +397,7 @@ export function MobileMoneyWithdrawModal({
             <div className="flex items-center min-w-0">
               <Smartphone className="w-5 h-5 mr-3 text-[#54d22d] flex-shrink-0" />
               <div className="min-w-0">
-                <DialogTitle className="text-white text-lg font-semibold truncate">Send to Phone</DialogTitle>
+                <DialogTitle className="text-white text-base font-normal truncate">Send to Phone</DialogTitle>
                 <DialogDescription className="text-[#a2c398] text-sm mt-1">
                   Convert {tokenSymbol} to mobile money
                 </DialogDescription>
@@ -537,7 +537,7 @@ export function MobileMoneyWithdrawModal({
                     <div className="text-sm">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-[#a2c398]">You'll receive:</span>
-                        <span className="font-semibold text-[#54d22d] text-lg">
+                        <span className="font-normal text-[#54d22d] text-base">
                           {formatEnhancedCurrencyAmount(Number.parseFloat(quote.outputAmount), form.fiatCurrency)}
                         </span>
                       </div>
@@ -583,7 +583,7 @@ export function MobileMoneyWithdrawModal({
           {currentStep === 2 && quote && (
             <div className="p-6 space-y-6">
               <div className="bg-[#21301c] border border-[#426039] rounded-lg p-4">
-                <h3 className="font-semibold text-white mb-4 flex items-center">
+                <h3 className="font-normal text-white mb-4 flex items-center">
                   <Shield className="w-4 h-4 mr-2 text-[#54d22d]" />
                   Review Details
                 </h3>
@@ -611,7 +611,7 @@ export function MobileMoneyWithdrawModal({
                       {formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}
                     </span>
                   </div>
-                  <div className="border-t border-[#2e4328] pt-3 flex justify-between font-semibold text-base">
+                  <div className="border-t border-[#2e4328] pt-3 flex justify-between font-normal text-base">
                     <span className="text-white">They'll receive:</span>
                     <span className="text-[#54d22d]">
                       {formatEnhancedCurrencyAmount(Number.parseFloat(quote.outputAmount), form.fiatCurrency)}
@@ -640,7 +640,7 @@ export function MobileMoneyWithdrawModal({
                 <Loader2 className="w-8 h-8 text-[#54d22d] animate-spin" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Sending Money</h3>
+                <h3 className="text-base font-normal text-white mb-2">Sending Money</h3>
                 <p className="text-sm text-[#a2c398]">
                   Converting your {tokenSymbol} and sending to {form.phoneNumber}...
                 </p>
@@ -656,7 +656,7 @@ export function MobileMoneyWithdrawModal({
                     <CheckCircle className="w-8 h-8 text-[#54d22d]" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Money Sent!</h3>
+                    <h3 className="text-base font-normal text-white mb-2">Money Sent!</h3>
                     <p className="text-sm text-[#a2c398] mb-4">Your mobile money transfer is being processed.</p>
                     <div className="bg-[#21301c] border border-[#426039] rounded-lg p-3">
                       <p className="text-xs text-[#a2c398] mb-1">Reference:</p>
@@ -670,7 +670,7 @@ export function MobileMoneyWithdrawModal({
                     <Clock className="w-8 h-8 text-[#54d22d]" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Almost Done</h3>
+                    <h3 className="text-base font-normal text-white mb-2">Almost Done</h3>
                     <p className="text-sm text-[#a2c398]">Setting up your mobile money transfer...</p>
                   </div>
                 </>

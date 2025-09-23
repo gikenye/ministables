@@ -12,9 +12,8 @@ import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/servic
 import { oracleService } from "@/lib/services/oracleService"
 import { getContract, prepareContractCall, sendTransaction, waitForReceipt } from "thirdweb"
 import { parseUnits } from "viem"
-import { celo } from "thirdweb/chains"
 import { client } from "@/lib/thirdweb/client"
-import { MINILEND_CELO } from "@/lib/constants"
+import { useChain } from "@/components/ChainProvider"
 import { LoanItem } from "./LoanItem"
 
 interface ActiveLoan {
@@ -29,7 +28,6 @@ interface PayBackModalProps {
   isOpen: boolean
   onClose: () => void
   onPayBack: (token: string, amount: string) => Promise<void>
-  tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading: boolean
   userBalances?: Record<string, string>
   requiresAuth?: boolean
@@ -39,13 +37,13 @@ export function PayBackModal({
   isOpen,
   onClose,
   onPayBack,
-  tokenInfos,
   loading,
   userBalances = {},
   requiresAuth = false,
 }: PayBackModalProps) {
   const account = useActiveAccount()
   const address = account?.address
+  const { chain, contract, contractAddress, tokens, tokenInfos } = useChain()
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
@@ -58,16 +56,7 @@ export function PayBackModal({
     amount: "",
   })
 
-  // Memoize contract instance to prevent re-creation
-  const contract = useMemo(
-    () =>
-      getContract({
-        client,
-        chain: celo,
-        address: MINILEND_CELO,
-      }),
-    [],
-  )
+
 
   // Get supported tokens from props - filtered to only cKES
   const supportedStablecoins = useMemo(() => {
@@ -86,6 +75,19 @@ export function PayBackModal({
       setRemainingBalance(null)
     }
   }, [isOpen])
+
+  // Reset modal state when the chain changes so tokens/loans from the old
+  // chain are not shown or used accidentally.
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1)
+      setForm({ token: "", amount: "" })
+      setSelectedLoan(null)
+      setPaymentSuccess(false)
+      setRemainingBalance(null)
+      setShowOnrampModal(false)
+    }
+  }, [chain?.id])
 
   // Auto-close after 5 seconds on success
   useEffect(() => {
@@ -107,17 +109,8 @@ export function PayBackModal({
   }
 
   // Balances for auto-wrap support when paying back with CELO
-  const { data: repayTokenBalance } = useWalletBalance({
-    client,
-    chain: celo,
-    address,
-    tokenAddress: form.token || undefined,
-  })
-  const { data: nativeBalanceData } = useWalletBalance({
-    client,
-    chain: celo,
-    address,
-  })
+  const { data: repayTokenBalance } = useWalletBalance({ client, chain, address, tokenAddress: form.token || undefined })
+  const { data: nativeBalanceData } = useWalletBalance({ client, chain, address })
 
   const handleRepayment = async () => {
     if (!form.token || !form.amount) {
@@ -134,15 +127,15 @@ export function PayBackModal({
     }
 
     try {
-      // Auto-wrap CELO if needed before repay
-      const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438"
-      const erc20Balance = Number.parseFloat(repayTokenBalance?.displayValue || "0")
-      const nativeBalance = Number.parseFloat(nativeBalanceData?.displayValue || "0")
-      const inputAmount = Number.parseFloat(form.amount)
+        // Auto-wrap CELO if needed before repay
+        const CELO_ERC20 = tokens.find(t => t.symbol.toUpperCase() === "CELO")?.address
+        const erc20Balance = Number.parseFloat(repayTokenBalance?.displayValue || "0")
+        const nativeBalance = Number.parseFloat(nativeBalanceData?.displayValue || "0")
+        const inputAmount = Number.parseFloat(form.amount)
 
-      if (form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= inputAmount - erc20Balance) {
-        const amountToWrap = inputAmount - erc20Balance
-        const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 })
+        if (CELO_ERC20 && form.token === CELO_ERC20 && erc20Balance < inputAmount && nativeBalance >= inputAmount - erc20Balance) {
+          const amountToWrap = inputAmount - erc20Balance
+    const celoContract = getContract({ client, chain, address: CELO_ERC20 })
         const wrapTx = prepareContractCall({
           contract: celoContract,
           method: "function deposit()",
@@ -152,7 +145,7 @@ export function PayBackModal({
         
         const wrapResult = await sendTransaction({ transaction: wrapTx, account })
         if (wrapResult?.transactionHash) {
-          await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash })
+          await waitForReceipt({ client, chain, transactionHash: wrapResult.transactionHash })
         }
       }
 
@@ -161,21 +154,13 @@ export function PayBackModal({
       const amountWei = parseUnits(form.amount, decimals)
 
       // First approve the MiniLend contract to spend tokens
-      const erc20Contract = getContract({
-        client,
-        chain: celo,
-        address: form.token,
-      })
+      const erc20Contract = getContract({ client, chain, address: form.token })
 
-      const approveTx = prepareContractCall({
-        contract: erc20Contract,
-        method: "function approve(address spender, uint256 amount)",
-        params: [MINILEND_CELO, amountWei],
-      })
+      const approveTx = prepareContractCall({ contract: erc20Contract, method: "function approve(address spender, uint256 amount)", params: [contractAddress, amountWei] })
 
       const approveResult = await sendTransaction({ account, transaction: approveTx })
       if (approveResult?.transactionHash) {
-        await waitForReceipt({ client, chain: celo, transactionHash: approveResult.transactionHash })
+        await waitForReceipt({ client, chain, transactionHash: approveResult.transactionHash })
       }
 
       // Now execute the repay transaction
@@ -191,7 +176,7 @@ export function PayBackModal({
       const result = await sendTransaction({ account, transaction: repayTx })
       
       if (result?.transactionHash) {
-        await waitForReceipt({ client, chain: celo, transactionHash: result.transactionHash })
+        await waitForReceipt({ client, chain, transactionHash: result.transactionHash })
         handleTransactionSuccess(result)
       }
     } catch (error) {
@@ -211,7 +196,7 @@ export function PayBackModal({
     
     // Report transaction to Divvi for referral tracking
     if (receipt.transactionHash) {
-      await reportTransactionToDivvi(receipt.transactionHash, celo.id)
+      await reportTransactionToDivvi(receipt.transactionHash, chain?.id)
       console.log("[PayBackModal] Reported transaction to Divvi:", receipt.transactionHash)
     }
   }
@@ -243,8 +228,8 @@ export function PayBackModal({
       const tokenSymbol = tokenInfos[tokenAddress]?.symbol
       if (!tokenSymbol) return false
 
-      const chainName = "CELO" // Chain name string, not chain object
-      return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
+    const chainName = chain.name
+    return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
     } catch (error) {
       console.error("Error checking onramp support:", error)
       return false

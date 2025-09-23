@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react"
 import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react"
@@ -26,15 +26,14 @@ export const minilendABI = [
 import { getContract, prepareContractCall, type PreparedTransaction, waitForReceipt } from "thirdweb"
 import { getApprovalForTransaction } from "thirdweb/extensions/erc20"
 import { client } from "@/lib/thirdweb/client"
-import { celo } from "thirdweb/chains"
-import { getTokenIcon } from "@/lib/utils/tokenIcons"
-import { MINILEND_CELO } from "@/lib/services/thirdwebService"
+
 import { parseUnits } from "viem"
+import { useChain } from "@/components/ChainProvider"
+import { getExplorerUrl } from "@/config/chainConfig"
 
 interface SaveMoneyModalProps {
   isOpen: boolean
   onClose: () => void
-  tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading?: boolean
   requiresAuth?: boolean
 }
@@ -42,13 +41,23 @@ interface SaveMoneyModalProps {
 export function SaveMoneyModal({
   isOpen,
   onClose,
-  tokenInfos,
   loading: _loading = false,
   requiresAuth = false,
 }: SaveMoneyModalProps) {
   const account = useActiveAccount()
+  const { chain, contractAddress, tokens, tokenInfos } = useChain()
 
-  const supportedStablecoins = Object.keys(tokenInfos)
+  // Only show deposit-appropriate tokens per chain
+  const supportedStablecoins = useMemo(() => {
+    if (chain?.id === 42220) { // Celo
+      const allowedSymbols = ["USDC", "USDT", "CUSD"]
+      return tokens.filter(t => allowedSymbols.includes(t.symbol.toUpperCase())).map(t => t.address)
+    } else if (chain?.id === 534352) { // Scroll
+      const allowedSymbols = ["USDC", "WETH"]
+      return tokens.filter(t => allowedSymbols.includes(t.symbol.toUpperCase())).map(t => t.address)
+    }
+    return tokens.map(t => t.address)
+  }, [tokens, chain?.id])
   const [currentStep, setCurrentStep] = useState(1)
   const [form, setForm] = useState({
     token: "",
@@ -71,7 +80,7 @@ export function SaveMoneyModal({
   // Use the working setup's wallet balance hook
   const { data: walletBalanceData, isLoading: isBalanceLoading } = useWalletBalance({
     client,
-    chain: celo,
+    chain,
     address: account?.address,
     tokenAddress: form.token || undefined,
   })
@@ -89,6 +98,21 @@ export function SaveMoneyModal({
     }
   }, [isOpen])
 
+  // Clear modal state when the chain changes to prevent using token addresses
+  // or balances from the previously selected chain.
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1)
+      setError(null)
+      setIsSaving(false)
+      setTransactionStatus(null)
+      setDepositSuccess(null)
+      setForm({ token: "", amount: "", lockPeriod: "2592000" })
+      setShowOnrampModal(false)
+      setSelectedTokenForOnramp("")
+    }
+  }, [chain?.id])
+
   const prepareDepositTransaction = async () => {
     if (!form.token || !form.amount || !form.lockPeriod || !account) {
       throw new Error("Missing required parameters")
@@ -100,7 +124,6 @@ export function SaveMoneyModal({
         tokenSymbol: tokenInfos[form.token]?.symbol,
         amount: 'REDACTED',
         lockPeriod: form.lockPeriod,
-        MINILEND_CELO: MINILEND_CELO?.substring(0, 10) + '...'
       })
     }
 
@@ -115,14 +138,14 @@ export function SaveMoneyModal({
       })
     }
 
-    // Create Minilend contract instance
+    // Create Minilend contract instance from config
     if (process.env.NODE_ENV === 'development') {
-      console.log("[SaveMoneyModal] Creating Minilend contract instance")
+      console.log("[SaveMoneyModal] Creating Minilend contract instance for chain:", chain?.id)
     }
     const minilendContract = getContract({
       client,
-      chain: celo,
-      address: MINILEND_CELO,
+      chain: chain,
+      address: contractAddress,
       abi: minilendABI,
     })
 
@@ -210,7 +233,7 @@ export function SaveMoneyModal({
       
       // Report transaction to Divvi for referral tracking
       if (receipt.transactionHash) {
-        reportTransactionToDivvi(receipt.transactionHash, celo.id)
+        reportTransactionToDivvi(receipt.transactionHash, chain.id)
           .then(() => {
             if (process.env.NODE_ENV === 'development') {
               console.log("[SaveMoneyModal] Reported transaction to Divvi:", receipt.transactionHash)
@@ -280,18 +303,18 @@ export function SaveMoneyModal({
         
         handleTransactionSent(approveResult, true)
         
-        if (approveResult?.transactionHash) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log("[SaveMoneyModal] Waiting for approval confirmation...")
+          if (approveResult?.transactionHash) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log("[SaveMoneyModal] Waiting for approval confirmation...")
+            }
+            setTransactionStatus("Processing authorization...")
+            const approvalReceipt = await waitForReceipt({
+              client,
+              chain,
+              transactionHash: approveResult.transactionHash,
+            })
+            handleTransactionSuccess(approvalReceipt, true)
           }
-          setTransactionStatus("Processing authorization...")
-          const approvalReceipt = await waitForReceipt({
-            client,
-            chain: celo,
-            transactionHash: approveResult.transactionHash,
-          })
-          handleTransactionSuccess(approvalReceipt, true)
-        }
       } else {
         console.log("[SaveMoneyModal] No approval needed, proceeding with deposit")
       }
@@ -305,18 +328,18 @@ export function SaveMoneyModal({
       
       handleTransactionSent(depositResult, false)
       
-      if (depositResult?.transactionHash) {
-        console.log("[SaveMoneyModal] Deposit transaction submitted with hash:", depositResult.transactionHash)
-        setTransactionStatus("Almost done...")
-        // Wait for deposit confirmation
-        const depositReceipt = await waitForReceipt({
-          client,
-          chain: celo,
-          transactionHash: depositResult.transactionHash,
-        })
-        setTransactionStatus("Success!")
-        handleTransactionSuccess(depositReceipt, false)
-      }
+        if (depositResult?.transactionHash) {
+          console.log("[SaveMoneyModal] Deposit transaction submitted with hash:", depositResult.transactionHash)
+          setTransactionStatus("Almost done...")
+          // Wait for deposit confirmation
+          const depositReceipt = await waitForReceipt({
+            client,
+            chain,
+            transactionHash: depositResult.transactionHash,
+          })
+          setTransactionStatus("Success!")
+          handleTransactionSuccess(depositReceipt, false)
+        }
 
     } catch (err: any) {
       setTransactionStatus(null)
@@ -436,8 +459,8 @@ export function SaveMoneyModal({
       const tokenSymbol = tokenInfos[tokenAddress]?.symbol
       if (!tokenSymbol) return false
 
-      const chainName = "CELO" // Chain name string, not chain object
-      return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
+  const chainName = chain?.name || chain?.chain || String(chain?.id)
+  return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
     } catch (error) {
       console.error("Error checking onramp support:", error)
       return false
@@ -539,14 +562,16 @@ export function SaveMoneyModal({
                               onClick={() => setForm({ ...form, token })}
                               className="flex items-center gap-3 flex-1 text-left"
                             >
-                              {getTokenIcon(symbol).startsWith("http") ? (
+                              {tokenInfos[token]?.icon ? (
                                 <img
-                                  src={getTokenIcon(symbol) || "/placeholder.svg"}
+                                  src={tokenInfos[token].icon}
                                   alt={symbol}
                                   className="w-8 h-8 rounded-full"
                                 />
                               ) : (
-                                <span className="text-2xl">{getTokenIcon(symbol)}</span>
+                                <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                                  {symbol.charAt(0)}
+                                </div>
                               )}
                               <div className="flex-1">
                                 <div className="font-medium">{symbol}</div>
@@ -834,7 +859,7 @@ export function SaveMoneyModal({
                     <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
                       <span className="text-[#a2c398]">Transaction</span>
                       <a
-                        href={`https://celoscan.io/tx/${depositSuccess.transactionHash}`}
+                        href={`${getExplorerUrl(chain?.id || 42220)}/tx/${depositSuccess.transactionHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[#54d22d] text-sm hover:underline truncate max-w-32"

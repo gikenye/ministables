@@ -10,7 +10,7 @@ import { ArrowLeft, Smartphone, AlertCircle } from "lucide-react"
 import { formatAmount } from "@/lib/utils"
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal"
 import { offrampService } from "@/lib/services/offrampService"
-import { getTokenIcon } from "@/lib/utils/tokenIcons"
+import { getExplorerUrl } from "@/config/chainConfig"
 
 interface FundsWithdrawalModalProps {
   isOpen: boolean
@@ -229,7 +229,7 @@ export function FundsWithdrawalModal({
                     const totalDeposit = userDeposits[token] || "0"
                     const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18)
                     const formattedTotal = formatAmount(totalDeposit, tokenInfo?.decimals || 18)
-                    const iconUrl = getTokenIcon(tokenInfo?.symbol || "")
+                    const iconUrl = tokenInfo?.icon || "💱"
                     const isTokenLocked = isLocked(depositLockEnds[token])
 
                     return (
