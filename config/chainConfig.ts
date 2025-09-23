@@ -1,6 +1,6 @@
 import { celo, scroll } from "thirdweb/chains";
 
-export const CHAINS = [scroll, celo];
+export const CHAINS = [celo, scroll];
 
 export const CONTRACTS = {
   [celo.id]: "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c",
