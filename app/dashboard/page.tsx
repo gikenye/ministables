@@ -20,14 +20,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatAddress } from "@/lib/utils";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+// Use configured contracts mapping from chainConfig
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { parseUnits } from "viem";
 import { useActiveAccount, useReadContract, useConnect, useSendTransaction, useWalletBalance } from "thirdweb/react";
 import { useUserDeposits, useUserBorrows, useAccumulatedInterest, useGetUserBalance } from "@/lib/thirdweb/minilend-contract";
 import { thirdwebService } from "@/lib/services/thirdwebService";
 import { client } from "@/lib/thirdweb/client";
-import { celo } from "thirdweb/chains";
+import { useChain } from "@/components/ChainProvider";
 
 
 interface UserData {
@@ -37,79 +37,6 @@ interface UserData {
   lockEnds: Record<string, number>;
 }
 
-// Supported stablecoins from deployment config
-const SUPPORTED_STABLECOINS = [
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
-];
-
-// Valid collateral assets from deployment config
-const SUPPORTED_COLLATERAL = [
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-];
-
-const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
-  "0x471EcE3750Da237f93B8E339c536989b8978a438": {
-    symbol: "CELO",
-    decimals: 18,
-  },
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
-    symbol: "cUSD",
-    decimals: 18,
-  },
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": {
-    symbol: "cEUR",
-    decimals: 18,
-  },
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": {
-    symbol: "cREAL",
-    decimals: 18,
-  },
-  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": {
-    symbol: "eXOF",
-    decimals: 18,
-  },
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": {
-    symbol: "cKES",
-    decimals: 18,
-  },
-  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": {
-    symbol: "PUSO",
-    decimals: 18,
-  },
-  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": {
-    symbol: "cCOP",
-    decimals: 18,
-  },
-  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": {
-    symbol: "cGHS",
-    decimals: 18,
-  },
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { symbol: "USDT", decimals: 6 },
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { symbol: "USDC", decimals: 6 },
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": {
-    symbol: "USDGLO",
-    decimals: 18,
-  },
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": {
-    symbol: "cNGN",
-    decimals: 18,
-  },
-};
 
 export default function DashboardPage() {
   // Use Math.pow then convert to BigInt to avoid BigInt literal syntax
@@ -131,22 +58,27 @@ export default function DashboardPage() {
     }
   }, [address, isConnected, account]);
 
-  const contract = getContract({
-    address: MINILEND_ADDRESS,
-    chain: celo,
-    client,
-  });
+  const { chain: selectedChain, contract, contractAddress, tokenInfos, tokens } = useChain();
+
+  const SUPPORTED_STABLECOINS = useMemo(() => {
+    try {
+      return (tokens || []).map((t: any) => t.address);
+    } catch {
+      return [];
+    }
+  }, [tokens]);
 
   // Log contract info for debugging wallet/contract connectivity
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log("[dashboard] contract info:", {
-        minilendAddress: MINILEND_ADDRESS,
+        minilendAddress: contractAddress,
         accountAddress: address,
         contractInstance: contract,
+        chainId: selectedChain.id,
       });
     }
-  }, [contract, address]);
+  }, [contract, address, contractAddress, selectedChain]);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
@@ -265,8 +197,8 @@ export default function DashboardPage() {
   // Accumulated interest (protocol-level) for the user
   const accumulatedInterest = useAccumulatedInterest(contract, address || "");
 
-  // Local token info reference (move above performance to avoid TDZ)
-  const tokenInfo = TOKEN_INFO;
+  // Use token info from chain config
+  const tokenInfo = tokenInfos;
 
   const performance = useMemo(() => {
     try {
@@ -283,7 +215,7 @@ export default function DashboardPage() {
       const totalInterest = BigInt(accumulatedInterest?.data?.toString?.() || "0");
 
       const rows = entries.map((t) => {
-  const decimals = TOKEN_INFO[t]?.decimals || 18;
+      const decimals = tokenInfo[t]?.decimals || 18;
   const depositWei = depositWeis[t] || BigInt(0);
   const interestWei = totalDeposits > BigInt(0) ? (totalInterest * depositWei) / totalDeposits : BigInt(0);
         const lockEnd = lockEndsState[t] || 0;
@@ -478,7 +410,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex-shrink-0 ml-3">
             {/* Render the ConnectWallet button so thirdweb can rehydrate/persist the user's session on reload */}
-            <ConnectWallet size="sm" />
+            <ConnectWallet/>
           </div>
         </div>
       </header>
@@ -537,11 +469,11 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <TrendingUp className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
-                <p className="text-sm font-medium mb-1 text-[#a2c398]">
+                <p className="text-xs font-normal mb-1 text-[#a2c398]">
                   Money Saved
                 </p>
-                <p className="text-2xl font-bold text-white">
-                  {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KES' : '$'}${convertAmount(totals.saved)}`}
+                <p className="text-lg font-normal text-white">
+                  {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KES' : '$'} ${convertAmount(totals.saved)}`}
                 </p>
                 {totals.nextUnlock && (
                   <p className="text-xs text-[#a2c398] mt-2">
@@ -551,10 +483,10 @@ export default function DashboardPage() {
               </div>
               <div className="text-center p-4 bg-black/30 backdrop-blur-sm rounded-xl">
                 <ArrowDownLeft className="w-6 h-6 mx-auto mb-2 text-[#54d22d]" />
-                <p className="text-sm font-medium mb-1 text-[#a2c398]">
+                <p className="text-xs font-normal mb-1 text-[#a2c398]">
                   Money Borrowed
                 </p>
-                <p className="text-2xl font-bold text-white">
+                <p className="text-lg font-normal text-white">
                   {!isConnected ? "--" : dashboardLoading ? "..." : `${displayCurrency === 'KES' ? 'KES' : '$'}${convertAmount(totals.borrowed)}`}
                 </p>
                 {parseFloat(totals.interest) > 0 && (
@@ -663,7 +595,7 @@ export default function DashboardPage() {
             const amountWei = parseUnits(amount, decimals);
 
             if (process.env.NODE_ENV === 'development') {
-              console.log('[dashboard] withdraw requested', { token, amount, decimals, amountWei: amountWei.toString(), account: account?.address, contractAddress: MINILEND_ADDRESS });
+              console.log('[dashboard] withdraw requested', { token, amount, decimals, amountWei: amountWei.toString(), account: account?.address, contractAddress });
             }
 
             // Check for outstanding borrows across supported stablecoins (contract will revert with E2 if any exist)
@@ -718,12 +650,8 @@ export default function DashboardPage() {
             const result = await sendTransaction(withdrawTx);
             
             if (result?.transactionHash) {
-              await waitForReceipt({
-                client,
-                chain: celo,
-                transactionHash: result.transactionHash,
-              });
-              
+              await waitForReceipt({ client, chain: selectedChain, transactionHash: result.transactionHash });
+
               // Close modal on success
               setWithdrawOpen(false);
             }

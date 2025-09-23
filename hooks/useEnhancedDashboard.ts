@@ -2,84 +2,35 @@
 import { useState, useEffect, useMemo } from "react";
 import { getContract } from "thirdweb";
 import { useReadContract } from "thirdweb/react";
-import { celo } from "thirdweb/chains";
 import { client } from "@/lib/thirdweb/client";
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService";
+import { CHAINS, CONTRACTS, TOKENS, getTokenInfoMap } from "@/config/chainConfig";
 
-// Standard stablecoin reference for value comparison
-const USD_REFERENCE_TOKEN = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // cUSD
+// Select a chain that has a configured contract (fall back to first chain)
+const SELECTED_CHAIN = (CHAINS && CHAINS.length > 0)
+  ? (CHAINS.find((c: any) => CONTRACTS && CONTRACTS[c.id]) || CHAINS[0])
+  : undefined;
+const USD_REFERENCE_TOKEN = (() => {
+  try {
+    if (TOKENS && SELECTED_CHAIN && TOKENS[SELECTED_CHAIN.id]) {
+      const usd = TOKENS[SELECTED_CHAIN.id].find((t: any) => (t.symbol || '').toUpperCase() === "CUSD")
+      return usd ? usd.address : undefined
+    }
+  } catch (e) {
+    // ignore
+  }
+  return undefined
+})();
 
-// Supported stablecoins from deployment config
-const SUPPORTED_STABLECOINS = [
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787", // cREAL
-  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08", // eXOF
-  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA", // cCOP
-  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313", // cGHS
-  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B", // PUSO
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73", // cEUR
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3", // USDGLO
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
-];
+const SUPPORTED_STABLECOINS: string[] = (() => {
+  try {
+    if (TOKENS && SELECTED_CHAIN && TOKENS[SELECTED_CHAIN.id]) {
+      return TOKENS[SELECTED_CHAIN.id].map((t: any) => t.address)
+    }
+  } catch (e) {}
+  return []
+})();
 
-// Token info mapping
-const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
-  "0x471EcE3750Da237f93B8E339c536989b8978a438": {
-    symbol: "CELO",
-    decimals: 18,
-  },
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
-    symbol: "cUSD",
-    decimals: 18,
-  },
-  "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73": {
-    symbol: "cEUR",
-    decimals: 18,
-  },
-  "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787": {
-    symbol: "cREAL",
-    decimals: 18,
-  },
-  "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08": {
-    symbol: "eXOF",
-    decimals: 18,
-  },
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": {
-    symbol: "cKES",
-    decimals: 18,
-  },
-  "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B": {
-    symbol: "PUSO",
-    decimals: 18,
-  },
-  "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": {
-    symbol: "cCOP",
-    decimals: 18,
-  },
-  "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": {
-    symbol: "cGHS",
-    decimals: 18,
-  },
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": { 
-    symbol: "USDT", 
-    decimals: 6 
-  },
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": { 
-    symbol: "USDC", 
-    decimals: 6 
-  },
-  "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": {
-    symbol: "USDGLO",
-    decimals: 18,
-  },
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": {
-    symbol: "cNGN",
-    decimals: 18,
-  },
-};
+const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = SELECTED_CHAIN ? getTokenInfoMap(SELECTED_CHAIN.id) : {};
 
 export interface EnhancedUserData {
   deposits: Record<string, string>;
@@ -112,12 +63,16 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   const [borrowValue, setBorrowValue] = useState("0");
   const [loading, setLoading] = useState(true);
 
-  // Create contract instance like the working modals
-  const contract = getContract({
-    client,
-    chain: celo,
-    address: MINILEND_ADDRESS,
-  });
+  // Create contract instance using the selected chain from config
+  const selectedAddress = (CONTRACTS && SELECTED_CHAIN) ? CONTRACTS[SELECTED_CHAIN.id] : undefined;
+
+  const contract = (SELECTED_CHAIN && selectedAddress)
+    ? getContract({
+        client,
+        chain: SELECTED_CHAIN,
+        address: selectedAddress,
+      })
+    : undefined;
 
   // Format big integers with proper decimal precision
   const bigIntPow10 = (n: number) => {
@@ -163,24 +118,24 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   // Get user data for all supported tokens
   const userDataQueries = SUPPORTED_STABLECOINS.map(token => {
     const { data: deposit } = useReadContract({
-      contract,
+      contract: contract as any,
       method: "function deposits(address, address) view returns (uint256)",
       params: [address || "0x0000000000000000000000000000000000000000", token],
-      queryOptions: { enabled: !!address },
+      queryOptions: { enabled: !!address && !!contract },
     });
     
     const { data: borrow } = useReadContract({
-      contract,
+      contract: contract as any,
       method: "function borrows(address, address) view returns (uint256)",
       params: [address || "0x0000000000000000000000000000000000000000", token],
-      queryOptions: { enabled: !!address },
+      queryOptions: { enabled: !!address && !!contract },
     });
     
     const { data: collateral } = useReadContract({
-      contract,
+      contract: contract as any,
       method: "function collaterals(address, address) view returns (uint256)",
       params: [address || "0x0000000000000000000000000000000000000000", token],
-      queryOptions: { enabled: !!address },
+      queryOptions: { enabled: !!address && !!contract },
     });
     
     return { token, deposit, borrow, collateral };

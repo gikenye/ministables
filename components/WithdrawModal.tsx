@@ -10,7 +10,7 @@ import { ArrowLeft, Smartphone, AlertCircle } from "lucide-react"
 import { formatAmount } from "@/lib/utils"
 import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal"
 import { offrampService } from "@/lib/services/offrampService"
-import { getTokenIcon } from "@/lib/utils/tokenIcons"
+import { getExplorerUrl } from "@/config/chainConfig"
 
 interface FundsWithdrawalModalProps {
   isOpen: boolean
@@ -229,7 +229,7 @@ export function FundsWithdrawalModal({
                     const totalDeposit = userDeposits[token] || "0"
                     const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18)
                     const formattedTotal = formatAmount(totalDeposit, tokenInfo?.decimals || 18)
-                    const iconUrl = getTokenIcon(tokenInfo?.symbol || "")
+                    const iconUrl = tokenInfo?.icon || "💱"
                     const isTokenLocked = isLocked(depositLockEnds[token])
 
                     return (
@@ -396,6 +396,9 @@ export function FundsWithdrawalModal({
                     <span className="text-white font-medium">Cash Out Option</span>
                   </div>
                   <p className="text-[#a2c398] text-sm mb-3">Convert to local currency via mobile money</p>
+                  <div className="text-xs text-[#a2c398] mb-3">
+                    Limits: KES {offrampService.getMinimumWithdrawalAmount('KES')} - {offrampService.getMaximumWithdrawalAmount('KES').toLocaleString()}
+                  </div>
                   <Button
                     onClick={() => setShowMobileMoneyModal(true)}
                     variant="outline"
@@ -433,7 +436,7 @@ export function FundsWithdrawalModal({
             onClose={() => setShowMobileMoneyModal(false)}
             tokenSymbol={tokenInfos[form.token]?.symbol || ""}
             tokenAddress={form.token}
-            network={offrampService.detectNetworkFromTokenAddress(form.token) || "celo"}
+            network={offrampService.detectNetworkFromTokenAddress(form.token) || "CELO"}
             availableAmount={formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18)}
             decimals={tokenInfos[form.token]?.decimals || 18}
             onWithdrawSuccess={(orderID, amount) => {

@@ -3,7 +3,7 @@ import QueryReservesAndLiquidity from "./QueryReservesAndLiquidity";
 import { Contract, getContract } from "thirdweb";
 import { formatAmount } from "@/lib/utils";
 import { client } from "@/lib/thirdweb/client";
-import { celo } from "thirdweb/chains";
+import { CHAINS } from "@/config/chainConfig";
 
 interface TVLCardProps {
   contract: Contract;
@@ -21,7 +21,7 @@ export default function TVLCard({
 }: TVLCardProps) {
   const aavePoolContract = getContract({
     client,
-    chain: celo,
+    chain: CHAINS && CHAINS.length > 0 ? CHAINS[0] : undefined,
     address: AAVE_POOL_ADDRESS,
   });
 

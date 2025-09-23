@@ -1,112 +1,69 @@
 import { getContract } from "thirdweb";
-import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
 import { readContract } from "thirdweb";
-import { MINILEND_ADDRESS as MINILEND_ADDRESS_CONST } from "../constants";
+import { CHAINS, CONTRACTS, TOKENS } from "@/config/chainConfig";
 // Removed unused imports that were causing linting errors
 
 // Contract configuration
-export const MINILEND_ADDRESS = MINILEND_ADDRESS_CONST;
+// Provide a default minilend address derived from the chain config to avoid
+// relying on legacy constants. This keeps backwards compatibility but prefers
+// the configured CONTRACTS mapping when available.
+const defaultChain = CHAINS && CHAINS.length > 0 ? CHAINS[0] : undefined;
+export const MINILEND_CELO = (CONTRACTS && defaultChain) ? CONTRACTS[defaultChain.id] : undefined;
 // Use env-configured oracle for Celo; default to the provided BackendPriceOracle
 export const ORACLE_ADDRESS =
   (process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS as string | undefined)?.trim() ||
   "0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924";
 
 // All supported stablecoins from contract
-export const NEW_SUPPORTED_TOKENS = {
-   USDC: {
-    address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
-    symbol: "USDC",
-    name: "USD Coin",
-    decimals: 6,
-  },
-    USDT: {
-    address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e",
-    symbol: "USDT",
-    name: "Tether USD",
-    decimals: 6,
-  },
-  cUSD: {
-    address: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-    symbol: "cUSD",
-    name: "Celo Dollar",
-    decimals: 18,
-  },
-    cKES: {
-    address: "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0",
-    symbol: "cKES",
-    name: "Celo Kenyan Shilling",
-    decimals: 18,
-  },
-    cNGN: {
-    address: "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71",
-    symbol: "cNGN",
-    name: "Celo Nigerian Naira",
-    decimals: 18,
-  },
-  CELO: {
-    address: "0x471EcE3750Da237f93B8E339c536989b8978a438",
-    symbol: "CELO",
-    name: "Celo",
-    decimals: 18,
-  },
-  
-  // cEUR: {
-  //   address: "0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73",
-  //   symbol: "cEUR",
-  //   name: "Celo Euro",
-  //   decimals: 18,
-  // },
-  // cREAL: {
-  //   address: "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787",
-  //   symbol: "cREAL",
-  //   name: "Celo Real",
-  //   decimals: 18,
-  // },
-  // eXOF: {
-  //   address: "0x73F93dcc49cB8A239e2032663e9475dd5ef29A08",
-  //   symbol: "eXOF",
-  //   name: "West African CFA Franc",
-  //   decimals: 18,
-  // },
+// Build a default supported tokens map from config TOKENS for the default chain
+const buildSupportedTokens = () => {
+  const result: Record<string, any> = {};
+  try {
+    if (defaultChain && TOKENS && TOKENS[defaultChain.id]) {
+      TOKENS[defaultChain.id].forEach((t: any) => {
+        const key = (t.symbol || t.symbol || t.address).toString();
+        result[key] = {
+          address: t.address,
+          symbol: t.symbol,
+          name: t.name || t.symbol,
+          decimals: t.decimals ?? t.decimal ?? 18,
+        };
+      });
+    }
+  } catch (e) {
+    // ignore and fallback to empty
+  }
+  return result;
+};
 
-  // PUSO: {
-  //   address: "0x105d4A9306D2E55a71d2Eb95B81553AE1dC20d7B",
-  //   symbol: "PUSO",
-  //   name: "Philippine Peso",
-  //   decimals: 18,
-  // },
-  // cCOP: {
-  //   address: "0x8A567e2aE79CA692Bd748aB832081C45de4041eA",
-  //   symbol: "cCOP",
-  //   name: "Celo Colombian Peso",
-  //   decimals: 18,
-  // },
-  // cGHS: {
-  //   address: "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313",
-  //   symbol: "cGHS",
-  //   name: "Celo Ghanaian Cedi",
-  //   decimals: 18,
-  // },
+export const NEW_SUPPORTED_TOKENS = buildSupportedTokens();
 
- 
-  // USDGLO: {
-  //   address: "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3",
-  //   symbol: "USDGLO",
-  //   name: "Glo Dollar",
-  //   decimals: 18,
-  // },
-
-} as const;
 
 // Oracle fallback rates
-const ORACLE_FALLBACK_RATES: Record<string, string> = {
-  "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": "1000000000000000000", // USDC
-  "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e": "1000000000000000000", // USDT
-  "0x471EcE3750Da237f93B8E339c536989b8978a438": "300000000000000000", // CELO
-  "0x765DE816845861e75A25fCA122bb6898B8B1282a": "1000000000000000000", // cUSD
-  "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0": "7700000000000000", // cKES
-  "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71": "654000000000000", // cNGN
+// Build a sensible set of oracle fallback rates based on token symbols where available
+const ORACLE_FALLBACK_RATES: Record<string, string> = {};
+try {
+  const base = NEW_SUPPORTED_TOKENS;
+  Object.values(base).forEach((t: any) => {
+    const addr = (t.address || "").toString();
+    const sym = (t.symbol || "").toUpperCase();
+    if (sym === "USDC" || sym === "USDT" || sym === "CUSD") {
+      ORACLE_FALLBACK_RATES[addr] = "1000000000000000000";
+    } else if (sym === "CELO") {
+      ORACLE_FALLBACK_RATES[addr] = "300000000000000000";
+    } else if (sym === "CKES") {
+      ORACLE_FALLBACK_RATES[addr] = "7700000000000000";
+    } else if (sym === "CNGN") {
+      ORACLE_FALLBACK_RATES[addr] = "654000000000000";
+    } else {
+      ORACLE_FALLBACK_RATES[addr] = "1000000000000000000";
+    }
+  });
+} catch (e) {
+  // fallback to a minimal set if config parsing fails
+  ORACLE_FALLBACK_RATES["0xcebA9300f2b948710d2653dD7B07f33A8B32118C"] = "1000000000000000000";
+}
 
 
 
@@ -118,26 +75,29 @@ const ORACLE_FALLBACK_RATES: Record<string, string> = {
   // "0x8A567e2aE79CA692Bd748aB832081C45de4041eA": "250000000000000", // cCOP
   // "0xfAeA5F3404bbA20D3cc2f8C4B0A888F55a3c7313": "63000000000000000", // cGHS
   // "0x4F604735c1cF31399C6E711D5962b2B3E0225AD3": "1000000000000000000", // USDGLO
-};
 
 class ThirdwebService {
-  private contract;
-  private oracleContract;
+  private contract: any;
+  private oracleContract: any;
   private lastRequestTime = 0;
   private readonly REQUEST_DELAY = 150; // Minimum delay between requests in ms
 
-  constructor() {
-    this.contract = getContract({
-      client,
-      chain: celo,
-      address: MINILEND_ADDRESS,
-    });
+  constructor(chain?: any, minilendAddress?: string) {
+    // Default to first chain in config to maintain backwards compatibility
+    const defaultChain = chain || (CHAINS && CHAINS.length > 0 ? CHAINS[0] : undefined);
+    const defaultAddress = minilendAddress || (CONTRACTS && defaultChain ? CONTRACTS[defaultChain.id] : undefined);
 
-    this.oracleContract = getContract({
-      client,
-      chain: celo,
-      address: ORACLE_ADDRESS,
-    });
+    if (defaultChain && defaultAddress) {
+      this.contract = getContract({ client, chain: defaultChain, address: defaultAddress });
+    } else {
+      this.contract = undefined;
+    }
+
+    if (defaultChain && ORACLE_ADDRESS) {
+      this.oracleContract = getContract({ client, chain: defaultChain, address: ORACLE_ADDRESS });
+    } else {
+      this.oracleContract = undefined;
+    }
   }
 
   private async rateLimitedRequest<T>(fn: () => Promise<T>): Promise<T> {
@@ -171,6 +131,9 @@ class ThirdwebService {
   // Read functions
   async getSupportedStablecoins(): Promise<string[]> {
     try {
+      if (!this.contract) {
+        return Object.values(NEW_SUPPORTED_TOKENS).map((t) => t.address);
+      }
       const tokens = [];
       let index = 0;
       while (true) {
@@ -195,6 +158,9 @@ class ThirdwebService {
 
   async getSupportedCollateral(): Promise<string[]> {
     try {
+      if (!this.contract) {
+        return Object.values(NEW_SUPPORTED_TOKENS).map((t) => t.address);
+      }
       const tokens = [];
       let index = 0;
       while (true) {
@@ -219,6 +185,7 @@ class ThirdwebService {
 
   async getDefaultLockPeriods(): Promise<string[]> {
     try {
+      if (!this.contract) return ["86400", "604800", "2592000", "7776000", "31536000"];
       const periods = [];
       for (let i = 0; i < 5; i++) {
         try {
@@ -243,6 +210,7 @@ class ThirdwebService {
 
   async getUserBalance(user: string, token: string): Promise<string> {
     try {
+      if (!this.contract) return "0";
       const balance = await this.retryWithBackoff(() => readContract({
         contract: this.contract,
         method: "function getUserBalance(address user, address token) returns (uint256)",
@@ -259,6 +227,7 @@ class ThirdwebService {
     token: string
   ): Promise<{ amount: string; lockEnd: number }> {
     try {
+      if (!this.contract) return { amount: "0", lockEnd: 0 };
       const result = await readContract({
         contract: this.contract,
         method:
@@ -276,6 +245,7 @@ class ThirdwebService {
 
   async getUserBorrows(user: string, token: string): Promise<string> {
     try {
+      if (!this.contract) return "0";
       const borrows = await readContract({
         contract: this.contract,
         method: "function userBorrows(address, address) view returns (uint256)",
@@ -289,6 +259,7 @@ class ThirdwebService {
 
   async getUserCollateral(user: string, token: string): Promise<string> {
     try {
+      if (!this.contract) return "0";
       const collateral = await readContract({
         contract: this.contract,
         method:
@@ -303,6 +274,7 @@ class ThirdwebService {
 
   async getDepositLockEnd(user: string, token: string): Promise<number> {
     try {
+      if (!this.contract) return 0;
       const result = await readContract({
         contract: this.contract,
         method:
@@ -317,6 +289,7 @@ class ThirdwebService {
 
   async getBorrowStartTime(user: string, token: string): Promise<string> {
     try {
+      if (!this.contract) return "0";
       const startTime = await readContract({
         contract: this.contract,
         method: "function borrowStartTime(address, address) view returns (uint256)",
@@ -330,6 +303,7 @@ class ThirdwebService {
 
   async getTotalSupply(token: string): Promise<string> {
     try {
+      if (!this.contract) return "0";
       const supply = await readContract({
         contract: this.contract,
         method: "function totalSupply(address) view returns (uint256)",
@@ -343,6 +317,12 @@ class ThirdwebService {
 
   async getOracleRate(token: string): Promise<{ rate: string; timestamp: string }> {
     try {
+      if (!this.oracleContract) {
+        return {
+          rate: ORACLE_FALLBACK_RATES[token] || "1000000000000000000",
+          timestamp: Math.floor(Date.now() / 1000).toString(),
+        };
+      }
       const result = await readContract({
         contract: this.oracleContract,
         method: "function getMedianRate(address) view returns (uint256, uint256)",
@@ -361,10 +341,11 @@ class ThirdwebService {
   }
 
   async getAllUserDeposits(user: string, token: string): Promise<Array<{ amount: string; lockEnd: number }>> {
-    const deposits = [];
+    const deposits: Array<{ amount: string; lockEnd: number }> = [];
     let index = 0;
     
     try {
+      if (!this.contract) return deposits;
       while (index < 50) {
         try {
           const result = await readContract({

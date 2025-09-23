@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Contract, Wallet, providers, utils, constants, BigNumber } from 'ethers';
 import { Mento } from '@mento-protocol/mento-sdk';
+import { TOKENS, CHAINS } from '@/config/chainConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,18 +63,12 @@ export async function GET(request: NextRequest) {
     const signer = new Wallet(privateKey, provider);
     const mento = await Mento.create(provider);
 
-    // Resolve token list from env
+    // Resolve token list from env or default to TOKENS for the default chain
     let tokenAddresses: string[] = parseAddressesFromEnv('TOKEN_ADDRESSES');
     if (tokenAddresses.length === 0) {
-      // Default to common tokens on Celo if not provided
-      tokenAddresses = [
-        '0x471EcE3750Da237f93B8E339c536989b8978a438', // CELO
-        '0x456a3D042C0DbD3db53D5489e98dFb038553B0d0', // cKES
-        '0x765DE816845861e75A25fCA122bb6898B8B1282a', // cUSD
-        '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', // USDC
-        '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', // USDT
-        '0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71', // cNGN
-      ];
+      const defaultChain = CHAINS[0];
+      const tokenList = (TOKENS as any)[defaultChain.id] || [];
+      tokenAddresses = tokenList.map((t: any) => t.address).filter(Boolean);
     }
 
     // Resolve SortedOracles address

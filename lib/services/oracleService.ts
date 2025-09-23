@@ -1,6 +1,6 @@
 import { getContract, readContract } from "thirdweb";
-import { celo } from "thirdweb/chains";
 import { client } from "../thirdweb/client";
+import { CHAINS, CONTRACTS } from "@/config/chainConfig";
 
 // Resolve oracle address from env for multi-chain readiness (client-safe)
 // NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS should be set for the active chain (Celo)
@@ -18,18 +18,27 @@ export interface OracleRate {
 }
 
 class OracleService {
-  private contract;
+  private contract: any;
 
-  constructor() {
-    this.contract = getContract({
-      client,
-      chain: celo,
-      address: ORACLE_ADDRESS,
-    });
+  // Allow constructing the service with an explicit chain, otherwise default
+  // to the first chain from the app's `CHAINS` config to avoid hardcoding.
+  constructor(chain?: any, oracleAddress?: string) {
+    const activeChain = chain || (CHAINS && CHAINS.length > 0 ? CHAINS[0] : undefined);
+    const address = oracleAddress || ORACLE_ADDRESS || (CONTRACTS && activeChain ? CONTRACTS[activeChain.id] : undefined);
+
+    if (!activeChain || !address) {
+      // Defer contract creation if config is missing; throw on usage if necessary.
+      this.contract = undefined;
+    } else {
+      this.contract = getContract({ client, chain: activeChain, address });
+    }
   }
 
   async getMedianRate(tokenAddress: string): Promise<OracleRate> {
     try {
+      if (!this.contract) {
+        throw new Error("Oracle contract not initialized for the active chain");
+      }
       // Prefer canonical getter to also retrieve timestamp
       const result = await readContract({
         contract: this.contract,
@@ -53,9 +62,8 @@ class OracleService {
 
   async getMultipleRates(tokenAddresses: string[]): Promise<{ rates: bigint[]; timestamp: bigint }> {
     try {
-      const results = await Promise.all(
-        tokenAddresses.map((addr) => this.getMedianRate(addr))
-      );
+      if (!this.contract) throw new Error("Oracle contract not initialized for the active chain");
+      const results = await Promise.all(tokenAddresses.map((addr) => this.getMedianRate(addr)));
 
       const rates = results.map((r) => r.rate);
       // Use the oldest timestamp among the set for conservatism
@@ -84,9 +92,11 @@ class OracleService {
 
   async validateMultipleTokens(tokenAddresses: string[]): Promise<boolean> {
     try {
-      const validations = await Promise.all(
-        tokenAddresses.map(token => this.validatePriceData(token))
-      );
+      if (!this.contract) {
+        console.error('Oracle contract not initialized for validateMultipleTokens');
+        return false;
+      }
+      const validations = await Promise.all(tokenAddresses.map(token => this.validatePriceData(token)));
       return validations.every(isValid => isValid);
     } catch (error) {
       console.error('Failed to validate multiple tokens:', error);

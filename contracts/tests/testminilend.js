@@ -24,7 +24,7 @@ async function main() {
   const provider = await getProvider();
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
-  const MINILEND_ADDRESS = "0x89E356E80De29B466E774A5Eb543118B439EE41E";
+  const MINILEND_CELO = "0x89E356E80De29B466E774A5Eb543118B439EE41E";
   const USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C"; // cUSD
   const CKES_ADDRESS = "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0";
   const CREAL_ADDRESS = "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787";
@@ -323,7 +323,7 @@ async function main() {
   ];
 
   // --- CONTRACT INSTANCES ---
-  const minilend = new ethers.Contract(MINILEND_ADDRESS, MINILEND_ABI, signer);
+  const minilend = new ethers.Contract(MINILEND_CELO, MINILEND_ABI, signer);
   const ckes = new ethers.Contract(CKES_ADDRESS, ERC20_ABI, signer);
   const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, signer);
   const creal = new ethers.Contract(CREAL_ADDRESS, ERC20_ABI, signer);
@@ -440,7 +440,7 @@ async function main() {
   const myCkesBalance = await ckes.balanceOf(myAddress);
   const myCrealBalance = await creal.balanceOf(myAddress);
   const myUsdcBalance = await usdc.balanceOf(myAddress);
-  const minilendAddress = MINILEND_ADDRESS;
+  const minilendAddress = MINILEND_CELO;
   const myCkesAllowance = await ckes.allowance(myAddress, minilendAddress);
   const myCrealAllowance = await creal.allowance(myAddress, minilendAddress);
   const myUsdcAllowance = await usdc.allowance(myAddress, minilendAddress);
@@ -478,9 +478,9 @@ async function main() {
       });
       const maxFeePerGas = feeData.maxFeePerGas && typeof feeData.maxFeePerGas !== "string" ? feeData.maxFeePerGas * 2n : ethers.parseUnits("5", "gwei");
       const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas && typeof feeData.maxPriorityFeePerGas !== "string" ? feeData.maxPriorityFeePerGas : ethers.parseUnits("2", "gwei");
-      const estimatedGas = await tokenContract.approve.estimateGas(MINILEND_ADDRESS, borrowBalance);
+      const estimatedGas = await tokenContract.approve.estimateGas(MINILEND_CELO, borrowBalance);
       console.log(`Estimated gas for approve: ${estimatedGas.toString()}`);
-      await tokenContract.approve(MINILEND_ADDRESS, borrowBalance, {
+      await tokenContract.approve(MINILEND_CELO, borrowBalance, {
         gasLimit: estimatedGas * 12n / 10n, // 20% buffer
         nonce: nonce,
         maxFeePerGas: maxFeePerGas,
@@ -507,9 +507,9 @@ async function main() {
     return;
   }
   console.log("Approving cKES...");
-  let tx = await ckes.approve(MINILEND_ADDRESS, CKES_AMOUNT, { gasLimit: 100000 });
+  let tx = await ckes.approve(MINILEND_CELO, CKES_AMOUNT, { gasLimit: 100000 });
   await tx.wait();
-  console.log("My cKES allowance after approval:", ethers.formatUnits(await ckes.allowance(myAddress, MINILEND_ADDRESS), 18));
+  console.log("My cKES allowance after approval:", ethers.formatUnits(await ckes.allowance(myAddress, MINILEND_CELO), 18));
   console.log("Supplying cKES with 60-second lock...");
   tx = await minilend.supply(CKES_ADDRESS, CKES_AMOUNT, LOCK_60_SECONDS, { gasLimit: 500000 });
   await tx.wait();
@@ -525,9 +525,9 @@ async function main() {
     return;
   }
   console.log("Approving cREAL...");
-  tx = await creal.approve(MINILEND_ADDRESS, CREAL_SUPPLY_AMOUNT, { gasLimit: 100000 });
+  tx = await creal.approve(MINILEND_CELO, CREAL_SUPPLY_AMOUNT, { gasLimit: 100000 });
   await tx.wait();
-  console.log("My cREAL allowance after approval:", ethers.formatUnits(await creal.allowance(myAddress, MINILEND_ADDRESS), 18));
+  console.log("My cREAL allowance after approval:", ethers.formatUnits(await creal.allowance(myAddress, MINILEND_CELO), 18));
   console.log("Supplying cREAL with 60-second lock...");
   tx = await minilend.supply(CREAL_ADDRESS, CREAL_SUPPLY_AMOUNT, LOCK_60_SECONDS, { gasLimit: 500000 });
   await tx.wait();
@@ -547,9 +547,9 @@ async function main() {
     return;
   }
   console.log("Approving cUSD...");
-  tx = await usdc.approve(MINILEND_ADDRESS, USDC_AMOUNT, { gasLimit: 100000 });
+  tx = await usdc.approve(MINILEND_CELO, USDC_AMOUNT, { gasLimit: 100000 });
   await tx.wait();
-  console.log("My cUSD allowance after approval:", ethers.formatUnits(await usdc.allowance(myAddress, MINILEND_ADDRESS), 6));
+  console.log("My cUSD allowance after approval:", ethers.formatUnits(await usdc.allowance(myAddress, MINILEND_CELO), 6));
   console.log("Depositing cUSD collateral...");
   tx = await minilend.depositCollateral(USDC_ADDRESS, USDC_AMOUNT, { gasLimit: 500000 });
   await tx.wait();
@@ -628,9 +628,9 @@ async function main() {
   });
   const maxFeePerGasApprove = feeDataApprove.maxFeePerGas && typeof feeDataApprove.maxFeePerGas !== "string" ? feeDataApprove.maxFeePerGas * 2n : ethers.parseUnits("5", "gwei");
   const maxPriorityFeePerGasApprove = feeDataApprove.maxPriorityFeePerGas && typeof feeDataApprove.maxPriorityFeePerGas !== "string" ? feeDataApprove.maxPriorityFeePerGas : ethers.parseUnits("2", "gwei");
-  const estimatedGasApprove = await creal.approve.estimateGas(MINILEND_ADDRESS, CREAL_AMOUNT);
+  const estimatedGasApprove = await creal.approve.estimateGas(MINILEND_CELO, CREAL_AMOUNT);
   console.log(`Estimated gas for approve: ${estimatedGasApprove.toString()}`);
-   tx = await creal.approve(MINILEND_ADDRESS, CREAL_AMOUNT, {
+   tx = await creal.approve(MINILEND_CELO, CREAL_AMOUNT, {
     gasLimit: estimatedGasApprove * 12n / 10n, // 20% buffer
     nonce: nonceApprove,
     maxFeePerGas: maxFeePerGasApprove,

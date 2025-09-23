@@ -11,8 +11,7 @@ import { parseUnits } from "viem"
 import { OnrampDepositModal } from "./OnrampDepositModal"
 import { onrampService } from "@/lib/services/onrampService"
 import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
-import { MINILEND_ADDRESS } from "@/lib/services/thirdwebService"
-import { getTokenIcon } from "@/lib/utils/tokenIcons"
+
 import { 
   getContract, 
   prepareContractCall, 
@@ -20,7 +19,7 @@ import {
   waitForReceipt
 } from "thirdweb"
 import { client } from "@/lib/thirdweb/client"
-import { celo } from "thirdweb/chains"
+
 import { calculateRequiredCollateral } from "@/lib/oracles/priceService"
 import { useRouter } from "next/navigation"
 
@@ -29,6 +28,7 @@ import {
   useReadContract, 
   useWalletBalance 
 } from "thirdweb/react"
+import { useChain } from "@/components/ChainProvider"
 
 // Helper to safely log thirdweb responses (avoid throwing on circular objects)
 const logThirdweb = (label: string, obj: any) => {
@@ -55,7 +55,6 @@ interface BorrowMoneyModalProps {
   onDepositCollateral: (token: string, amount: string) => Promise<void>
   userBalances: Record<string, string>
   userCollaterals: Record<string, string>
-  tokenInfos: Record<string, { symbol: string; decimals: number }>
   loading: boolean
   requiresAuth?: boolean
 }
@@ -74,37 +73,49 @@ export function BorrowMoneyModal({
   onDepositCollateral,
   userBalances,
   userCollaterals,
-  tokenInfos,
   loading,
   requiresAuth = false,
 }: BorrowMoneyModalProps) {
   const { toast } = useToast()
   const account = useActiveAccount()
   const router = useRouter()
+  const { chain, contractAddress, tokens, tokenInfos } = useChain()
 
   const contract = getContract({
     client,
-    chain: celo,
-    address: MINILEND_ADDRESS,
+    chain,
+    address: contractAddress,
   })
 
-  // Valid collateral assets from deployment config
-  const SUPPORTED_COLLATERAL = useMemo(
-    () => [
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
-      "0x765DE816845861e75A25fCA122bb6898B8B1282a", // cUSD
-    ],
-    [],
-  )
+  // Valid collateral assets - only specific tokens per chain
+  const SUPPORTED_COLLATERAL = useMemo(() => {
+    if (chain?.id === 42220) { // Celo
+      const allowedSymbols = ["USDC", "USDT", "CUSD"]
+      return Object.entries(tokenInfos || {}).filter(([, info]) => {
+        const s = (info.symbol || "").toUpperCase()
+        return allowedSymbols.includes(s)
+      }).map(([addr]) => addr)
+    } else if (chain?.id === 534352) { // Scroll
+      const allowedSymbols = ["USDC"]
+      return Object.entries(tokenInfos || {}).filter(([, info]) => {
+        const s = (info.symbol || "").toUpperCase()
+        return allowedSymbols.includes(s)
+      }).map(([addr]) => addr)
+    }
+    return []
+  }, [tokenInfos, chain?.id])
 
-  // cKES and cNGN available for borrowing
+  // Only cKES, bKES, and cNGN available for borrowing
   const SUPPORTED_STABLECOINS = useMemo(() => {
-    return [
-      "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0", // cKES
-      "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71", // cNGN
-    ]
-  }, [])
+    // Filter tokens to only allow cKES, bKES, and cNGN
+    const allowedSymbols = ["CKES", "BKES", "CNGN"]
+    const filtered = Object.entries(tokenInfos || {}).filter(([, info]) => {
+      const s = (info.symbol || "").toUpperCase()
+      return allowedSymbols.includes(s)
+    }).map(([addr]) => addr)
+
+    return filtered
+  }, [tokenInfos])
 
   const [currentStep, setCurrentStep] = useState<BorrowStep>(BorrowStep.SELECT_TOKEN)
   const [form, setForm] = useState({
@@ -131,15 +142,49 @@ export function BorrowMoneyModal({
     }
   }, [isOpen])
 
-  // Calculate required collateral with fallback
+  // Reset modal-specific state when the selected chain changes to avoid
+  // carrying over token addresses or selections from the previous chain.
+  useEffect(() => {
+    // Only reset if modal is open (user is interacting) to avoid surprising
+    // behaviour when switching chains elsewhere in the app.
+    if (isOpen) {
+      setCurrentStep(BorrowStep.SELECT_TOKEN)
+      setForm({ token: "", collateralToken: "", amount: "" })
+      setRequiredCollateral(null)
+      setExchangeRate(null)
+      setTransactionStatus(null)
+      setIsProcessing(false)
+      setShowOnrampModal(false)
+    }
+  }, [chain?.id])
+
+  // Calculate required collateral using price service
   useEffect(() => {
     if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
       setFetchingRate(true)
-      // Use simple 1.5x ratio fallback to avoid oracle issues
-      const amountValue = Number(form.amount)
-      setRequiredCollateral((amountValue * 1.5).toFixed(4))
-      setExchangeRate(1.5)
-      setFetchingRate(false)
+      calculateRequiredCollateral(
+        form.token,
+        form.collateralToken,
+        form.amount,
+        1.5
+      ).then(result => {
+        if (result) {
+          setRequiredCollateral(result.amount)
+          setExchangeRate(result.rate)
+        } else {
+          // Fallback only if price service fails
+          const amountValue = Number(form.amount)
+          setRequiredCollateral((amountValue * 1.5).toFixed(4))
+          setExchangeRate(1.5)
+        }
+      }).catch(() => {
+        // Fallback on error
+        const amountValue = Number(form.amount)
+        setRequiredCollateral((amountValue * 1.5).toFixed(4))
+        setExchangeRate(1.5)
+      }).finally(() => {
+        setFetchingRate(false)
+      })
     } else {
       setRequiredCollateral(null)
       setExchangeRate(null)
@@ -157,64 +202,105 @@ export function BorrowMoneyModal({
     return available >= Number.parseFloat(required)
   }
 
-  // Check if borrowing is paused for token
-  const { data: isBorrowingPaused, isPending: checkingBorrowingStatus } = useReadContract({
-    contract,
-    method: "function isBorrowingPaused(address) view returns (bool)",
-    params: [form.token || "0x0000000000000000000000000000000000000000"],
-    queryOptions: {
-      enabled: !!form.token,
-      retry: 2,
-    },
+  // Pre-fetch liquidity data for all supported tokens
+  const tokenLiquidityData = useMemo(() => {
+    const data: Record<string, { 
+      totalSupply?: bigint, 
+      totalBorrows?: bigint, 
+      isBorrowingPaused?: boolean,
+      isLoading: boolean 
+    }> = {}
+    
+    SUPPORTED_STABLECOINS.forEach(token => {
+      data[token] = { isLoading: true }
+    })
+    
+    return data
+  }, [SUPPORTED_STABLECOINS])
+
+  // Fetch data for each supported token
+  const liquidityQueries = SUPPORTED_STABLECOINS.map(token => {
+    const { data: totalSupply } = useReadContract({
+      contract,
+      method: "function totalSupply(address) view returns (uint256)",
+      params: [token],
+      queryOptions: {
+        enabled: isOpen && !!token,
+        retry: 2,
+      },
+    })
+
+    const { data: totalBorrows } = useReadContract({
+      contract,
+      method: "function totalBorrows(address) view returns (uint256)",
+      params: [token],
+      queryOptions: {
+        enabled: isOpen && !!token,
+        retry: 2,
+      },
+    })
+
+    const { data: isBorrowingPaused } = useReadContract({
+      contract,
+      method: "function isBorrowingPaused(address) view returns (bool)",
+      params: [token],
+      queryOptions: {
+        enabled: isOpen && !!token,
+        retry: 2,
+      },
+    })
+
+    return { token, totalSupply, totalBorrows, isBorrowingPaused }
   })
 
-  // Get total supply to check liquidity
-  const { data: totalSupply, isPending: checkingLiquidity } = useReadContract({
-    contract,
-    method: "function totalSupply(address) view returns (uint256)",
-    params: [form.token || "0x0000000000000000000000000000000000000000"],
-    queryOptions: {
-      enabled: !!form.token,
-      retry: 2,
-    },
-  })
+  // Calculate liquidity for all tokens
+  const allTokenLiquidity = useMemo(() => {
+    const result: Record<string, {
+      liquidity: string,
+      isPaused: boolean,
+      isLoading: boolean
+    }> = {}
 
-  // Get total borrows to calculate available liquidity
-  const { data: totalBorrows, isPending: checkingBorrows } = useReadContract({
-    contract, 
-    method: "function totalBorrows(address) view returns (uint256)",
-    params: [form.token || "0x0000000000000000000000000000000000000000"],
-    queryOptions: {
-      enabled: !!form.token,
-      retry: 2,
-    },
-  })
+    liquidityQueries.forEach(({ token, totalSupply, totalBorrows, isBorrowingPaused }) => {
+      const isLoading = totalSupply === undefined || totalBorrows === undefined || isBorrowingPaused === undefined
+      
+      if (isLoading) {
+        result[token] = { liquidity: "0", isPaused: false, isLoading: true }
+        return
+      }
 
-  // Calculate available liquidity
-  const selectedTokenLiquidity = useMemo(() => {
-    if (!form.token || checkingLiquidity || checkingBorrows) return null
-    if (!totalSupply) return "0"
-    
-    const borrowsAmount = totalBorrows || BigInt(0)
-    const availableLiquidity = totalSupply > borrowsAmount ? totalSupply - borrowsAmount : BigInt(0)
-    
-    if (availableLiquidity <= 0) return "0"
-    
-    const decimals = tokenInfos[form.token]?.decimals || 18
-    return formatAmount(availableLiquidity.toString(), decimals)
-  }, [form.token, totalSupply, totalBorrows, tokenInfos, checkingLiquidity, checkingBorrows])
+      const borrowsAmount = totalBorrows || BigInt(0)
+      const availableLiquidity = totalSupply && totalSupply > borrowsAmount ? totalSupply - borrowsAmount : BigInt(0)
+      
+      const decimals = tokenInfos[token]?.decimals || 18
+      const liquidityFormatted = availableLiquidity > 0 ? formatAmount(availableLiquidity.toString(), decimals) : "0"
+      
+      result[token] = {
+        liquidity: liquidityFormatted,
+        isPaused: isBorrowingPaused || false,
+        isLoading: false
+      }
+    })
+
+    return result
+  }, [liquidityQueries, tokenInfos])
+
+  // Get data for selected token
+  const selectedTokenData = form.token ? allTokenLiquidity[form.token] : null
+
+
 
   // Balances for auto-wrap support when depositing collateral in CELO
   const { data: collateralTokenBalance } = useWalletBalance({
     client,
-    chain: celo,
+    chain: chain,
     address: account?.address,
     tokenAddress: form.collateralToken || undefined,
   })
-  
+
   const { data: nativeBalanceData } = useWalletBalance({
     client,
-    chain: celo,
+    chain: chain,
     address: account?.address,
   })
 
@@ -253,12 +339,12 @@ export function BorrowMoneyModal({
     
     if (!account) return
 
-    if (isBorrowingPaused) {
+    if (selectedTokenData?.isPaused) {
       setTransactionStatus(`Borrowing ${tokenInfos[form.token]?.symbol} is currently paused. Please try again later or select another token.`)
       return
     }
 
-    if (selectedTokenLiquidity === "0") {
+    if (selectedTokenData?.liquidity === "0") {
       setTransactionStatus(`There are no funds available for ${tokenInfos[form.token]?.symbol}. Please try again later.`)
       return
     }
@@ -272,16 +358,17 @@ export function BorrowMoneyModal({
         setTransactionStatus("Securing your loan...")
         const decimals = tokenInfos[form.collateralToken]?.decimals || 18
         const walletBalance = Number.parseFloat(formatAmount(userBalances[form.collateralToken] || "0", decimals))
-        const CELO_ERC20 = "0x471EcE3750Da237f93B8E339c536989b8978a438"
+        // Find CELO token from current chain tokens
+        const CELO_ERC20 = tokens.find(t => t.symbol.toUpperCase() === "CELO")?.address
         const required = Number.parseFloat(requiredCollateral)
 
         // Auto-wrap native CELO to ERC-20 if collateral is CELO and ERC-20 balance is short
-        if (form.collateralToken === CELO_ERC20 && walletBalance < required) {
+        if (CELO_ERC20 && form.collateralToken === CELO_ERC20 && walletBalance < required) {
           const nativeBal = Number.parseFloat(nativeBalanceData?.displayValue || "0")
           const amountToWrap = Math.min(required - walletBalance, nativeBal)
           if (amountToWrap > 0) {
             setTransactionStatus("Converting CELO for collateral...")
-            const celoContract = getContract({ client, chain: celo, address: CELO_ERC20 })
+            const celoContract = getContract({ client, chain: chain, address: CELO_ERC20 })
             const wrapTx = prepareContractCall({
               contract: celoContract,
               method: "function deposit()",
@@ -293,7 +380,7 @@ export function BorrowMoneyModal({
             logThirdweb('wrapResult', wrapResult)
             if (wrapResult?.transactionHash) {
               setTransactionStatus("Waiting for CELO conversion...")
-              await waitForReceipt({ client, chain: celo, transactionHash: wrapResult.transactionHash })
+              await waitForReceipt({ client, chain: chain, transactionHash: wrapResult.transactionHash })
               setTransactionStatus("CELO converted successfully ✓")
             }
           }
@@ -314,14 +401,14 @@ export function BorrowMoneyModal({
         // Prepare ERC20 approval
         const tokenContract = getContract({
           client,
-          chain: celo,
-          address: form.collateralToken
+          chain: chain,
+          address: form.collateralToken,
         })
-        
+
         const allowanceTx = prepareContractCall({
           contract: tokenContract,
           method: "function approve(address spender, uint256 amount)",
-          params: [MINILEND_ADDRESS, amount]
+          params: [contractAddress, amount],
         })
         
         // Execute approval transaction
@@ -329,7 +416,7 @@ export function BorrowMoneyModal({
         const allowanceResult = await sendTransaction({ transaction: allowanceTx, account })
   logThirdweb('allowanceResult', allowanceResult)
         if (allowanceResult?.transactionHash) {
-          await waitForReceipt({ client, chain: celo, transactionHash: allowanceResult.transactionHash })
+          await waitForReceipt({ client, chain: chain, transactionHash: allowanceResult.transactionHash })
         }
         
         // Prepare deposit collateral transaction
@@ -343,14 +430,14 @@ export function BorrowMoneyModal({
         setTransactionStatus("Depositing your security...")
         const depositResult = await sendTransaction({ transaction: depositTx, account })
   logThirdweb('depositResult', depositResult)
-        if (depositResult?.transactionHash) {
-          await waitForReceipt({ client, chain: celo, transactionHash: depositResult.transactionHash })
-          
-          // Report collateral deposit transaction to Divvi
-          reportTransactionToDivvi(depositResult.transactionHash, celo.id)
-            .then(() => console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash))
-            .catch(error => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
-        }
+          if (depositResult?.transactionHash) {
+            await waitForReceipt({ client, chain: chain, transactionHash: depositResult.transactionHash })
+
+            // Report collateral deposit transaction to Divvi
+            reportTransactionToDivvi(depositResult.transactionHash, chain?.id)
+              .then(() => console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash))
+              .catch((error) => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
+          }
         
         setTransactionStatus("Security added ✓")
         await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -371,12 +458,12 @@ export function BorrowMoneyModal({
   logThirdweb('borrowResult', borrowResult)
       if (borrowResult?.transactionHash) {
         setTransactionStatus("Processing transaction...")
-        await waitForReceipt({ client, chain: celo, transactionHash: borrowResult.transactionHash })
-        
+        await waitForReceipt({ client, chain: chain, transactionHash: borrowResult.transactionHash })
+
         // Report borrow transaction to Divvi
-        reportTransactionToDivvi(borrowResult.transactionHash, celo.id)
+        reportTransactionToDivvi(borrowResult.transactionHash, chain?.id)
           .then(() => console.log("[BorrowMoneyModal] Reported borrow transaction to Divvi:", borrowResult.transactionHash))
-          .catch(error => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
+          .catch((error) => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
       }
 
       setTransactionStatus("Cash sent to your wallet ✓")
@@ -421,7 +508,7 @@ export function BorrowMoneyModal({
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case BorrowStep.SELECT_TOKEN:
-        return !!form.token && selectedTokenLiquidity !== "0" && !isBorrowingPaused
+        return !!form.token && selectedTokenData?.liquidity !== "0" && !selectedTokenData?.isPaused
       case BorrowStep.ENTER_AMOUNT:
         return !!form.amount && Number.parseFloat(form.amount) > 0
       case BorrowStep.CHOOSE_SECURITY:
@@ -466,9 +553,9 @@ export function BorrowMoneyModal({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        {getTokenIcon(symbol).startsWith("http") || getTokenIcon(symbol).startsWith("/") ? (
+                        {tokenInfo?.icon ? (
                           <img
-                            src={getTokenIcon(symbol) || "/placeholder.svg"}
+                            src={tokenInfo.icon}
                             alt={symbol}
                             className="w-8 h-8 rounded-full"
                           />
@@ -479,17 +566,22 @@ export function BorrowMoneyModal({
                         )}
                         <div className="flex-1 text-left">
                           <div className="font-semibold text-white">{symbol}</div>
-                          {checkingLiquidity || checkingBorrows ? (
-                            <div className="text-xs text-[#a2c398]">Checking availability...</div>
-                          ) : isBorrowingPaused ? (
-                            <div className="text-xs text-red-400">Currently paused</div>
-                          ) : selectedTokenLiquidity === "0" ? (
-                            <div className="text-xs text-red-400">Not available</div>
-                          ) : selectedTokenLiquidity && isSelected ? (
-                            <div className="text-xs text-[#54d22d]">Available: {selectedTokenLiquidity}</div>
-                          ) : (
-                            <div className="text-xs text-[#a2c398]">Tap to select</div>
-                          )}
+                          {(() => {
+                            const tokenData = allTokenLiquidity[token]
+                            if (tokenData?.isLoading) {
+                              return <div className="text-xs text-[#a2c398]">Loading...</div>
+                            }
+                            if (tokenData?.isPaused) {
+                              return <div className="text-xs text-red-400">Currently paused</div>
+                            }
+                            if (tokenData?.liquidity === "0") {
+                              return <div className="text-xs text-red-400">Not available</div>
+                            }
+                            if (tokenData?.liquidity && isSelected) {
+                              return <div className="text-xs text-[#54d22d]">Available: {tokenData.liquidity}</div>
+                            }
+                            return <div className="text-xs text-[#a2c398]">Tap to select</div>
+                          })()}
                         </div>
                         {isSelected && <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />}
                       </div>
@@ -525,9 +617,9 @@ export function BorrowMoneyModal({
                 </div>
               </div>
 
-              {selectedTokenLiquidity && (
+              {selectedTokenData?.liquidity && selectedTokenData.liquidity !== "0" && (
                 <div className="text-center text-sm text-[#a2c398]">
-                  Available to borrow: {selectedTokenLiquidity} {tokenInfos[form.token]?.symbol}
+                  Available to borrow: {selectedTokenData.liquidity} {tokenInfos[form.token]?.symbol}
                 </div>
               )}
             </div>
@@ -560,9 +652,9 @@ export function BorrowMoneyModal({
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      {getTokenIcon(symbol).startsWith("http") || getTokenIcon(symbol).startsWith("/") ? (
+                      {tokenInfo?.icon ? (
                         <img
-                          src={getTokenIcon(symbol) || "/placeholder.svg"}
+                          src={tokenInfo.icon}
                           alt={symbol}
                           className="w-8 h-8 rounded-full"
                         />
@@ -623,7 +715,7 @@ export function BorrowMoneyModal({
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-[#a2c398]">Current exchange rate</span>
                     <span className="text-[#a2c398]">
-                      1 {tokenInfos[form.collateralToken]?.symbol} = {(1/exchangeRate).toFixed(4)} {tokenInfos[form.token]?.symbol}
+                      1 {tokenInfos[form.collateralToken]?.symbol} = {exchangeRate.toFixed(4)} {tokenInfos[form.token]?.symbol}
                     </span>
                   </div>
                 )}
@@ -758,9 +850,9 @@ export function BorrowMoneyModal({
                   !form.collateralToken ||
                   !form.amount ||
                   !requiredCollateral ||
-                  selectedTokenLiquidity === "0" ||
-                  checkingLiquidity ||
-                  isBorrowingPaused ||
+                  selectedTokenData?.liquidity === "0" ||
+                  selectedTokenData?.isLoading ||
+                  selectedTokenData?.isPaused ||
                   fetchingRate ||
                   // Disable button if transaction is complete and showing final message
                   transactionStatus?.includes("check your wallet")

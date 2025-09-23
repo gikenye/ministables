@@ -13,7 +13,7 @@ async function main() {
     console.log("My address:", myAddress);
 
     const CREAL_ADDRESS = "0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787";
-    const MINILEND_ADDRESS = "0xe58866e69dD87DcF84d5057ED182ae49AC6952E9";
+    const MINILEND_CELO = "0xe58866e69dD87DcF84d5057ED182ae49AC6952E9";
     const CREAL_AMOUNT = ethers.parseEther("1.0");
 
     const cREAL = new ethers.Contract(CREAL_ADDRESS, [
@@ -21,23 +21,23 @@ async function main() {
         "function allowance(address, address) view returns (uint256)",
         "function balanceOf(address) view returns (uint256)"
     ], signer);
-    const minilend = new ethers.Contract(MINILEND_ADDRESS, [
+    const minilend = new ethers.Contract(MINILEND_CELO, [
         "function repay(address, uint256)",
         "function userBorrows(address, address) view returns (uint256)"
     ], signer);
 
     console.log("cREAL balance:", ethers.formatUnits(await cREAL.balanceOf(myAddress), 18));
-    console.log("cREAL allowance:", ethers.formatUnits(await cREAL.allowance(myAddress, MINILEND_ADDRESS), 18));
+    console.log("cREAL allowance:", ethers.formatUnits(await cREAL.allowance(myAddress, MINILEND_CELO), 18));
     console.log("User cREAL borrow balance:", ethers.formatUnits(await minilend.userBorrows(myAddress, CREAL_ADDRESS), 18));
 
     console.log("Approving cREAL...");
-    await (await cREAL.approve(MINILEND_ADDRESS, CREAL_AMOUNT, { gasLimit: 100000 })).wait();
-    console.log("cREAL allowance after approval:", ethers.formatUnits(await cREAL.allowance(myAddress, MINILEND_ADDRESS), 18));
+    await (await cREAL.approve(MINILEND_CELO, CREAL_AMOUNT, { gasLimit: 100000 })).wait();
+    console.log("cREAL allowance after approval:", ethers.formatUnits(await cREAL.allowance(myAddress, MINILEND_CELO), 18));
 
     console.log("Simulating repay...");
     const repayData = minilend.interface.encodeFunctionData("repay", [CREAL_ADDRESS, CREAL_AMOUNT]);
     try {
-        await provider.call({ to: MINILEND_ADDRESS, data: repayData, from: myAddress });
+        await provider.call({ to: MINILEND_CELO, data: repayData, from: myAddress });
         console.log("Simulated repay succeeded");
     } catch (e) {
         console.error("Simulated repay error:", e);
