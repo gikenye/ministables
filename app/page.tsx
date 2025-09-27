@@ -35,7 +35,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataAwareRender } from "@/components/ui/loading-indicator";
 import { Logo } from "@/components/Logo";
-
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // thirdweb handles transaction modals; no custom tx modal
 import { SaveMoneyModal } from "@/components/SaveMoneyModal";
@@ -43,7 +43,8 @@ import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
 import { useChain } from "@/components/ChainProvider";
-import { ChainSwitchTest } from "@/components/ChainSwitchTest";
+import { ChainDebug } from "@/components/ChainDebug";
+import { getTransactionUrl, getTokens, getTokenInfo as getChainTokenInfo } from "@/config/chainConfig";
 
 // Types
 interface ActionCard {
@@ -128,6 +129,11 @@ export default function AppPage() {
   const { isSDKLoaded, context } = useMiniApp();
   const { chain, contract, contractAddress, tokens, tokenInfos } = useChain();  
 
+  // Validate chain configuration
+  const chainConfigValid = useMemo(() => {
+    return chain && contractAddress && tokens && tokens.length > 0 && tokenInfos;
+  }, [chain, contractAddress, tokens, tokenInfos]);
+
   // Contract functions (no longer needed with direct sendTransaction)
   // const borrowFn = useBorrow();
   // const depositFn = useDeposit();
@@ -135,13 +141,8 @@ export default function AppPage() {
   // const repayFn = useRepay();
   // const withdrawFn = useWithdraw();
 
-  // Supported token addresses for the active chain from config
-  const ALL_SUPPORTED_TOKENS = tokens.map((t) => t.address);
-
-  const FALLBACK_STABLECOINS = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 4), [ALL_SUPPORTED_TOKENS]);
-
-  // Fallback collateral: first few tokens from config
-  const FALLBACK_COLLATERAL = useMemo(() => ALL_SUPPORTED_TOKENS.slice(0, 5), [ALL_SUPPORTED_TOKENS]);
+  // All supported token addresses for the active chain from config
+  const allTokenAddresses = useMemo(() => tokens.map((t) => t.address), [tokens]);
 
   // Read supported tokens from contract (first few indices)
   const stablecoin0 = useSupportedStablecoins(contract, BigInt(0));
@@ -150,29 +151,31 @@ export default function AppPage() {
   const collateral0 = useSupportedCollateral(contract, BigInt(0));
   const collateral1 = useSupportedCollateral(contract, BigInt(1));
 
-  // Get supported tokens with fallback
+  // Get supported tokens from contract with chain config fallback
   const supportedStablecoins = useMemo(() => {
-    const tokens = [
+    const contractTokens = [
       stablecoin0.data,
       stablecoin1.data,
       stablecoin2.data,
     ].filter(
       (token) => token && token !== "0x0000000000000000000000000000000000000000"
     );
-    return tokens.length > 0 ? tokens : FALLBACK_STABLECOINS;
+    // Use contract tokens if available, otherwise use all tokens from chain config
+    return contractTokens.length > 0 ? contractTokens : allTokenAddresses;
   }, [
     stablecoin0.data,
     stablecoin1.data,
     stablecoin2.data,
-    FALLBACK_STABLECOINS,
+    allTokenAddresses,
   ]);
 
   const supportedCollateral = useMemo(() => {
-    const tokens = [collateral0.data, collateral1.data].filter(
+    const contractTokens = [collateral0.data, collateral1.data].filter(
       (token) => token && token !== "0x0000000000000000000000000000000000000000"
     );
-    return tokens.length > 0 ? tokens : FALLBACK_COLLATERAL;
-  }, [collateral0.data, collateral1.data, FALLBACK_COLLATERAL]);
+    // Use contract tokens if available, otherwise use all tokens from chain config  
+    return contractTokens.length > 0 ? contractTokens : allTokenAddresses;
+  }, [collateral0.data, collateral1.data, allTokenAddresses]);
 
   // All unique tokens
   const allTokens = useMemo(() => {
@@ -193,9 +196,16 @@ export default function AppPage() {
       for (const token of allTokens) {
         if (!token) continue;
         try {
-          // If token equals the native/wrapped token in config use native balance
-          const nativeWrapped = tokens.find((t) => (t.symbol || "").toUpperCase() === "CELO")?.address;
-          if (nativeWrapped && token.toLowerCase() === nativeWrapped.toLowerCase()) {
+          // Check if this token is the native wrapped token for this chain
+          const tokenInfo = tokens.find((t) => t.address.toLowerCase() === token.toLowerCase());
+          // Check if this is a native wrapped token (WETH, WCELO, etc.)
+          const isNativeWrapped = tokenInfo && (
+            tokenInfo.symbol.toUpperCase().startsWith('W') && 
+            (tokenInfo.symbol.toUpperCase().includes('ETH') || 
+             tokenInfo.symbol.toUpperCase().includes('CELO'))
+          );
+          
+          if (isNativeWrapped) {
             const native = await getWalletBalance({
               client,
               chain: chain,
@@ -221,7 +231,7 @@ export default function AppPage() {
     };
 
     fetchWalletBalances();
-  }, [address, isConnected, allTokens, client]);
+  }, [address, isConnected, allTokens, chain, tokens, client]);
 
   const userBorrow0 = useUserBorrows(
     contract,
@@ -376,9 +386,26 @@ export default function AppPage() {
     enableDataSaver(newState);
   };
 
-  const getTokenInfo = (tokenAddress: string): TokenInfo => {
-    return tokenInfos[tokenAddress] || { symbol: "UNKNOWN", decimals: 18 };
-  };
+  const getTokenInfo = useCallback((tokenAddress: string): TokenInfo => {
+    // Use chain config token info with proper fallback
+    const info = tokenInfos[tokenAddress];
+    if (info) {
+      return { symbol: info.symbol, decimals: info.decimals };
+    }
+    
+    // Try to find token by address in the chain config tokens array
+    const token = tokens.find((t) => 
+      t.address.toLowerCase() === tokenAddress.toLowerCase()
+    );
+    
+    if (token) {
+      return { symbol: token.symbol, decimals: token.decimals };
+    }
+    
+    // Log when token is not found in chain config (for debugging)
+    console.warn(`[getTokenInfo] Token ${tokenAddress} not found in chain config for ${chain.name}. Using fallback.`);
+    return { symbol: "UNKNOWN", decimals: 18 };
+  }, [tokenInfos, tokens, chain.name]);
 
   const handleSaveMoney = async (
     token: string,
@@ -405,6 +432,7 @@ export default function AppPage() {
 
       // 2. Approve if needed and wait for receipt per v5 docs
       if (currentAllowance < amountWei) {
+        console.log(`[SaveMoney] Approving ${tokenInfo.symbol} spending for contract`);
         const approveTx = approve({
           contract: tokenContract,
           spender: contractAddress,
@@ -412,6 +440,7 @@ export default function AppPage() {
         });
         const result = await sendTransaction(approveTx);
         if (result?.transactionHash) {
+          console.log(`[SaveMoney] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
           await waitForReceipt({
             client,
             chain: chain,
@@ -421,15 +450,19 @@ export default function AppPage() {
       }
 
       // 3. Deposit
+      console.log(`[SaveMoney] Depositing ${amount} ${tokenInfo.symbol} for ${lockPeriod} seconds`);
       const depositTx = prepareContractCall({
         contract,
         method:
           "function deposit(address token, uint256 amount, uint256 lockPeriod)",
         params: [token, amountWei, BigInt(lockPeriod)],
       });
-      await sendTransaction(depositTx);
+      const result = await sendTransaction(depositTx);
+      if (result?.transactionHash) {
+        console.log(`[SaveMoney] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+      }
     } catch (error) {
-      console.error("Save money error:", error);
+      console.error(`[SaveMoney] Error on ${chain.name}:`, error);
     }
   };
 
@@ -442,17 +475,22 @@ export default function AppPage() {
 
     try {
       const tokenInfo = getTokenInfo(token);
+      const collateralInfo = getTokenInfo(collateralToken);
       const amountWei = parseUnits(amount, tokenInfo.decimals);
 
+      console.log(`[BorrowMoney] Borrowing ${amount} ${tokenInfo.symbol} against ${collateralInfo.symbol} collateral on ${chain.name}`);
       const borrowTx = prepareContractCall({
         contract,
         method:
           "function borrow(address token, uint256 amount, address collateralToken)",
         params: [token, amountWei, collateralToken],
       });
-      await sendTransaction(borrowTx);
+      const result = await sendTransaction(borrowTx);
+      if (result?.transactionHash) {
+        console.log(`[BorrowMoney] Borrow tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+      }
     } catch (error) {
-      console.error("Borrow money error:", error);
+      console.error(`[BorrowMoney] Error on ${chain.name}:`, error);
     }
   };
 
@@ -475,22 +513,30 @@ export default function AppPage() {
       });
 
       if (currentAllowance < amountWei) {
+        console.log(`[DepositCollateral] Approving ${tokenInfo.symbol} spending for contract`);
         const approveTx = approve({
           contract: tokenContract,
           spender: contractAddress,
           amount: amountWei.toString(),
         });
-        await sendTransaction(approveTx);
+        const result = await sendTransaction(approveTx);
+        if (result?.transactionHash) {
+          console.log(`[DepositCollateral] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        }
       }
 
+      console.log(`[DepositCollateral] Depositing ${amount} ${tokenInfo.symbol} as collateral on ${chain.name}`);
       const depositTx = prepareContractCall({
         contract,
         method: "function depositCollateral(address token, uint256 amount)",
         params: [token, amountWei],
       });
-      await sendTransaction(depositTx);
+      const result = await sendTransaction(depositTx);
+      if (result?.transactionHash) {
+        console.log(`[DepositCollateral] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+      }
     } catch (error) {
-      console.error("Deposit collateral error:", error);
+      console.error(`[DepositCollateral] Error on ${chain.name}:`, error);
     }
   };
 
@@ -513,22 +559,30 @@ export default function AppPage() {
       });
 
       if (currentAllowance < amountWei) {
+        console.log(`[PayBack] Approving ${tokenInfo.symbol} spending for repayment`);
         const approveTx = approve({
           contract: tokenContract,
           spender: contractAddress,
           amount: amountWei.toString(),
         });
-        await sendTransaction(approveTx);
+        const result = await sendTransaction(approveTx);
+        if (result?.transactionHash) {
+          console.log(`[PayBack] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        }
       }
 
+      console.log(`[PayBack] Repaying ${amount} ${tokenInfo.symbol} loan on ${chain.name}`);
       const repayTx = prepareContractCall({
         contract,
         method: "function repay(address token, uint256 amount)",
         params: [token, amountWei],
       });
-      await sendTransaction(repayTx);
+      const result = await sendTransaction(repayTx);
+      if (result?.transactionHash) {
+        console.log(`[PayBack] Repay tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+      }
     } catch (error) {
-      console.error("Pay back error:", error);
+      console.error(`[PayBack] Error on ${chain.name}:`, error);
     }
   };
 
@@ -539,14 +593,18 @@ export default function AppPage() {
       const tokenInfo = getTokenInfo(token);
       const amountWei = parseUnits(amount, tokenInfo.decimals);
 
+      console.log(`[Withdraw] Withdrawing ${amount} ${tokenInfo.symbol} on ${chain.name}`);
       const withdrawTx = prepareContractCall({
         contract,
         method: "function withdraw(address token, uint256 amount)",
         params: [token, amountWei],
       });
-      await sendTransaction(withdrawTx);
+      const result = await sendTransaction(withdrawTx);
+      if (result?.transactionHash) {
+        console.log(`[Withdraw] Withdraw tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+      }
     } catch (error) {
-      console.error("Withdraw error:", error);
+      console.error(`[Withdraw] Error on ${chain.name}:`, error);
     }
   };
 
@@ -600,6 +658,25 @@ export default function AppPage() {
     []
   );
 
+  // Show error if chain configuration is invalid
+  if (!chainConfigValid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center space-y-4 p-8">
+          <div className="text-red-400 text-xl font-semibold">
+            Chain Configuration Error
+          </div>
+          <div className="text-gray-300 max-w-md">
+            The current chain is not properly configured. Please check the chain configuration or switch to a supported network.
+          </div>
+          <div className="text-sm text-gray-400">
+            Chain: {chain?.name || 'Unknown'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Safari Background */}
@@ -612,11 +689,15 @@ export default function AppPage() {
           <Link href="https://minilend.xyz" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-3">
             <div>
               <img src="/new-logo.png" alt="Minilend Logo" style={{height: "50px", width: "auto"}} />
-
             </div>
           </Link>
 
-          <div className="flex-shrink-0">
+          <div className="flex items-center space-x-3 flex-shrink-0">
+            {/* Chain indicator */}
+            <div className="hidden sm:flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d] border border-[#54d22d]/30">
+              <div className="w-2 h-2 rounded-full bg-[#54d22d] mr-2"></div>
+              {chain.name}
+            </div>
             <ConnectWallet />
           </div>
         </div>
@@ -630,10 +711,12 @@ export default function AppPage() {
             <p>You are currently offline. Some features may be limited.</p>
           </div>
         )}
-{/* 
+
         {process.env.NODE_ENV === 'development' && (
-          <ChainSwitchTest />
-        )} */}
+          <div className="mb-4">
+            <ChainDebug />
+          </div>
+        )}
 
         {isConnected && (
           <div className="text-center mb-6">
@@ -717,11 +800,8 @@ export default function AppPage() {
         onDepositCollateral={handleDepositCollateral}
         userBalances={userBalances}
         userCollaterals={userCollaterals}
-        tokenInfos={tokenInfos}
         loading={loading}
         requiresAuth={!isConnected}
-        chain={chain}
-        contractAddress={contractAddress}
       />
       <PayBackModal
         isOpen={activeModal === "payback"}
