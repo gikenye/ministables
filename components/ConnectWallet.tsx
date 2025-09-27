@@ -46,6 +46,7 @@ export function ConnectWallet({ className }: { className?: string }) {
         showThirdwebBranding: false,
         size: "compact",
         title: "Minilend",
+        titleIcon: "https://www.minilend.xyz/static/new-logo.png"
       }}
       theme={darkTheme({
         colors: {
