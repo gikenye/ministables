@@ -66,13 +66,16 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
   // Create contract instance using the selected chain from config
   const selectedAddress = (CONTRACTS && SELECTED_CHAIN) ? CONTRACTS[SELECTED_CHAIN.id] : undefined;
 
-  const contract = (SELECTED_CHAIN && selectedAddress)
-    ? getContract({
+  const contract = useMemo(() => {
+    if (SELECTED_CHAIN && selectedAddress) {
+      return getContract({
         client,
         chain: SELECTED_CHAIN,
         address: selectedAddress,
-      })
-    : undefined;
+      });
+    }
+    return undefined;
+  }, [selectedAddress]);
 
   // Format big integers with proper decimal precision
   const bigIntPow10 = (n: number) => {
@@ -115,31 +118,43 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
     return futureUnlockTimes.length > 0 ? futureUnlockTimes[0] : null;
   }, [dashboardData.lockEnds]);
 
-  // Get user data for all supported tokens
+  // Get user data for all supported tokens - create a stable reference
   const userDataQueries = SUPPORTED_STABLECOINS.map(token => {
     const { data: deposit } = useReadContract({
       contract: contract as any,
       method: "function deposits(address, address) view returns (uint256)",
-      params: [address || "0x0000000000000000000000000000000000000000", token],
+      params: [address || "0x0000000000000000000000000000000000000000", token] as const,
       queryOptions: { enabled: !!address && !!contract },
     });
     
     const { data: borrow } = useReadContract({
       contract: contract as any,
       method: "function borrows(address, address) view returns (uint256)",
-      params: [address || "0x0000000000000000000000000000000000000000", token],
+      params: [address || "0x0000000000000000000000000000000000000000", token] as const,
       queryOptions: { enabled: !!address && !!contract },
     });
     
     const { data: collateral } = useReadContract({
       contract: contract as any,
       method: "function collaterals(address, address) view returns (uint256)",
-      params: [address || "0x0000000000000000000000000000000000000000", token],
+      params: [address || "0x0000000000000000000000000000000000000000", token] as const,
       queryOptions: { enabled: !!address && !!contract },
     });
     
     return { token, deposit, borrow, collateral };
   });
+
+  // Memoize the serialized data to avoid infinite loops
+  const serializedData = useMemo(() => {
+    return userDataQueries.map(({ token, deposit, borrow, collateral }) => ({
+      token,
+      deposit: deposit?.toString() || "0",
+      borrow: borrow?.toString() || "0", 
+      collateral: collateral?.toString() || "0"
+    }));
+  }, [userDataQueries.map(q => q.deposit?.toString()).join(','), 
+      userDataQueries.map(q => q.borrow?.toString()).join(','),
+      userDataQueries.map(q => q.collateral?.toString()).join(',')]);
 
   useEffect(() => {
     if (!address) {
@@ -161,22 +176,18 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
     let totalBorrowValue = 0;
 
     // Process all token data
-    userDataQueries.forEach(({ token, deposit, borrow, collateral }) => {
-      const depositAmount = deposit?.toString() || "0";
-      const borrowAmount = borrow?.toString() || "0";
-      const collateralAmount = collateral?.toString() || "0";
-      
-      newData.deposits[token] = depositAmount;
-      newData.borrows[token] = borrowAmount;
-      newData.collateral[token] = collateralAmount;
+    serializedData.forEach(({ token, deposit, borrow, collateral }) => {
+      newData.deposits[token] = deposit;
+      newData.borrows[token] = borrow;
+      newData.collateral[token] = collateral;
       newData.lockEnds[token] = 0;
       newData.interest[token] = "0";
       newData.interestUsd[token] = "0";
       newData.borrowStartTimes[token] = 0;
 
       // Calculate values (assuming 1:1 USD for simplicity)
-      const depositValue = parseFloat(formatAmount(depositAmount, token));
-      const borrowValue = parseFloat(formatAmount(borrowAmount, token));
+      const depositValue = parseFloat(formatAmount(deposit, token));
+      const borrowValue = parseFloat(formatAmount(borrow, token));
       totalDepositValue += depositValue;
       totalBorrowValue += borrowValue;
     });
@@ -185,7 +196,7 @@ export function useEnhancedDashboard(address: string | undefined): EnhancedUserD
     setDepositValue(totalDepositValue.toFixed(2));
     setBorrowValue(totalBorrowValue.toFixed(2));
     setLoading(false);
-  }, [address, userDataQueries]);
+  }, [address, serializedData]);
   
 
 
