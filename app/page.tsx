@@ -44,7 +44,11 @@ import { PayBackModal } from "@/components/PayBackModal";
 import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
 import { useChain } from "@/components/ChainProvider";
 import { ChainDebug } from "@/components/ChainDebug";
-import { getTransactionUrl, getTokens, getTokenInfo as getChainTokenInfo } from "@/config/chainConfig";
+import {
+  getTransactionUrl,
+  getTokens,
+  getTokenInfo as getChainTokenInfo,
+} from "@/config/chainConfig";
 
 // Types
 interface ActionCard {
@@ -127,11 +131,13 @@ export default function AppPage() {
     payModal: false,
   });
   const { isSDKLoaded, context } = useMiniApp();
-  const { chain, contract, contractAddress, tokens, tokenInfos } = useChain();  
+  const { chain, contract, contractAddress, tokens, tokenInfos } = useChain();
 
   // Validate chain configuration
   const chainConfigValid = useMemo(() => {
-    return chain && contractAddress && tokens && tokens.length > 0 && tokenInfos;
+    return (
+      chain && contractAddress && tokens && tokens.length > 0 && tokenInfos
+    );
   }, [chain, contractAddress, tokens, tokenInfos]);
 
   // Contract functions (no longer needed with direct sendTransaction)
@@ -142,7 +148,10 @@ export default function AppPage() {
   // const withdrawFn = useWithdraw();
 
   // All supported token addresses for the active chain from config
-  const allTokenAddresses = useMemo(() => tokens.map((t) => t.address), [tokens]);
+  const allTokenAddresses = useMemo(
+    () => tokens.map((t) => t.address),
+    [tokens]
+  );
 
   // Read supported tokens from contract (first few indices)
   const stablecoin0 = useSupportedStablecoins(contract, BigInt(0));
@@ -162,18 +171,13 @@ export default function AppPage() {
     );
     // Use contract tokens if available, otherwise use all tokens from chain config
     return contractTokens.length > 0 ? contractTokens : allTokenAddresses;
-  }, [
-    stablecoin0.data,
-    stablecoin1.data,
-    stablecoin2.data,
-    allTokenAddresses,
-  ]);
+  }, [stablecoin0.data, stablecoin1.data, stablecoin2.data, allTokenAddresses]);
 
   const supportedCollateral = useMemo(() => {
     const contractTokens = [collateral0.data, collateral1.data].filter(
       (token) => token && token !== "0x0000000000000000000000000000000000000000"
     );
-    // Use contract tokens if available, otherwise use all tokens from chain config  
+    // Use contract tokens if available, otherwise use all tokens from chain config
     return contractTokens.length > 0 ? contractTokens : allTokenAddresses;
   }, [collateral0.data, collateral1.data, allTokenAddresses]);
 
@@ -197,14 +201,16 @@ export default function AppPage() {
         if (!token) continue;
         try {
           // Check if this token is the native wrapped token for this chain
-          const tokenInfo = tokens.find((t) => t.address.toLowerCase() === token.toLowerCase());
-          // Check if this is a native wrapped token (WETH, WCELO, etc.)
-          const isNativeWrapped = tokenInfo && (
-            tokenInfo.symbol.toUpperCase().startsWith('W') && 
-            (tokenInfo.symbol.toUpperCase().includes('ETH') || 
-             tokenInfo.symbol.toUpperCase().includes('CELO'))
+          const tokenInfo = tokens.find(
+            (t) => t.address.toLowerCase() === token.toLowerCase()
           );
-          
+          // Check if this is a native wrapped token (WETH, WCELO, etc.)
+          const isNativeWrapped =
+            tokenInfo &&
+            tokenInfo.symbol.toUpperCase().startsWith("W") &&
+            (tokenInfo.symbol.toUpperCase().includes("ETH") ||
+              tokenInfo.symbol.toUpperCase().includes("CELO"));
+
           if (isNativeWrapped) {
             const native = await getWalletBalance({
               client,
@@ -350,8 +356,6 @@ export default function AppPage() {
     return userBorrow0.isLoading || userDeposit0.isLoading;
   }, [userBorrow0.isLoading, userDeposit0.isLoading]);
 
-
-
   // Check localStorage for verification skip state
   useEffect(() => {
     const skipped = localStorage.getItem("verification-skipped") === "true";
@@ -386,26 +390,31 @@ export default function AppPage() {
     enableDataSaver(newState);
   };
 
-  const getTokenInfo = useCallback((tokenAddress: string): TokenInfo => {
-    // Use chain config token info with proper fallback
-    const info = tokenInfos[tokenAddress];
-    if (info) {
-      return { symbol: info.symbol, decimals: info.decimals };
-    }
-    
-    // Try to find token by address in the chain config tokens array
-    const token = tokens.find((t) => 
-      t.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    
-    if (token) {
-      return { symbol: token.symbol, decimals: token.decimals };
-    }
-    
-    // Log when token is not found in chain config (for debugging)
-    console.warn(`[getTokenInfo] Token ${tokenAddress} not found in chain config for ${chain.name}. Using fallback.`);
-    return { symbol: "UNKNOWN", decimals: 18 };
-  }, [tokenInfos, tokens, chain.name]);
+  const getTokenInfo = useCallback(
+    (tokenAddress: string): TokenInfo => {
+      // Use chain config token info with proper fallback
+      const info = tokenInfos[tokenAddress];
+      if (info) {
+        return { symbol: info.symbol, decimals: info.decimals };
+      }
+
+      // Try to find token by address in the chain config tokens array
+      const token = tokens.find(
+        (t) => t.address.toLowerCase() === tokenAddress.toLowerCase()
+      );
+
+      if (token) {
+        return { symbol: token.symbol, decimals: token.decimals };
+      }
+
+      // Log when token is not found in chain config (for debugging)
+      console.warn(
+        `[getTokenInfo] Token ${tokenAddress} not found in chain config for ${chain.name}. Using fallback.`
+      );
+      return { symbol: "UNKNOWN", decimals: 18 };
+    },
+    [tokenInfos, tokens, chain.name]
+  );
 
   const handleSaveMoney = async (
     token: string,
@@ -432,7 +441,9 @@ export default function AppPage() {
 
       // 2. Approve if needed and wait for receipt per v5 docs
       if (currentAllowance < amountWei) {
-        console.log(`[SaveMoney] Approving ${tokenInfo.symbol} spending for contract`);
+        console.log(
+          `[SaveMoney] Approving ${tokenInfo.symbol} spending for contract`
+        );
         const approveTx = approve({
           contract: tokenContract,
           spender: contractAddress,
@@ -440,7 +451,9 @@ export default function AppPage() {
         });
         const result = await sendTransaction(approveTx);
         if (result?.transactionHash) {
-          console.log(`[SaveMoney] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+          console.log(
+            `[SaveMoney] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+          );
           await waitForReceipt({
             client,
             chain: chain,
@@ -450,7 +463,9 @@ export default function AppPage() {
       }
 
       // 3. Deposit
-      console.log(`[SaveMoney] Depositing ${amount} ${tokenInfo.symbol} for ${lockPeriod} seconds`);
+      console.log(
+        `[SaveMoney] Depositing ${amount} ${tokenInfo.symbol} for ${lockPeriod} seconds`
+      );
       const depositTx = prepareContractCall({
         contract,
         method:
@@ -459,7 +474,9 @@ export default function AppPage() {
       });
       const result = await sendTransaction(depositTx);
       if (result?.transactionHash) {
-        console.log(`[SaveMoney] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        console.log(
+          `[SaveMoney] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+        );
       }
     } catch (error) {
       console.error(`[SaveMoney] Error on ${chain.name}:`, error);
@@ -478,7 +495,9 @@ export default function AppPage() {
       const collateralInfo = getTokenInfo(collateralToken);
       const amountWei = parseUnits(amount, tokenInfo.decimals);
 
-      console.log(`[BorrowMoney] Borrowing ${amount} ${tokenInfo.symbol} against ${collateralInfo.symbol} collateral on ${chain.name}`);
+      console.log(
+        `[BorrowMoney] Borrowing ${amount} ${tokenInfo.symbol} against ${collateralInfo.symbol} collateral on ${chain.name}`
+      );
       const borrowTx = prepareContractCall({
         contract,
         method:
@@ -487,7 +506,9 @@ export default function AppPage() {
       });
       const result = await sendTransaction(borrowTx);
       if (result?.transactionHash) {
-        console.log(`[BorrowMoney] Borrow tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        console.log(
+          `[BorrowMoney] Borrow tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+        );
       }
     } catch (error) {
       console.error(`[BorrowMoney] Error on ${chain.name}:`, error);
@@ -513,7 +534,9 @@ export default function AppPage() {
       });
 
       if (currentAllowance < amountWei) {
-        console.log(`[DepositCollateral] Approving ${tokenInfo.symbol} spending for contract`);
+        console.log(
+          `[DepositCollateral] Approving ${tokenInfo.symbol} spending for contract`
+        );
         const approveTx = approve({
           contract: tokenContract,
           spender: contractAddress,
@@ -521,11 +544,15 @@ export default function AppPage() {
         });
         const result = await sendTransaction(approveTx);
         if (result?.transactionHash) {
-          console.log(`[DepositCollateral] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+          console.log(
+            `[DepositCollateral] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+          );
         }
       }
 
-      console.log(`[DepositCollateral] Depositing ${amount} ${tokenInfo.symbol} as collateral on ${chain.name}`);
+      console.log(
+        `[DepositCollateral] Depositing ${amount} ${tokenInfo.symbol} as collateral on ${chain.name}`
+      );
       const depositTx = prepareContractCall({
         contract,
         method: "function depositCollateral(address token, uint256 amount)",
@@ -533,7 +560,9 @@ export default function AppPage() {
       });
       const result = await sendTransaction(depositTx);
       if (result?.transactionHash) {
-        console.log(`[DepositCollateral] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        console.log(
+          `[DepositCollateral] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+        );
       }
     } catch (error) {
       console.error(`[DepositCollateral] Error on ${chain.name}:`, error);
@@ -559,7 +588,9 @@ export default function AppPage() {
       });
 
       if (currentAllowance < amountWei) {
-        console.log(`[PayBack] Approving ${tokenInfo.symbol} spending for repayment`);
+        console.log(
+          `[PayBack] Approving ${tokenInfo.symbol} spending for repayment`
+        );
         const approveTx = approve({
           contract: tokenContract,
           spender: contractAddress,
@@ -567,11 +598,15 @@ export default function AppPage() {
         });
         const result = await sendTransaction(approveTx);
         if (result?.transactionHash) {
-          console.log(`[PayBack] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+          console.log(
+            `[PayBack] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+          );
         }
       }
 
-      console.log(`[PayBack] Repaying ${amount} ${tokenInfo.symbol} loan on ${chain.name}`);
+      console.log(
+        `[PayBack] Repaying ${amount} ${tokenInfo.symbol} loan on ${chain.name}`
+      );
       const repayTx = prepareContractCall({
         contract,
         method: "function repay(address token, uint256 amount)",
@@ -579,7 +614,9 @@ export default function AppPage() {
       });
       const result = await sendTransaction(repayTx);
       if (result?.transactionHash) {
-        console.log(`[PayBack] Repay tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        console.log(
+          `[PayBack] Repay tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+        );
       }
     } catch (error) {
       console.error(`[PayBack] Error on ${chain.name}:`, error);
@@ -593,7 +630,9 @@ export default function AppPage() {
       const tokenInfo = getTokenInfo(token);
       const amountWei = parseUnits(amount, tokenInfo.decimals);
 
-      console.log(`[Withdraw] Withdrawing ${amount} ${tokenInfo.symbol} on ${chain.name}`);
+      console.log(
+        `[Withdraw] Withdrawing ${amount} ${tokenInfo.symbol} on ${chain.name}`
+      );
       const withdrawTx = prepareContractCall({
         contract,
         method: "function withdraw(address token, uint256 amount)",
@@ -601,7 +640,9 @@ export default function AppPage() {
       });
       const result = await sendTransaction(withdrawTx);
       if (result?.transactionHash) {
-        console.log(`[Withdraw] Withdraw tx: ${getTransactionUrl(chain.id, result.transactionHash)}`);
+        console.log(
+          `[Withdraw] Withdraw tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
+        );
       }
     } catch (error) {
       console.error(`[Withdraw] Error on ${chain.name}:`, error);
@@ -667,10 +708,11 @@ export default function AppPage() {
             Chain Configuration Error
           </div>
           <div className="text-gray-300 max-w-md">
-            The current chain is not properly configured. Please check the chain configuration or switch to a supported network.
+            The current chain is not properly configured. Please check the chain
+            configuration or switch to a supported network.
           </div>
           <div className="text-sm text-gray-400">
-            Chain: {chain?.name || 'Unknown'}
+            Chain: {chain?.name || "Unknown"}
           </div>
         </div>
       </div>
@@ -686,22 +728,43 @@ export default function AppPage() {
       {/* Header */}
       <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-3 py-4 sticky top-0 z-40 relative">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <Link href="https://minilend.xyz" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-3">
-            <div>
-              <img src="/new-logo.png" alt="Minilend Logo" style={{height: "50px", width: "auto"}} />
+          <Link
+            href="https://minilend.xyz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center space-x-3"
+          >
+            {/* Container for the logo with relative positioning */}
+            <div className="relative flex-shrink-0">
+              <img
+                src="/new-logo.png"
+                alt="Minilend Logo"
+                className="absolute-centered-logo"
+              />
             </div>
           </Link>
 
           <div className="flex items-center space-x-3 flex-shrink-0">
             {/* Chain indicator */}
-            <div className="hidden sm:flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d] border border-[#54d22d]/30">
+            {/* <div className="hidden sm:flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d] border border-[#54d22d]/30">
               <div className="w-2 h-2 rounded-full bg-[#54d22d] mr-2"></div>
               {chain.name}
-            </div>
+            </div> */}
             <ConnectWallet />
           </div>
         </div>
       </header>
+
+      <style jsx>{`
+        .absolute-centered-logo {
+          height: 100px; /* Adjust this to your desired size */
+          width: auto;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+        }
+      `}</style>
 
       {/* Main Content */}
       <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto relative z-10">
@@ -712,7 +775,7 @@ export default function AppPage() {
           </div>
         )}
 
-        {process.env.NODE_ENV === 'development' && (
+        {process.env.NODE_ENV === "development" && (
           <div className="mb-4">
             <ChainDebug />
           </div>
