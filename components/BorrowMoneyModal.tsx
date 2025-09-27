@@ -218,12 +218,22 @@ export function BorrowMoneyModal({
     return data
   }, [SUPPORTED_STABLECOINS])
 
-  // Fetch data for each supported token
-  const liquidityQueries = SUPPORTED_STABLECOINS.map(token => {
+  // Create a stable array to avoid hook order issues when chain changes
+  const maxTokens = 10; // Fixed number to ensure consistent hook calls
+  const paddedTokens = useMemo(() => {
+    const result = [...SUPPORTED_STABLECOINS];
+    while (result.length < maxTokens) {
+      result.push(null); // Fill with null for unused slots
+    }
+    return result.slice(0, maxTokens);
+  }, [SUPPORTED_STABLECOINS]);
+
+  // Always call the same number of hooks regardless of chain
+  const allLiquidityQueries = paddedTokens.map((token) => {
     const { data: totalSupply } = useReadContract({
       contract,
       method: "function totalSupply(address) view returns (uint256)",
-      params: [token],
+      params: token ? [token] : ["0x0000000000000000000000000000000000000000"],
       queryOptions: {
         enabled: isOpen && !!token,
         retry: 2,
@@ -233,7 +243,7 @@ export function BorrowMoneyModal({
     const { data: totalBorrows } = useReadContract({
       contract,
       method: "function totalBorrows(address) view returns (uint256)",
-      params: [token],
+      params: token ? [token] : ["0x0000000000000000000000000000000000000000"],
       queryOptions: {
         enabled: isOpen && !!token,
         retry: 2,
@@ -243,7 +253,7 @@ export function BorrowMoneyModal({
     const { data: isBorrowingPaused } = useReadContract({
       contract,
       method: "function isBorrowingPaused(address) view returns (bool)",
-      params: [token],
+      params: token ? [token] : ["0x0000000000000000000000000000000000000000"],
       queryOptions: {
         enabled: isOpen && !!token,
         retry: 2,
@@ -252,6 +262,9 @@ export function BorrowMoneyModal({
 
     return { token, totalSupply, totalBorrows, isBorrowingPaused }
   })
+
+  // Filter out null entries after all hooks have been called
+  const liquidityQueries = allLiquidityQueries.filter(query => query.token !== null)
 
   // Calculate liquidity for all tokens
   const allTokenLiquidity = useMemo(() => {
