@@ -1,5 +1,6 @@
 import { Contract, providers, utils } from "ethers";
 import { Mento } from "@mento-protocol/mento-sdk";
+import { getUSDToKESRate, convertUSDToKES, convertKESToUSD } from "@/lib/services/exchangeRateService";
 
 // Constants
 const ERC20_ABI = [
@@ -106,31 +107,99 @@ export async function getExchangeRate(
       return cached.quote;
     }
     
-    // Get Mento instance
-    const mento = await getOrCreateMento();
+    // Special handling for BKES pairs
+    const bKESAddress = "0xd62fBDd984241BcFdEe96915b43101912a9fcE69";
+    const scrollUSDCAddress = "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4";
     
-    // Get token info (using cache if available)
+    // Get token symbols first for BKES handling
     let fromSymbol: string;
     let toSymbol: string;
+    
+    if (tokenCache.has(fromToken)) {
+      fromSymbol = tokenCache.get(fromToken)!.symbol;
+    } else {
+      fromSymbol = await getTokenSymbol(providerInstance!, fromToken);
+      const decimals = await getTokenDecimals(providerInstance!, fromToken);
+      tokenCache.set(fromToken, { symbol: fromSymbol, decimals });
+    }
+    
+    if (tokenCache.has(toToken)) {
+      toSymbol = tokenCache.get(toToken)!.symbol;
+    } else {
+      toSymbol = await getTokenSymbol(providerInstance!, toToken);
+      const decimals = await getTokenDecimals(providerInstance!, toToken);
+      tokenCache.set(toToken, { symbol: toSymbol, decimals });
+    }
+    
+    // Handle BKES to USDC conversion
+    if (fromToken.toLowerCase() === bKESAddress.toLowerCase() && 
+        toToken.toLowerCase() === scrollUSDCAddress.toLowerCase()) {
+      const usdToKesRate = await getUSDToKESRate();
+      if (!usdToKesRate) {
+        console.error('Failed to fetch USD to KES rate for BKES to USDC conversion');
+        return null;
+      }
+      
+      // 1 BKES = 1 KES, and we want to know how many USDC that is
+      const rate = 1 / usdToKesRate; // USDC per BKES
+      const numericAmount = parseFloat(amount);
+      const convertedAmount = numericAmount * rate;
+      
+      const quote: PriceQuote = {
+        price: convertedAmount,
+        symbol: `${toSymbol}/${fromSymbol}`,
+        baseSymbol: fromSymbol,
+        quoteSymbol: toSymbol,
+      };
+      
+      priceQuoteCache.set(cacheKey, { quote, timestamp: now });
+      console.log(`BKES to USDC rate: 1 BKES = ${rate.toFixed(6)} USDC`);
+      return quote;
+    }
+    
+    // Handle USDC to BKES conversion
+    if (fromToken.toLowerCase() === scrollUSDCAddress.toLowerCase() && 
+        toToken.toLowerCase() === bKESAddress.toLowerCase()) {
+      const usdToKesRate = await getUSDToKESRate();
+      if (!usdToKesRate) {
+        console.error('Failed to fetch USD to KES rate for USDC to BKES conversion');
+        return null;
+      }
+      
+      // 1 USDC ≈ 1 USD, and we want to know how many KES (BKES) that is
+      const rate = usdToKesRate; // BKES per USDC
+      const numericAmount = parseFloat(amount);
+      const convertedAmount = numericAmount * rate;
+      
+      const quote: PriceQuote = {
+        price: convertedAmount,
+        symbol: `${toSymbol}/${fromSymbol}`,
+        baseSymbol: fromSymbol,
+        quoteSymbol: toSymbol,
+      };
+      
+      priceQuoteCache.set(cacheKey, { quote, timestamp: now });
+      console.log(`USDC to BKES rate: 1 USDC = ${rate} BKES`);
+      return quote;
+    }
+    
+    // Fall back to Mento for other pairs
+    const mento = await getOrCreateMento();
+    
+    // Get token decimals for Mento pairs
     let fromDecimals: number;
     let toDecimals: number;
     
     if (tokenCache.has(fromToken)) {
-      const cached = tokenCache.get(fromToken)!;
-      fromSymbol = cached.symbol;
-      fromDecimals = cached.decimals;
+      fromDecimals = tokenCache.get(fromToken)!.decimals;
     } else {
-      fromSymbol = await getTokenSymbol(providerInstance!, fromToken);
       fromDecimals = await getTokenDecimals(providerInstance!, fromToken);
       tokenCache.set(fromToken, { symbol: fromSymbol, decimals: fromDecimals });
     }
     
     if (tokenCache.has(toToken)) {
-      const cached = tokenCache.get(toToken)!;
-      toSymbol = cached.symbol;
-      toDecimals = cached.decimals;
+      toDecimals = tokenCache.get(toToken)!.decimals;
     } else {
-      toSymbol = await getTokenSymbol(providerInstance!, toToken);
       toDecimals = await getTokenDecimals(providerInstance!, toToken);
       tokenCache.set(toToken, { symbol: toSymbol, decimals: toDecimals });
     }
@@ -175,6 +244,43 @@ export async function calculateEquivalentValue(
   amount: string
 ): Promise<{value: string, rate: number} | null> {
   try {
+    // Special handling for BKES conversions
+    const bKESAddress = "0xd62fBDd984241BcFdEe96915b43101912a9fcE69";
+    const scrollUSDCAddress = "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4";
+    
+    // BKES to USDC
+    if (fromToken.toLowerCase() === bKESAddress.toLowerCase() && 
+        toToken.toLowerCase() === scrollUSDCAddress.toLowerCase()) {
+      const usdToKesRate = await getUSDToKESRate();
+      if (!usdToKesRate) return null;
+      
+      const rate = 1 / usdToKesRate; // USDC per BKES
+      const numericAmount = parseFloat(amount);
+      const equivalentValue = numericAmount * rate;
+      
+      return {
+        value: equivalentValue.toString(),
+        rate: rate
+      };
+    }
+    
+    // USDC to BKES
+    if (fromToken.toLowerCase() === scrollUSDCAddress.toLowerCase() && 
+        toToken.toLowerCase() === bKESAddress.toLowerCase()) {
+      const usdToKesRate = await getUSDToKESRate();
+      if (!usdToKesRate) return null;
+      
+      const rate = usdToKesRate; // BKES per USDC
+      const numericAmount = parseFloat(amount);
+      const equivalentValue = numericAmount * rate;
+      
+      return {
+        value: equivalentValue.toString(),
+        rate: rate
+      };
+    }
+    
+    // Fall back to standard exchange rate lookup
     // Get token decimals
     let fromDecimals: number;
     if (tokenCache.has(fromToken)) {
@@ -237,16 +343,85 @@ export async function calculateRequiredCollateral(
       tokenCache.set(collateralToken, collateralTokenInfo);
     }
 
+    // Special handling for BKES (Kenyan Shilling backed token)
+    const bKESAddress = "0xd62fBDd984241BcFdEe96915b43101912a9fcE69"; // BKES on Scroll
+    const scrollUSDCAddress = "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"; // USDC on Scroll
+    
+    if (borrowToken.toLowerCase() === bKESAddress.toLowerCase()) {
+      // Borrowing BKES, need to convert collateral to KES equivalent
+      console.log(`Calculating collateral for BKES loan using external exchange rates`);
+      
+      if (collateralToken.toLowerCase() === scrollUSDCAddress.toLowerCase()) {
+        // USDC collateral for BKES loan
+        const usdToKesRate = await getUSDToKESRate();
+        if (!usdToKesRate) {
+          console.error('Failed to fetch USD to KES exchange rate');
+          return null;
+        }
+        
+        // 1 USDC = usdToKesRate KES (since USDC ~= USD)
+        // So 1 BKES = 1 KES, and 1 USDC = usdToKesRate BKES
+        const exchangeRate = usdToKesRate; // How many BKES per 1 USDC
+        const borrowAmountNum = parseFloat(borrowAmount);
+        const requiredCollateral = borrowAmountNum * collateralRatio / exchangeRate;
+        
+        console.log(`BKES loan: ${borrowAmount} BKES requires ${requiredCollateral.toFixed(4)} USDC (rate: 1 USDC = ${exchangeRate} BKES)`);
+        
+        return {
+          amount: requiredCollateral.toFixed(4),
+          rate: exchangeRate
+        };
+      } else {
+        console.log(`Unsupported collateral token for BKES: ${collateralTokenInfo.symbol}`);
+        return null;
+      }
+    }
+    
+    if (collateralToken.toLowerCase() === scrollUSDCAddress.toLowerCase() && borrowToken.toLowerCase() === bKESAddress.toLowerCase()) {
+      // This case is already handled above, but keeping for clarity
+      console.log('BKES borrowing with USDC collateral handled above');
+    }
+
     // Dollar-backed stables (USDC, USDT) have 1:1 rate with USD-pegged tokens
     const dollarBackedTokens = [
-      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC
-      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", // USDC on Celo
+      "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", // USDT on Celo
+      "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4", // USDC on Scroll
     ];
     
     const cUsdAddress = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // Correct cUSD mainnet address
     
     let exchangeRate: number;
     
+    // Handle BKES as collateral for other tokens
+    if (collateralToken.toLowerCase() === bKESAddress.toLowerCase()) {
+      console.log(`Using BKES as collateral for ${borrowTokenInfo.symbol}`);
+      
+      if (borrowToken.toLowerCase() === scrollUSDCAddress.toLowerCase()) {
+        // BKES collateral for USDC loan
+        const usdToKesRate = await getUSDToKESRate();
+        if (!usdToKesRate) {
+          console.error('Failed to fetch USD to KES exchange rate for BKES collateral');
+          return null;
+        }
+        
+        // 1 BKES = 1 KES, and we need to know how many USD that is
+        const exchangeRate = 1 / usdToKesRate; // How many USDC per 1 BKES
+        const borrowAmountNum = parseFloat(borrowAmount);
+        const requiredCollateral = borrowAmountNum * collateralRatio / exchangeRate;
+        
+        console.log(`USDC loan with BKES collateral: ${borrowAmount} USDC requires ${requiredCollateral.toFixed(4)} BKES (rate: 1 BKES = ${exchangeRate.toFixed(6)} USDC)`);
+        
+        return {
+          amount: requiredCollateral.toFixed(4),
+          rate: exchangeRate
+        };
+      } else {
+        console.log(`Unsupported borrow token with BKES collateral: ${borrowTokenInfo.symbol}`);
+        return null;
+      }
+    }
+
     // Special handling for dollar-backed stables as collateral
     if (dollarBackedTokens.includes(collateralToken)) {
       console.log(`Using dollar-backed collateral: ${collateralTokenInfo.symbol}`);

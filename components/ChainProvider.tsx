@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useState, useMemo } from "react";
+import { createContext, useContext, useState, useMemo, useEffect } from "react";
 import { CHAINS, getContractAddress, getTokens, getTokenInfoMap } from "@/config/chainConfig";
 import { getContract } from "thirdweb";
 import { client } from "@/lib/thirdweb/client";
+import { useActiveWalletChain } from "thirdweb/react";
 
 interface ChainContextType {
   chain: typeof CHAINS[0];
@@ -25,6 +26,18 @@ const ChainContext = createContext<ChainContextType>({
 
 export function ChainProvider({ children }: { children: React.ReactNode }) {
   const [chain, setChain] = useState(CHAINS[0]);
+  const activeWalletChain = useActiveWalletChain();
+
+  // Sync custom chain state with wallet chain changes
+  useEffect(() => {
+    if (activeWalletChain) {
+      const matchingChain = CHAINS.find(c => c.id === activeWalletChain.id);
+      if (matchingChain && matchingChain.id !== chain.id) {
+        console.log(`[ChainProvider] Wallet switched to ${matchingChain.name}, updating app state`);
+        setChain(matchingChain);
+      }
+    }
+  }, [activeWalletChain?.id, chain.id]);
   
   const value = useMemo(() => {
     const contractAddress = getContractAddress(chain.id);
