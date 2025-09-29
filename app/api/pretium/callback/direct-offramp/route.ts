@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { connectToDatabase } from '@/lib/mongodb'
+import { getCollection } from '@/lib/mongodb'
 import { eventService } from '@/lib/services/eventService'
 
 export async function POST(request: NextRequest) {
@@ -9,8 +9,8 @@ export async function POST(request: NextRequest) {
     
     if (transaction_code) {
       // Store in database
-      const { db } = await connectToDatabase()
-      await db.collection('transactions').updateOne(
+      const transactionsCollection = await getCollection('transactions')
+      await transactionsCollection.updateOne(
         { transaction_code },
         {
           $set: {
