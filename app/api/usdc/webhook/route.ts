@@ -7,18 +7,12 @@ import { createHmac } from 'crypto';
 
 // Constants from environment
 const SETTLEMENT_ADDRESS = process.env.SETTLEMENT_ADDRESS?.toLowerCase();
-const WEBHOOK_SECRET = process.env.THIRDWEB_WEBHOOK_SECRET;
 
 if (!SETTLEMENT_ADDRESS) {
   throw new Error("SETTLEMENT_ADDRESS environment variable is required");
 }
 
-if (!WEBHOOK_SECRET) {
-  throw new Error("WEBHOOK_SECRET environment variable is required");
-}
-
-// Get USDC info from your chain config
-const scrollTokens = getTokensBySymbol(scroll.id);
+const scrollTokens: ReturnType<typeof getTokensBySymbol> = getTokensBySymbol(scroll.id);
 const USDC_TOKEN = scrollTokens.USDC;
 if (!USDC_TOKEN) {
   throw new Error("USDC token not found in Scroll chain configuration");
@@ -40,18 +34,20 @@ interface ThirdwebWebhookPayload {
 
 export async function POST(request: NextRequest) {
   try {
+    let payload: ThirdwebWebhookPayload;
+    
     // Verify webhook authenticity (optional but recommended)
     const webhookSecret = process.env.THIRDWEB_WEBHOOK_SECRET;
     if (webhookSecret) {
       const signature = request.headers.get("x-thirdweb-signature");
       if (signature) {
         const body = await request.text();
-        if (!WEBHOOK_SECRET) {
-          console.error('Webhook secret not configured');
+        if (!webhookSecret) {
+          console.error('THIRDWEB_WEBHOOK_SECRET not configured');
           return NextResponse.json({ error: 'Webhook authentication failed' }, { status: 401 });
         }
         
-        const expectedSignature = generateWebhookSignature(body, WEBHOOK_SECRET);
+        const expectedSignature = generateWebhookSignature(body, webhookSecret);
         
         if (signature !== expectedSignature) {
           console.error('Invalid webhook signature');
@@ -59,15 +55,19 @@ export async function POST(request: NextRequest) {
             error: 'Invalid signature' 
           }, { status: 401 });
         }
+        
+        // Parse the body that we already read for signature verification
+        payload = JSON.parse(body);
       } else {
         console.error('Missing webhook signature');
         return NextResponse.json({ 
           error: 'Missing signature' 
         }, { status: 401 });
       }
+    } else {
+      // If no webhook secret is configured, read the body normally
+      payload = await request.json();
     }
-
-    const payload: ThirdwebWebhookPayload = await request.json();
 
     console.log("Thirdweb webhook received:", payload);
 
