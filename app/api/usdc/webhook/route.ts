@@ -14,7 +14,7 @@ if (!SETTLEMENT_ADDRESS) {
 }
 
 if (!WEBHOOK_SECRET) {
-  throw new Error("THIRDWEB_WEBHOOK_SECRET environment variable is required");
+  throw new Error("WEBHOOK_SECRET environment variable is required");
 }
 
 // Get USDC info from your chain config
