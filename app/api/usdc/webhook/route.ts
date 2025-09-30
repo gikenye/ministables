@@ -136,8 +136,16 @@ export async function POST(request: NextRequest) {
       source: "webhook",
     });
 
-    // Trigger KES disbursement processing
-    await triggerDisbursement(transferData);
+    // Check if this is an onramp completion or offramp initiation
+    const isOnrampCompletion = await checkIfOnrampCompletion(fromAddress, db);
+    
+    if (isOnrampCompletion) {
+      // This is an onramp completion - user received USDC
+      await handleOnrampCompletion(transferData, db);
+    } else {
+      // This is an offramp initiation - trigger KES disbursement
+      await triggerDisbursement(transferData);
+    }
 
     return NextResponse.json({
       success: true,
@@ -331,4 +339,89 @@ function generateWebhookSignature(payload: string, secret: string): string {
   return createHmac('sha256', secret)
     .update(payload)
     .digest('hex');
+}
+
+// Check if a USDC transfer is an onramp completion
+async function checkIfOnrampCompletion(fromAddress: string, db: any): Promise<boolean> {
+  try {
+    // Check if there's an onramp mapping for this user address
+    const onrampMapping = await db.collection("onramp_recipient_mappings").findOne({
+      user_address: fromAddress.toLowerCase(),
+      active: true,
+      type: 'ONRAMP'
+    });
+
+    return !!onrampMapping;
+  } catch (error) {
+    console.error("Error checking onramp completion:", error);
+    return false;
+  }
+}
+
+// Handle onramp completion
+async function handleOnrampCompletion(transfer: any, db: any) {
+  try {
+    console.log(`Onramp completion detected:`, {
+      from: transfer.from_address,
+      amount: transfer.amount_usdc,
+      txHash: transfer.transaction_hash,
+    });
+
+    // Update transfer record to mark as onramp completion
+    await db.collection("usdc_transfers").updateOne(
+      { transaction_hash: transfer.transaction_hash },
+      {
+        $set: {
+          processed: true,
+          transaction_type: 'ONRAMP_COMPLETION',
+          processed_at: new Date(),
+          updated_at: new Date(),
+        },
+      }
+    );
+
+    // Emit success event for onramp completion
+    eventService.emit("onramp_completion", {
+      transaction_hash: transfer.transaction_hash,
+      user_address: transfer.from_address,
+      amount_usdc: transfer.amount_usdc,
+      amount_raw: transfer.amount_raw,
+      block_number: transfer.block_number,
+    });
+
+    // Send notification
+    eventService.emit("notification", {
+      type: "success",
+      message: `USDC ${transfer.amount_usdc} onramp completed successfully`,
+      transaction_hash: transfer.transaction_hash,
+      user_address: transfer.from_address,
+    });
+
+    console.log("Onramp completion processed successfully:", transfer.transaction_hash);
+  } catch (error) {
+    console.error("Error handling onramp completion:", error);
+
+    // Update database with processing error
+    try {
+      await db.collection("usdc_transfers").updateOne(
+        { transaction_hash: transfer.transaction_hash },
+        {
+          $set: {
+            processing_error: `Onramp completion processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            updated_at: new Date(),
+          },
+        }
+      );
+    } catch (dbError) {
+      console.error("Error updating database with onramp completion error:", dbError);
+    }
+
+    // Emit error event
+    eventService.emit("onramp_completion_error", {
+      transaction_hash: transfer.transaction_hash,
+      user_address: transfer.from_address,
+      error: error instanceof Error ? error.message : "Unknown error",
+      amount_usdc: transfer.amount_usdc,
+    });
+  }
 }

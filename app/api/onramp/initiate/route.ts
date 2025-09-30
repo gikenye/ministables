@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getWebhookBaseUrl } from '@/lib/utils';
 
 const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       chain,
       asset,
       address,
-      callback_url
+      callback_url: callback_url || `${getWebhookBaseUrl()}/api/onramp/callback`
     };
 
     console.log('📤 Onramp request payload:', requestBody);
