@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react"
 import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
-import { ScrollUsdcOnrampModal } from "./ScrollUsdcOnrampModal"
+import { KesOnrampModal } from "./KesOnrampModal"
 import { onrampService } from "@/lib/services/onrampService"
 import { appendDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 
@@ -68,7 +68,7 @@ export function SaveMoneyModal({
 
   const [error, setError] = useState<string | null>(null)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
-  const [showScrollUsdcOnrampModal, setShowScrollUsdcOnrampModal] = useState(false)
+  const [showKesOnrampModal, setShowKesOnrampModal] = useState(false)
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [transactionStatus, setTransactionStatus] = useState<string | null>(null)
@@ -111,7 +111,7 @@ export function SaveMoneyModal({
       setDepositSuccess(null)
       setForm({ token: "", amount: "", lockPeriod: "2592000" })
       setShowOnrampModal(false)
-      setShowScrollUsdcOnrampModal(false)
+      setShowKesOnrampModal(false)
       setSelectedTokenForOnramp("")
     }
   }, [chain?.id])
@@ -447,7 +447,7 @@ export function SaveMoneyModal({
 
   const handleOnrampSuccess = () => {
     setShowOnrampModal(false)
-    setShowScrollUsdcOnrampModal(false)
+    setShowKesOnrampModal(false)
     // Optionally set the token and continue to amount step
     setForm((prev) => ({ ...prev, token: selectedTokenForOnramp }))
     setCurrentStep(2)
@@ -609,9 +609,9 @@ export function SaveMoneyModal({
                                     <button
                                       onClick={() => {
                                         setSelectedTokenForOnramp(token)
-                                        // Check if this is Scroll USDC - use custom modal
+                                        // Check if this is Scroll USDC - use KES collection modal
                                         if (chain?.id === 534352 && tokenInfos[token]?.symbol === "USDC") {
-                                          setShowScrollUsdcOnrampModal(true)
+                                          setShowKesOnrampModal(true)
                                         } else {
                                           setShowOnrampModal(true)
                                         }
@@ -913,11 +913,9 @@ export function SaveMoneyModal({
           onSuccess={handleOnrampSuccess}
         />
 
-        <ScrollUsdcOnrampModal
-          isOpen={showScrollUsdcOnrampModal}
-          onClose={() => setShowScrollUsdcOnrampModal(false)}
-          selectedAsset={selectedTokenForOnramp}
-          assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || ""}
+        <KesOnrampModal
+          isOpen={showKesOnrampModal}
+          onClose={() => setShowKesOnrampModal(false)}
           onSuccess={handleOnrampSuccess}
         />
       </DialogContent>
