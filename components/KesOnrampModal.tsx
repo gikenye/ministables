@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { ArrowLeft, Check, AlertCircle, Loader2, Copy, ExternalLink } from "lucide-react"
+import { ArrowLeft, Check, AlertCircle, Loader2, Copy } from "lucide-react"
 import { useActiveAccount } from "thirdweb/react"
-import { eventService } from "@/lib/services/eventService"
 
 interface KesOnrampModalProps {
   isOpen: boolean
@@ -18,6 +17,22 @@ interface KesOnrampStep {
   description: string
 }
 
+interface MobileNetwork {
+  value: string
+  label: string
+  icon: string
+}
+
+interface PretiumCollectResponse {
+  code: number
+  message: string
+  data: {
+    transaction_code: string
+    status: string
+    message: string
+  }
+}
+
 const ONRAMP_STEPS: KesOnrampStep[] = [
   { step: 1, title: "Phone Number", description: "Enter your M-Pesa phone number" },
   { step: 2, title: "Amount", description: "Enter KES amount to convert to USDC" },
@@ -25,13 +40,10 @@ const ONRAMP_STEPS: KesOnrampStep[] = [
   { step: 4, title: "Confirmation", description: "Receive USDC in your wallet" }
 ]
 
-const MOBILE_NETWORKS = [
+const MOBILE_NETWORKS: MobileNetwork[] = [
   { value: "SAFARICOM", label: "Safaricom M-Pesa", icon: "🟢" },
   { value: "AIRTEL", label: "Airtel Money", icon: "🔴" }
 ]
-
-// Scroll USDC contract address
-const SCROLL_USDC_ADDRESS = "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"
 
 export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalProps) {
   const account = useActiveAccount()
@@ -41,12 +53,11 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
   const [mobileNetwork, setMobileNetwork] = useState("SAFARICOM")
   const [kesAmount, setKesAmount] = useState("")
   const [usdcAmount, setUsdcAmount] = useState("")
-  const [exchangeRate, setExchangeRate] = useState(130) // KES per USDC
+  const [exchangeRate] = useState(130) // KES per USDC
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [transactionCode, setTransactionCode] = useState("")
-  const [shortcode, setShortcode] = useState("600000")
-  const [paymentInstructions, setPaymentInstructions] = useState("")
+  const [shortcode] = useState("600000")
   const [trackingPayment, setTrackingPayment] = useState(false)
 
   // Reset modal state when opening
@@ -58,7 +69,6 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
       setUsdcAmount("")
       setError("")
       setTransactionCode("")
-      setPaymentInstructions("")
       setTrackingPayment(false)
     }
   }, [isOpen])
@@ -67,7 +77,7 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
   useEffect(() => {
     if (!transactionCode) return
 
-    const handleKesUpdate = (data: any) => {
+    const handleKesUpdate = (data: { transaction_code: string; status: string; message?: string }) => {
       if (data.transaction_code === transactionCode) {
         if (data.status === 'COMPLETED' || data.status === 'SUCCESS') {
           // Payment successful - wait for USDC transfer
@@ -81,7 +91,7 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
       }
     }
 
-    const handleOnrampCompletion = (data: any) => {
+    const handleOnrampCompletion = (data: { user_address?: string }) => {
       if (data.user_address?.toLowerCase() === account?.address?.toLowerCase()) {
         // USDC received successfully
         setTimeout(() => {
@@ -90,15 +100,27 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
       }
     }
 
-    eventService.addEventListener('kes_transaction_update', handleKesUpdate)
-    eventService.addEventListener('onramp_completion', handleOnrampCompletion)
+    // Use polling instead of event listeners for now
+    const pollForUpdates = setInterval(() => {
+      // Poll your API for transaction status
+      fetch(`/api/pretium/kes/status/${transactionCode}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'COMPLETED' || data.status === 'SUCCESS') {
+            handleKesUpdate(data)
+            clearInterval(pollForUpdates)
+          } else if (data.status === 'FAILED') {
+            handleKesUpdate(data)
+            clearInterval(pollForUpdates)
+          }
+        })
+        .catch(console.error)
+    }, 5000) // Poll every 5 seconds
 
     return () => {
-      eventService.removeEventListener('kes_transaction_update', handleKesUpdate)
-      eventService.removeEventListener('onramp_completion', handleOnrampCompletion)
+      clearInterval(pollForUpdates)
     }
   }, [transactionCode, account?.address, onSuccess])
-
   // Calculate USDC amount when KES amount changes
   useEffect(() => {
     if (kesAmount && !isNaN(parseFloat(kesAmount))) {
@@ -126,7 +148,7 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
     return '+' + cleaned
   }
 
-  const handleNextStep = async () => {
+  const handleNextStep = async (): Promise<void> => {
     setError("")
 
     if (currentStep === 1) {
@@ -160,7 +182,7 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
     }
   }
 
-  const initiateKesCollection = async () => {
+  const initiateKesCollection = async (): Promise<void> => {
     if (!account?.address) {
       setError("Please connect your wallet")
       return
@@ -199,18 +221,13 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
         })
       })
 
-      const result = await response.json()
+      const result: PretiumCollectResponse = await response.json()
 
       if (!response.ok || result.code !== 200) {
         throw new Error(result.message || 'Failed to initiate KES collection')
       }
 
       setTransactionCode(result.data.transaction_code)
-      
-      // Generate payment instructions
-      const formattedPhone = formatPhoneNumber(phoneNumber)
-      const instructions = `Send KES ${kesAmount} to ${shortcode}\nReference: ${result.data.transaction_code}\nFrom: ${formattedPhone}`
-      setPaymentInstructions(instructions)
       
       setLoading(false)
     } catch (error) {
@@ -220,18 +237,18 @@ export function KesOnrampModal({ isOpen, onClose, onSuccess }: KesOnrampModalPro
     }
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const copyToClipboard = (text: string): void => {
+    navigator.clipboard.writeText(text).catch(console.error)
   }
 
-  const goBack = () => {
+  const goBack = (): void => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1)
       setError("")
     }
   }
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     if (!loading && !trackingPayment) {
       onClose()
     }
