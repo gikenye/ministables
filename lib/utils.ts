@@ -37,3 +37,51 @@ export function formatAmount(amount: string, decimals = 6): string {
     return "0.00"
   }
 }
+
+/**
+ * Get the appropriate base URL for API calls and webhooks
+ * Supports multiple URLs based on environment and deployment
+ */
+export function getBaseUrl(): string {
+  // In client-side, use window.location.origin if available
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+
+  // Check for supported base URLs from environment
+  const supportedUrls = process.env.SUPPORTED_BASE_URLS?.split(',').map(url => url.trim()) || []
+  
+  // Determine which URL to use based on environment
+  if (process.env.NODE_ENV === 'production') {
+    // In production, prefer the production URLs
+    const productionUrl = supportedUrls.find(url => 
+      url.includes('app.minilend.xyz') || 
+      url.includes('ministables.vercel.app')
+    )
+    if (productionUrl) return productionUrl
+  }
+  
+  // Default to NEXTAUTH_URL or first supported URL
+  return process.env.NEXTAUTH_URL || supportedUrls[0] || 'http://localhost:3000'
+}
+
+/**
+ * Get the webhook callback base URL - always use production URL for webhooks
+ */
+export function getWebhookBaseUrl(): string {
+  const supportedUrls = process.env.SUPPORTED_BASE_URLS?.split(',').map(url => url.trim()) || []
+  
+  // For webhooks, always prefer the production URL (app.minilend.xyz)
+  const webhookUrl = supportedUrls.find(url => url.includes('app.minilend.xyz'))
+  if (webhookUrl) return webhookUrl
+  
+  // Fallback to other production URLs
+  const productionUrl = supportedUrls.find(url => 
+    url.includes('ministables.vercel.app') || 
+    url.startsWith('https://')
+  )
+  if (productionUrl) return productionUrl
+  
+  // Last resort - use base URL
+  return getBaseUrl()
+}

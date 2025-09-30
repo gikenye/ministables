@@ -4,6 +4,7 @@ import { eventService } from '@/lib/services/eventService';
 import { scroll } from 'thirdweb/chains';
 import { getTokensBySymbol } from '@/config/chainConfig';
 import { createHmac } from 'crypto';
+import { getWebhookBaseUrl } from '@/lib/utils';
 
 // Constants from environment
 const SETTLEMENT_ADDRESS = process.env.SETTLEMENT_ADDRESS?.toLowerCase();
@@ -197,7 +198,7 @@ async function triggerDisbursement(transfer: any) {
           : mapping.account_number || mapping.recipient_phone,
       type: mapping.type,
       mobile_network: mapping.recipient_network,
-      callback_url: `${process.env.NEXTAUTH_URL}/api/pretium/callback/kes/log-disburse`,
+      callback_url: `${getWebhookBaseUrl()}/api/pretium/callback/kes/log-disburse`,
     };
 
     console.log("Triggering KES disbursement for USDC deposit:", {
@@ -207,7 +208,7 @@ async function triggerDisbursement(transfer: any) {
 
     // Call the disbursement API
     const response = await fetch(
-      `${process.env.NEXTAUTH_URL}/api/pretium/kes/disburse`,
+      `${getWebhookBaseUrl()}/api/pretium/kes/disburse`,
       {
         method: "POST",
         headers: {

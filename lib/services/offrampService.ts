@@ -1,4 +1,6 @@
 // Offramp service for Pretium API integration - Mobile Money Withdrawals
+import { getWebhookBaseUrl } from '@/lib/utils';
+
 export interface OfframpQuoteRequest {
   amount: string;
   fiatCurrency: string;
@@ -259,7 +261,7 @@ class OfframpService {
         type: "MOBILE",
         mobile_network: this.detectMobileNetwork(request.partyB),
         chain: request.chain.toUpperCase(),
-        callback_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/pretium/callback`
+        callback_url: `${getWebhookBaseUrl()}/api/pretium/callback`
       };
       
       const endpoint = request.chain === 'celo' ? '/v1/pay' : `/v1/pay/${this.getCurrencyFromChain(request.chain)}`;

@@ -5,6 +5,7 @@ import { scroll } from 'thirdweb/chains';
 import { getTokenInfo, getTokensBySymbol } from '@/config/chainConfig';
 import { getDatabase } from '@/lib/mongodb';
 import { eventService } from './eventService';
+import { getWebhookBaseUrl } from '@/lib/utils';
 
 // Constants from environment
 const SETTLEMENT_ADDRESS = process.env.USDC_SETTLEMENT_ADDRESS?.toLowerCase();
@@ -265,7 +266,7 @@ class USDCEventListener {
         account_number: mapping.type === 'MOBILE' ? mapping.recipient_phone : (mapping.account_number || mapping.recipient_phone),
         type: mapping.type,
         mobile_network: mapping.recipient_network,
-        callback_url: `${process.env.NEXTAUTH_URL}/api/pretium/callback/kes/log-disburse`
+        callback_url: `${getWebhookBaseUrl()}/api/pretium/callback/kes/log-disburse`
       };
 
       console.log('Triggering KES disbursement for USDC deposit:', {
@@ -274,7 +275,7 @@ class USDCEventListener {
       });
 
       // Call the disbursement API
-      const response = await fetch(`${process.env.NEXTAUTH_URL}/api/pretium/kes/disburse`, {
+      const response = await fetch(`${getWebhookBaseUrl()}/api/pretium/kes/disburse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
