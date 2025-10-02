@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react"
 import { useActiveAccount, useSendTransaction, useWalletBalance } from "thirdweb/react"
 import { OnrampDepositModal } from "./OnrampDepositModal"
+import { KesOnrampModal } from "./KesOnrampModal"
 import { onrampService } from "@/lib/services/onrampService"
 import { appendDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
 
@@ -67,6 +68,7 @@ export function SaveMoneyModal({
 
   const [error, setError] = useState<string | null>(null)
   const [showOnrampModal, setShowOnrampModal] = useState(false)
+  const [showKesOnrampModal, setShowKesOnrampModal] = useState(false)
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [transactionStatus, setTransactionStatus] = useState<string | null>(null)
@@ -109,6 +111,7 @@ export function SaveMoneyModal({
       setDepositSuccess(null)
       setForm({ token: "", amount: "", lockPeriod: "2592000" })
       setShowOnrampModal(false)
+      setShowKesOnrampModal(false)
       setSelectedTokenForOnramp("")
     }
   }, [chain?.id])
@@ -444,6 +447,7 @@ export function SaveMoneyModal({
 
   const handleOnrampSuccess = () => {
     setShowOnrampModal(false)
+    setShowKesOnrampModal(false)
     // Optionally set the token and continue to amount step
     setForm((prev) => ({ ...prev, token: selectedTokenForOnramp }))
     setCurrentStep(2)
@@ -459,8 +463,13 @@ export function SaveMoneyModal({
       const tokenSymbol = tokenInfos[tokenAddress]?.symbol
       if (!tokenSymbol) return false
 
-  const chainName = chain?.name || chain?.chain || String(chain?.id)
-  return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
+      // Special case for USDC on Scroll network
+      if (chain?.id === 534352 && tokenSymbol === "USDC") {
+        return true
+      }
+
+      const chainName = chain?.name || String(chain?.id)
+      return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
     } catch (error) {
       console.error("Error checking onramp support:", error)
       return false
@@ -600,7 +609,12 @@ export function SaveMoneyModal({
                                     <button
                                       onClick={() => {
                                         setSelectedTokenForOnramp(token)
-                                        setShowOnrampModal(true)
+                                        // Check if this is Scroll USDC - use KES collection modal
+                                        if (chain?.id === 534352 && tokenInfos[token]?.symbol === "USDC") {
+                                          setShowKesOnrampModal(true)
+                                        } else {
+                                          setShowOnrampModal(true)
+                                        }
                                       }}
                                       className="flex-1 h-9 bg-[#162013] text-white text-xs font-medium rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-1 md:h-8"
                                     >
@@ -896,6 +910,12 @@ export function SaveMoneyModal({
           onClose={() => setShowOnrampModal(false)}
           selectedAsset={selectedTokenForOnramp}
           assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || ""}
+          onSuccess={handleOnrampSuccess}
+        />
+
+        <KesOnrampModal
+          isOpen={showKesOnrampModal}
+          onClose={() => setShowKesOnrampModal(false)}
           onSuccess={handleOnrampSuccess}
         />
       </DialogContent>
