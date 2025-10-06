@@ -60,22 +60,39 @@ export const SUPPORTED_COUNTRIES = {
   CDF: { name: "Congo", flag: "🇨🇩", networks: ["MTN"] },
 } as const;
 
-// Supported assets by chain for onramp
-import { CHAINS } from "@/config/chainConfig";
+// Import chain configuration
+import { CHAINS, TOKENS, getTokens } from "@/config/chainConfig";
+import { celo, scroll } from "thirdweb/chains";
 
-const defaultChainName = (CHAINS && CHAINS.length > 0 && CHAINS[0].name) ? (CHAINS[0].name as string) : "CELO";
+// Get supported assets dynamically from chainConfig
+const getSupportedAssetsByChain = () => {
+  const supportedAssets: Record<string, string[]> = {};
+  
+  // Add Celo assets
+  if (TOKENS[celo.id]) {
+    supportedAssets["CELO"] = TOKENS[celo.id].map(token => token.symbol);
+    supportedAssets[celo.id.toString()] = TOKENS[celo.id].map(token => token.symbol);
+  }
+  
+  // Add Scroll assets  
+  if (TOKENS[scroll.id]) {
+    supportedAssets["SCROLL"] = TOKENS[scroll.id].map(token => token.symbol);
+    supportedAssets[scroll.id.toString()] = TOKENS[scroll.id].map(token => token.symbol);
+  }
+  
+  return supportedAssets;
+};
 
-export const ONRAMP_SUPPORTED_ASSETS =  {
-  [defaultChainName.toUpperCase()]: ["cUSD", "USDC", "USDT"],
-  BASE: ["USDC"],
-  STELLAR: ["USDC"], 
-} as const;
+export const ONRAMP_SUPPORTED_ASSETS = getSupportedAssetsByChain();
 
 // Asset to chain mapping (default chains for each asset)
 export const ASSET_CHAIN_MAPPING = {
-  USDC: defaultChainName.toUpperCase(),
-  USDT: defaultChainName.toUpperCase(),
-  cUSD: defaultChainName.toUpperCase(),
+  USDC: "CELO",
+  USDT: "CELO", 
+  CUSD: "CELO",
+  CKES: "CELO",
+  CNGN: "CELO",
+  BKES: "SCROLL",
 } as const;
 
 // Limits by country
@@ -209,14 +226,38 @@ class OnrampService {
   }
 
   // Helper method to determine if an asset is supported for onramp
-  isAssetSupportedForOnramp(asset: string, chain: string = defaultChainName.toUpperCase()): boolean {
-    const supportedAssets = ONRAMP_SUPPORTED_ASSETS[chain as keyof typeof ONRAMP_SUPPORTED_ASSETS];
-    return supportedAssets?.includes(asset as any) || false;
+  isAssetSupportedForOnramp(asset: string, chain: string = "CELO"): boolean {
+    console.log("[OnrampService] Checking asset support:", { asset, chain });
+    console.log("[OnrampService] Available supported assets:", ONRAMP_SUPPORTED_ASSETS);
+    
+    // Normalize chain name
+    const normalizedChain = chain.toUpperCase();
+    console.log("[OnrampService] Normalized chain:", normalizedChain);
+    
+    // Check by chain name first
+    let supportedAssets = ONRAMP_SUPPORTED_ASSETS[normalizedChain];
+    console.log("[OnrampService] Supported assets for chain name:", supportedAssets);
+    
+    // If not found by name, try by chain ID
+    if (!supportedAssets) {
+      const chainId = normalizedChain === "CELO" ? celo.id.toString() : 
+                     normalizedChain === "SCROLL" ? scroll.id.toString() : 
+                     normalizedChain;
+      console.log("[OnrampService] Trying chain ID:", chainId);
+      supportedAssets = ONRAMP_SUPPORTED_ASSETS[chainId];
+      console.log("[OnrampService] Supported assets for chain ID:", supportedAssets);
+    }
+    
+    const normalizedAsset = asset.toUpperCase();
+    const isSupported = supportedAssets?.includes(normalizedAsset) || false;
+    console.log("[OnrampService] Final result:", { normalizedAsset, supportedAssets, isSupported });
+    
+    return isSupported;
   }
 
   // Helper method to get the appropriate chain for an asset
   getChainForAsset(asset: string): string {
-    return ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] || defaultChainName.toUpperCase();
+    return ASSET_CHAIN_MAPPING[asset.toUpperCase() as keyof typeof ASSET_CHAIN_MAPPING] || "CELO";
   }
 
   // Helper method to get country limits

@@ -266,6 +266,11 @@ export default function DashboardPage() {
   const lockEnds = lockEndsState;
   const dashboardLoading = false;
 
+  // Helper to check if user has existing savings
+  const hasExistingSavings = useMemo(() => {
+    return Object.values(deposits).some(amount => BigInt(amount || "0") > BigInt(0));
+  }, [deposits]);
+
   // Normalize deposit and lock keys to match tokenInfo address casing so the modal's
   // tokenInfos lookup and the deposits object use the same keys (case-insensitive match).
   const normalizedDeposits = useMemo(() => {
@@ -504,9 +509,13 @@ export default function DashboardPage() {
                     setError('Please connect your wallet to use this feature');
                     return;
                   }
+                  if (!hasExistingSavings) {
+                    setError('No funds available to withdraw. Start saving first!');
+                    return;
+                  }
                   setWithdrawOpen(true);
                 }}
-                disabled={isProcessing || isTransactionPending}
+                disabled={isProcessing || isTransactionPending || !hasExistingSavings}
               >
                 {isProcessing || isTransactionPending ? "Processing..." : "Cash Out"}
               </Button>
@@ -577,9 +586,11 @@ export default function DashboardPage() {
         </div>
       </footer>
 
-  <FundsWithdrawalModal
-        isOpen={withdrawOpen}
-        onClose={() => setWithdrawOpen(false)}
+  {/* Only show withdrawal modal if user has existing savings */}
+      {hasExistingSavings && (
+        <FundsWithdrawalModal
+          isOpen={withdrawOpen}
+          onClose={() => setWithdrawOpen(false)}
         onWithdraw={async (token: string, amount: string) => {
           if (!account || !token || !amount) {
             setError("Missing required parameters for withdrawal");
@@ -679,7 +690,8 @@ export default function DashboardPage() {
             return "0";
           }
         }}
-      />
+        />
+      )}
     </div>
   );
 }

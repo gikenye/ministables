@@ -35,6 +35,13 @@ export function OnrampDepositModal({
   const address = account?.address
   const { toast } = useToast()
 
+  // Log what we're receiving
+  console.log("[OnrampDepositModal] Props received:", {
+    selectedAsset,
+    assetSymbol,
+    isOpen
+  })
+
   const [currentStep, setCurrentStep] = useState(1)
   const [form, setForm] = useState({
     phoneNumber: "",
@@ -193,8 +200,8 @@ export function OnrampDepositModal({
     }
 
     // Check if asset is supported for onramp
-    const chain = onrampService.getChainForAsset(selectedAsset)
-    if (!onrampService.isAssetSupportedForOnramp(selectedAsset, chain)) {
+    const chain = onrampService.getChainForAsset(assetSymbol)
+    if (!onrampService.isAssetSupportedForOnramp(assetSymbol, chain)) {
       toast({
         title: "Asset Not Supported",
         description: `${assetSymbol} is not supported for mobile money deposits.`,
@@ -226,7 +233,7 @@ export function OnrampDepositModal({
         fee: Math.round(Number.parseFloat(form.amount) * 0.02), // 2% fee estimate
         mobile_network: form.mobileNetwork,
         chain: chain,
-        asset: selectedAsset,
+        asset: assetSymbol,
         address: address,
         callback_url: `${window.location.origin}/api/onramp/callback`,
       }

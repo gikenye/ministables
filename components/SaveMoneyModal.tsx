@@ -59,6 +59,7 @@ export function SaveMoneyModal({
     return tokens.map(t => t.address)
   }, [tokens, chain?.id])
   const [currentStep, setCurrentStep] = useState(1)
+  const [depositMethod, setDepositMethod] = useState<"mpesa" | "crypto" | "">("")
   const [form, setForm] = useState({
     token: "",
     amount: "",
@@ -91,6 +92,7 @@ export function SaveMoneyModal({
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1)
+      setDepositMethod("")
       setError(null)
       setIsSaving(false)
       setTransactionStatus(null)
@@ -103,6 +105,7 @@ export function SaveMoneyModal({
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1)
+      setDepositMethod("")
       setError(null)
       setIsSaving(false)
       setTransactionStatus(null)
@@ -229,7 +232,7 @@ export function SaveMoneyModal({
         transactionHash: receipt.transactionHash
       })
       // Move to success step
-      setCurrentStep(5)
+      setCurrentStep(6)
       
       // Report transaction to Divvi for referral tracking
       if (receipt.transactionHash) {
@@ -352,6 +355,7 @@ export function SaveMoneyModal({
   const handleMakeAnotherDeposit = () => {
     setDepositSuccess(null)
     setCurrentStep(1)
+    setDepositMethod("")
     setForm({
       token: "",
       amount: "",
@@ -367,6 +371,7 @@ export function SaveMoneyModal({
       amount: "",
       lockPeriod: "2592000",
     })
+    setDepositMethod("")
     setDepositSuccess(null)
     onClose()
   }
@@ -403,12 +408,14 @@ export function SaveMoneyModal({
   const canProceedToStep = (step: number) => {
     switch (step) {
       case 2:
-        return form.token !== ""
+        return depositMethod !== ""
       case 3:
-        return form.token !== "" && form.amount !== ""
+        return depositMethod !== "" && form.token !== ""
       case 4:
-        return form.token !== "" && form.amount !== "" && form.lockPeriod !== ""
+        return depositMethod !== "" && form.token !== "" && form.amount !== ""
       case 5:
+        return depositMethod !== "" && form.token !== "" && form.amount !== "" && form.lockPeriod !== ""
+      case 6:
         return depositSuccess !== null
       default:
         return true
@@ -416,7 +423,7 @@ export function SaveMoneyModal({
   }
 
   const nextStep = () => {
-    if (currentStep < 5 && canProceedToStep(currentStep + 1)) {
+    if (currentStep < 6 && canProceedToStep(currentStep + 1)) {
       setCurrentStep(currentStep + 1)
     }
   }
@@ -444,8 +451,7 @@ export function SaveMoneyModal({
 
   const handleOnrampSuccess = () => {
     setShowOnrampModal(false)
-    // Optionally set the token and continue to amount step
-    setForm((prev) => ({ ...prev, token: selectedTokenForOnramp }))
+    // For M-Pesa, continue to asset selection
     setCurrentStep(2)
   }
 
@@ -457,12 +463,29 @@ export function SaveMoneyModal({
   const isAssetSupportedForOnramp = (tokenAddress: string) => {
     try {
       const tokenSymbol = tokenInfos[tokenAddress]?.symbol
-      if (!tokenSymbol) return false
+      if (!tokenSymbol) {
+        console.log("[SaveMoneyModal] No token symbol found for address:", tokenAddress)
+        return false
+      }
 
-  const chainName = chain?.name || chain?.chain || String(chain?.id)
-  return onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
+      // Map chain ID to proper chain name
+      const chainName = chain?.id === 42220 ? "CELO" : 
+                       chain?.id === 534352 ? "SCROLL" : 
+                       "CELO"
+      
+      console.log("[SaveMoneyModal] Checking onramp support for:", {
+        tokenAddress: tokenAddress.substring(0, 10) + '...',
+        tokenSymbol,
+        chainId: chain?.id,
+        chainName
+      })
+      
+      const isSupported = onrampService.isAssetSupportedForOnramp(tokenSymbol, chainName)
+      console.log("[SaveMoneyModal] Onramp support result:", isSupported)
+      
+      return isSupported
     } catch (error) {
-      console.error("Error checking onramp support:", error)
+      console.error("[SaveMoneyModal] Error checking onramp support:", error)
       return false
     }
   }
@@ -480,21 +503,22 @@ export function SaveMoneyModal({
             Start earning by choosing a token, entering an amount, selecting a lock period, and confirming your deposit.
           </DialogDescription>
           <div className="flex items-center justify-between pt-5 pb-3">
-            {currentStep > 1 && currentStep !== 5 && (
+            {currentStep > 1 && currentStep !== 6 && (
               <button onClick={prevStep} className="p-1 text-[#a2c398] hover:text-white transition-colors">
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div className="flex-1 text-center">
               <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">
-                {currentStep === 1 && ""}
-                {currentStep === 2 && "Enter Amount"}
-                {currentStep === 3 && "Lock Period"}
-                {currentStep === 4 && "Review"}
-                {currentStep === 5 && "Success!"}
+                {currentStep === 1 && "Deposit Method"}
+                {currentStep === 2 && "Choose Asset"}
+                {currentStep === 3 && "Enter Amount"}
+                {currentStep === 4 && "Lock Period"}
+                {currentStep === 5 && "Review"}
+                {currentStep === 6 && "Success!"}
               </h1>
               <div className="flex justify-center gap-2 mt-2">
-                {[1, 2, 3, 4, 5].map((step) => (
+                {[1, 2, 3, 4, 5, 6].map((step) => (
                   <div
                     key={step}
                     className={`min-w-8 h-7 px-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors ${
@@ -505,7 +529,7 @@ export function SaveMoneyModal({
                         : "bg-[#21301c] text-[#a2c398] border border-[#426039]"
                     }`}
                   >
-                    {step === 5 ? (
+                    {step === 6 ? (
                       <Check className="w-4 h-4" />
                     ) : (
                       step
@@ -514,7 +538,7 @@ export function SaveMoneyModal({
                 ))}
               </div>
             </div>
-            {currentStep > 1 && currentStep !== 5 && <div className="w-7" />}
+            {currentStep > 1 && currentStep !== 6 && <div className="w-7" />}
           </div>
 
           {error && (
@@ -534,6 +558,95 @@ export function SaveMoneyModal({
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div className="text-center">
+                  <h3 className="text-white text-lg font-medium mb-2">How would you like to deposit?</h3>
+                  <p className="text-[#a2c398] text-sm">Choose your preferred deposit method</p>
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepositMethod("mpesa")
+                      // Set USDC as default token for M-Pesa deposits
+                      const usdcToken = supportedStablecoins.find(token => 
+                        tokenInfos[token]?.symbol?.toUpperCase() === "USDC"
+                      )
+                      if (usdcToken) {
+                        setForm({ ...form, token: usdcToken })
+                        setSelectedTokenForOnramp(usdcToken)
+                      }
+                      setShowOnrampModal(true)
+                    }}
+                    className="w-full p-4 rounded-xl border-2 border-[#426039] bg-[#2e4328] hover:border-[#54d22d] transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                        M
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-semibold text-white">M-Pesa</div>
+                        <div className="text-xs text-[#a2c398]">Deposit using mobile money</div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepositMethod("crypto")
+                      const usdcToken = supportedStablecoins.find(token => 
+                        tokenInfos[token]?.symbol?.toUpperCase() === "USDC"
+                      )
+                      if (usdcToken) {
+                        setForm({ ...form, token: usdcToken })
+                      }
+                      nextStep()
+                    }}
+                    className="w-full p-4 rounded-xl border-2 border-[#426039] bg-[#2e4328] hover:border-[#54d22d] transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                        ₿
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-semibold text-white">Crypto</div>
+                        <div className="text-xs text-[#a2c398]">Deposit USDC from your wallet</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && depositMethod === "crypto" && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h3 className="text-white text-lg font-medium mb-2">Deposit USDC</h3>
+                  <p className="text-[#a2c398] text-sm">You'll deposit USDC on {chain?.name}</p>
+                </div>
+
+                <div className="bg-[#21301c] rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[#a2c398] text-sm">Selected Asset</span>
+                    <span className="text-[#54d22d] font-semibold">USDC</span>
+                  </div>
+                  <div className="text-xs text-[#a2c398]">
+                    Balance: {isBalanceLoading ? "Loading..." : `${formatDisplayNumber(walletBalance)} USDC`}
+                  </div>
+                </div>
+
+                <button
+                  onClick={nextStep}
+                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
+                >
+                  Continue with USDC
+                </button>
+              </div>
+            )}
+
+            {currentStep === 2 && depositMethod === "mpesa" && (
+              <div className="space-y-6">
+                <div className="text-center">
                   <h3 className="text-white text-lg font-medium mb-2">Choose asset to deposit</h3>
                   <p className="text-[#a2c398] text-sm">Select which token you'd like to deposit</p>
                 </div>
@@ -545,7 +658,7 @@ export function SaveMoneyModal({
                     const showBalance = isSelected && !isBalanceLoading
                     const zeroBalance = isSelected && hasZeroBalance()
 
-                    const onrampSupported = isAssetSupportedForOnramp(token)
+                    const onrampSupported = isSelected ? isAssetSupportedForOnramp(token) : true
 
                     return (
                       <div key={token} className="w-full">
@@ -647,7 +760,7 @@ export function SaveMoneyModal({
               </div>
             )}
 
-            {currentStep === 2 && (
+            {currentStep === 3 && (
               <div className="space-y-6">
                 <div className="text-center">
                   <h3 className="text-white text-lg font-medium mb-2">How much?</h3>
@@ -727,7 +840,7 @@ export function SaveMoneyModal({
               </div>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <div className="space-y-6">
                 <div className="text-center">
                   <h3 className="text-white text-lg font-medium mb-2">Lock period</h3>
@@ -773,7 +886,7 @@ export function SaveMoneyModal({
               </div>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <div className="space-y-6">
                 <div className="text-center">
                   <h3 className="text-white text-lg font-medium mb-2">Deposit {tokenInfos[form.token]?.symbol}</h3>
@@ -823,7 +936,7 @@ export function SaveMoneyModal({
               </div>
             )}
 
-            {currentStep === 5 && depositSuccess && (
+            {currentStep === 6 && depositSuccess && (
               <div className="space-y-6">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-4">
@@ -895,7 +1008,15 @@ export function SaveMoneyModal({
           isOpen={showOnrampModal}
           onClose={() => setShowOnrampModal(false)}
           selectedAsset={selectedTokenForOnramp}
-          assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || ""}
+          assetSymbol={(() => {
+            const symbol = tokenInfos[selectedTokenForOnramp]?.symbol || ""
+            console.log("[SaveMoneyModal] Passing to OnrampDepositModal:", {
+              selectedTokenForOnramp,
+              symbol,
+              tokenInfos: tokenInfos[selectedTokenForOnramp]
+            })
+            return symbol
+          })()}
           onSuccess={handleOnrampSuccess}
         />
       </DialogContent>

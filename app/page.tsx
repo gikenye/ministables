@@ -69,41 +69,70 @@ interface TokenInfo {
 const ActionCardsGrid = ({
   actionCards,
   onCardClick,
+  hasExistingLoans,
+  hasExistingSavings,
 }: {
   actionCards: ActionCard[];
   onCardClick: (id: string) => void;
+  hasExistingLoans: boolean;
+  hasExistingSavings: boolean;
 }) => {
   const renderCard = useCallback(
     (card: ActionCard) => {
       const IconComponent = card.icon;
-      const handleClick = () => onCardClick(card.id);
+      
+      // Determine if card should be disabled
+      const isDisabled = 
+        (card.id === "payback" && !hasExistingLoans) ||
+        (card.id === "withdraw" && !hasExistingSavings);
+      
+      const handleClick = () => {
+        if (!isDisabled) {
+          onCardClick(card.id);
+        }
+      };
 
       return (
         <Card
           key={card.id}
-          className="group cursor-pointer border border-[#2e4328] shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-[#21301c]/80 backdrop-blur-sm overflow-hidden"
+          className={`group border border-[#2e4328] shadow-md sm:shadow-lg transition-all duration-300 bg-[#21301c]/80 backdrop-blur-sm overflow-hidden ${
+            isDisabled 
+              ? "opacity-60 cursor-not-allowed" 
+              : "cursor-pointer hover:shadow-xl sm:hover:shadow-2xl transform hover:-translate-y-1 sm:hover:-translate-y-2"
+          }`}
           onClick={handleClick}
         >
           <CardContent className="p-3 sm:p-6 text-center relative">
             <div
-              className={`w-10 h-10 sm:w-16 sm:h-16 ${card.color} rounded-lg sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}
+              className={`w-10 h-10 sm:w-16 sm:h-16 ${card.color} rounded-lg sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-4 transition-transform duration-300 ${
+                !isDisabled ? "group-hover:scale-110" : ""
+              }`}
             >
               <IconComponent
                 className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`}
               />
             </div>
-            <h3 className="text-sm sm:text-lg font-semibold text-white mb-0.5 sm:mb-2">
-              {card.title}
-            </h3>
-            <p className="text-xs sm:text-sm text-[#a2c398] line-clamp-2">
+            <div className="flex items-center justify-center gap-2 mb-0.5 sm:mb-2">
+              <h3 className="text-sm sm:text-lg font-semibold text-white">
+                {card.title}
+              </h3>
+              {isDisabled && (
+                <div className="w-2 h-2 rounded-full bg-gray-500" />
+              )}
+            </div>
+            <p className={`text-xs sm:text-sm line-clamp-2 ${
+              isDisabled ? "text-gray-400" : "text-[#a2c398]"
+            }`}>
               {card.description}
             </p>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#54d22d]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
+            {!isDisabled && (
+              <div className="absolute inset-0 bg-gradient-to-t from-[#54d22d]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
+            )}
           </CardContent>
         </Card>
       );
     },
-    [onCardClick]
+    [onCardClick, hasExistingLoans, hasExistingSavings]
   );
 
   return (
@@ -649,16 +678,37 @@ export default function AppPage() {
     }
   };
 
+  // Helper functions to check user account status
+  const hasExistingLoans = useMemo(() => {
+    return Object.values(userBorrows).some(amount => BigInt(amount || "0") > BigInt(0));
+  }, [userBorrows]);
+
+  const hasExistingSavings = useMemo(() => {
+    return Object.values(userDeposits).some(amount => BigInt(amount || "0") > BigInt(0));
+  }, [userDeposits]);
+
   const handleCardClick = useCallback(
     (cardId: string) => {
       // Only route "history" to the dashboard
       if (cardId === "history") {
         router.push("/dashboard");
-      } else {
-        setActiveModal(cardId);
+        return;
       }
+      
+      // Check if user should see this modal based on their account status
+      if (cardId === "payback" && !hasExistingLoans) {
+        // Don't show payback modal if user has no loans
+        return;
+      }
+      
+      if (cardId === "withdraw" && !hasExistingSavings) {
+        // Don't show withdraw modal if user has no savings
+        return;
+      }
+      
+      setActiveModal(cardId);
     },
-    [router]
+    [router, hasExistingLoans, hasExistingSavings]
   );
 
   const actionCards = useMemo(
@@ -682,21 +732,25 @@ export default function AppPage() {
       {
         id: "withdraw",
         title: "Withdraw",
-        description: "directly to your mobile money wallet",
+        description: hasExistingSavings 
+          ? "directly to your mobile money wallet" 
+          : "Start saving first to withdraw",
         icon: ArrowUpRight,
-        color: "bg-[#2e4328]",
+        color: hasExistingSavings ? "bg-[#2e4328]" : "bg-gray-600",
         iconColor: "text-white",
       },
       {
         id: "payback",
         title: "Repay Loans",
-        description: "directly from your M-Pesa or Airtel Money",
+        description: hasExistingLoans 
+          ? "directly from your M-Pesa or Airtel Money" 
+          : "No active loans to repay",
         icon: ArrowUpRight,
-        color: "bg-[#21301c]",
+        color: hasExistingLoans ? "bg-[#21301c]" : "bg-gray-600",
         iconColor: "text-white",
       },
     ],
-    []
+    [hasExistingLoans, hasExistingSavings]
   );
 
   // Show error if chain configuration is invalid
@@ -812,6 +866,8 @@ export default function AppPage() {
           <ActionCardsGrid
             actionCards={actionCards}
             onCardClick={handleCardClick}
+            hasExistingLoans={hasExistingLoans}
+            hasExistingSavings={hasExistingSavings}
           />
         </div>
         <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/20 shadow-2xl">
@@ -849,7 +905,7 @@ export default function AppPage() {
         {/* <FooterNavigation currentPath="/" /> */}
       </main>
 
-      {/* Modals - Always available for exploration */}
+      {/* Modals - Conditionally shown based on user account status */}
       <SaveMoneyModal
         isOpen={activeModal === "save"}
         onClose={() => setActiveModal(null)}
@@ -866,24 +922,30 @@ export default function AppPage() {
         loading={loading}
         requiresAuth={!isConnected}
       />
-      <PayBackModal
-        isOpen={activeModal === "payback"}
-        onClose={() => setActiveModal(null)}
-        onPayBack={handlePayBack}
-        loading={loading}
-        userBalances={userBalances}
-        requiresAuth={!isConnected}
-      />
-      <FundsWithdrawalModal
-        isOpen={activeModal === "withdraw"}
-        onClose={() => setActiveModal(null)}
-        onWithdraw={handleWithdraw}
-        userDeposits={userDeposits}
-        depositLockEnds={depositLockEnds}
-        tokenInfos={tokenInfos}
-        loading={loading}
-        requiresAuth={!isConnected}
-      />
+      {/* Only show PayBackModal if user has existing loans */}
+      {hasExistingLoans && (
+        <PayBackModal
+          isOpen={activeModal === "payback"}
+          onClose={() => setActiveModal(null)}
+          onPayBack={handlePayBack}
+          loading={loading}
+          userBalances={userBalances}
+          requiresAuth={!isConnected}
+        />
+      )}
+      {/* Only show WithdrawModal if user has existing savings */}
+      {hasExistingSavings && (
+        <FundsWithdrawalModal
+          isOpen={activeModal === "withdraw"}
+          onClose={() => setActiveModal(null)}
+          onWithdraw={handleWithdraw}
+          userDeposits={userDeposits}
+          depositLockEnds={depositLockEnds}
+          tokenInfos={tokenInfos}
+          loading={loading}
+          requiresAuth={!isConnected}
+        />
+      )}
     </div>
   );
 }
