@@ -15,6 +15,8 @@ import {
   detectCountryFromPhone,
   type OnrampRequest,
 } from "@/lib/services/onrampService"
+import { getContractAddress } from "@/config/chainConfig"
+import { celo } from "thirdweb/chains"
 
 interface OnrampDepositModalProps {
   isOpen: boolean
@@ -226,6 +228,7 @@ export function OnrampDepositModal({
 
     try {
       const formattedPhone = formatPhoneNumber(form.phoneNumber, form.countryCode)
+      const minilendContractAddress = getContractAddress(celo.id)
 
       const onrampRequest: OnrampRequest = {
         shortcode: formattedPhone,
@@ -238,7 +241,12 @@ export function OnrampDepositModal({
         callback_url: `${window.location.origin}/api/onramp/callback`,
       }
 
-      const result = await onrampService.initiateOnramp(onrampRequest, form.countryCode)
+      const result = await onrampService.initiateOnramp(
+        onrampRequest, 
+        form.countryCode,
+        minilendContractAddress,
+        address
+      )
 
       if (result.success) {
         setTransaction({
@@ -251,7 +259,7 @@ export function OnrampDepositModal({
 
         toast({
           title: "Deposit Initiated",
-          description: "Please complete the payment on your phone to receive the tokens.",
+          description: "Complete payment on your phone. Assets will be automatically deposited to your Minilend account.",
         })
 
         // Call success callback if provided
@@ -506,10 +514,10 @@ export function OnrampDepositModal({
                       <div className="space-y-1">
                         <div>1. Confirm your deposit details</div>
                         <div>2. Complete payment on your phone</div>
-                        <div>3. Receive {assetSymbol} in your wallet</div>
+                        <div>3. Assets auto-deposited to Minilend</div>
                       </div>
                       <div className="text-[#54d22d] mt-2 text-xs">
-                        To: {address?.slice(0, 8)}...{address?.slice(-6)}
+                        Auto-deposit to your Minilend account
                       </div>
                     </div>
                   </div>

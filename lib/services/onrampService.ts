@@ -9,6 +9,12 @@ export interface OnrampRequest {
   address: string;
   callback_url?: string;
   type?: string;
+  callback_metadata?: {
+    auto_deposit?: boolean;
+    minilend_contract?: string;
+    user_address?: string;
+    lock_period?: string;
+  };
 }
 
 export interface OnrampResponse {
@@ -184,15 +190,30 @@ class OnrampService {
     }
   }
 
-  // Initiate onramp transaction
+  // Initiate onramp transaction with auto-deposit to Minilend
   async initiateOnramp(
     request: OnrampRequest,
-    currencyCode: string = "KES"
+    currencyCode: string = "KES",
+    minilendContractAddress?: string,
+    userAddress?: string
   ): Promise<OnrampResponse> {
     try {
+      // If Minilend contract address is provided, use it as destination for auto-deposit
+      const destinationAddress = minilendContractAddress || request.address;
+      
       const result = await this.makeRequest<any>("/initiate", "POST", {
         ...request,
+        address: destinationAddress,
         currency_code: currencyCode,
+        // Add metadata for auto-deposit callback
+        ...(minilendContractAddress && userAddress && {
+          callback_metadata: {
+            auto_deposit: true,
+            minilend_contract: minilendContractAddress,
+            user_address: userAddress,
+            lock_period: "2592000" // 30 days default
+          }
+        })
       });
 
       return {
@@ -227,30 +248,22 @@ class OnrampService {
 
   // Helper method to determine if an asset is supported for onramp
   isAssetSupportedForOnramp(asset: string, chain: string = "CELO"): boolean {
-    console.log("[OnrampService] Checking asset support:", { asset, chain });
-    console.log("[OnrampService] Available supported assets:", ONRAMP_SUPPORTED_ASSETS);
-    
     // Normalize chain name
     const normalizedChain = chain.toUpperCase();
-    console.log("[OnrampService] Normalized chain:", normalizedChain);
     
     // Check by chain name first
     let supportedAssets = ONRAMP_SUPPORTED_ASSETS[normalizedChain];
-    console.log("[OnrampService] Supported assets for chain name:", supportedAssets);
     
     // If not found by name, try by chain ID
     if (!supportedAssets) {
       const chainId = normalizedChain === "CELO" ? celo.id.toString() : 
                      normalizedChain === "SCROLL" ? scroll.id.toString() : 
                      normalizedChain;
-      console.log("[OnrampService] Trying chain ID:", chainId);
       supportedAssets = ONRAMP_SUPPORTED_ASSETS[chainId];
-      console.log("[OnrampService] Supported assets for chain ID:", supportedAssets);
     }
     
     const normalizedAsset = asset.toUpperCase();
     const isSupported = supportedAssets?.includes(normalizedAsset) || false;
-    console.log("[OnrampService] Final result:", { normalizedAsset, supportedAssets, isSupported });
     
     return isSupported;
   }

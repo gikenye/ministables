@@ -451,8 +451,13 @@ export function SaveMoneyModal({
 
   const handleOnrampSuccess = () => {
     setShowOnrampModal(false)
-    // For M-Pesa, continue to asset selection
-    setCurrentStep(2)
+    // For M-Pesa with auto-deposit, show success directly
+    setDepositSuccess({
+      token: form.token,
+      amount: "Auto-deposited",
+      lockPeriod: "2592000", // 30 days default
+    })
+    setCurrentStep(6)
   }
 
   const hasZeroBalance = () => {
@@ -943,7 +948,9 @@ export function SaveMoneyModal({
                     <Check className="w-8 h-8 text-[#162013]" />
                   </div>
                   <h3 className="text-white text-lg font-medium mb-2">Deposit Successful!</h3>
-                  <p className="text-[#a2c398] text-sm">Your funds have been deposited and are now earning rewards</p>
+                  <p className="text-[#a2c398] text-sm">
+                    {depositMethod === "mpesa" ? "Your M-Pesa payment will be auto-deposited to earn rewards" : "Your funds have been deposited and are now earning rewards"}
+                  </p>
                 </div>
 
                 <div className="bg-[#21301c] rounded-xl p-4 space-y-4">
