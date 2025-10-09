@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getDatabase } from "@/lib/mongodb";
 
 const KES_COLLECT = process.env.KES_COLLECT;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
@@ -13,13 +14,14 @@ export async function POST(request: NextRequest) {
       amount,
       mobile_network = "Safaricom",
       callback_url,
+      wallet_address,
     } = body;
 
-    if (!shortcode || !amount || !mobile_network || !callback_url) {
+    if (!shortcode || !amount || !mobile_network || !callback_url || !wallet_address) {
       console.log("❌ KES collection failed - Missing required fields");
       return NextResponse.json(
         {
-          error: "Shortcode, amount, mobile_network, are required",
+          error: "Shortcode, amount, mobile_network, callback_url, and wallet_address are required",
         },
         { status: 400 }
       );
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
       amount,
       mobile_network,
       callback_url,
+      wallet_address,
     };
 
     console.log("📤 Onramp request payload:", requestBody);
@@ -103,6 +106,36 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("✅ fiat collection initiated successfully:", data);
+    
+    // Store initial transaction with wallet address
+    try {
+      const db = await getDatabase();
+      const transactionCode = data?.data?.transaction_code;
+      
+      if (transactionCode) {
+        await db.collection("kes_transactions").updateOne(
+          { transaction_code: transactionCode },
+          {
+            $set: {
+              transaction_code: transactionCode,
+              wallet_address,
+              amount,
+              shortcode,
+              mobile_network,
+              status: "INITIATED",
+              created_at: new Date(),
+              updated_at: new Date()
+            }
+          },
+          { upsert: true }
+        );
+        console.log("💾 Initial transaction stored:", transactionCode);
+      }
+    } catch (dbError) {
+      console.error("❌ Failed to store initial transaction:", dbError);
+      // Don't fail the API call if DB storage fails
+    }
+    
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
     console.error("❌ fiat collection initiation error details:", {
