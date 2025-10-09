@@ -45,10 +45,14 @@ export async function POST(request: NextRequest) {
     try {
       const db = await getDatabase();
       
-      // If wallet_address not in callback, get it from original transaction
-      if (!recipientWallet && transaction_code) {
-        const originalTx = await db.collection("kes_transactions").findOne({ transaction_code });
-        recipientWallet = originalTx?.wallet_address;
+      // Get missing data from original transaction
+      let originalAmount = amount;
+      if (!recipientWallet || !originalAmount) {
+        if (transaction_code) {
+          const originalTx = await db.collection("kes_transactions").findOne({ transaction_code });
+          if (!recipientWallet) recipientWallet = originalTx?.wallet_address;
+          if (!originalAmount) originalAmount = originalTx?.amount;
+        }
       }
 
       await db.collection("kes_transactions").updateOne(
@@ -82,11 +86,14 @@ export async function POST(request: NextRequest) {
       console.log("💾 Transaction saved:", transactionKey);
       
       // Handle successful payment - disburse USDC
-      if (status?.toUpperCase() === "SUCCESS" || status?.toUpperCase() === "COMPLETED") {
-        if (recipientWallet && amount) {
+      if (status?.toUpperCase() === "SUCCESS" || status?.toUpperCase() === "COMPLETED" || status?.toUpperCase() === "COMPLETE") {
+        console.log("💰 Payment successful, checking disbursement conditions...");
+        console.log("🔍 Disbursement check:", { recipientWallet, amount: originalAmount });
+        
+        if (recipientWallet && originalAmount) {
           try {
             console.log("🚀 Initiating USDC disbursement...");
-            const disbursementResult = await disburseuSDC(recipientWallet, amount);
+            const disbursementResult = await disburseuSDC(recipientWallet, originalAmount);
             
             // Update transaction with disbursement info
             await db.collection("kes_transactions").updateOne(
@@ -119,8 +126,10 @@ export async function POST(request: NextRequest) {
             );
           }
         } else {
-          console.warn("⚠️ Cannot disburse: missing wallet address or amount");
+          console.warn("⚠️ Cannot disburse: missing wallet address or amount", { recipientWallet, amount: originalAmount });
         }
+      } else {
+        console.log("🔄 Status not eligible for disbursement:", status?.toUpperCase());
       }
 
       // Emit real-time event
