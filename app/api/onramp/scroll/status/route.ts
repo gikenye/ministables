@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 import { eventService } from "@/lib/services/eventService";
+import { disburseuSDC } from "@/lib/services/disbursementService";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
       reference,
       message,
       public_name,
+      wallet_address,
     } = body;
 
     // Log the transaction details
@@ -36,9 +38,18 @@ export async function POST(request: NextRequest) {
       status
     );
 
+    // Get wallet address from original transaction if not in callback
+    let recipientWallet = wallet_address;
+    
     // Store in database with KES-specific fields
     try {
       const db = await getDatabase();
+      
+      // If wallet_address not in callback, get it from original transaction
+      if (!recipientWallet && transaction_code) {
+        const originalTx = await db.collection("kes_transactions").findOne({ transaction_code });
+        recipientWallet = originalTx?.wallet_address;
+      }
 
       await db.collection("kes_transactions").updateOne(
         { transaction_key: transactionKey },
@@ -55,6 +66,7 @@ export async function POST(request: NextRequest) {
             reference,
             message,
             public_name,
+            wallet_address: recipientWallet,
             failure_reason: status?.toUpperCase() === "FAILED" ? message : null,
             updated_at: new Date(),
             callback_received_at: new Date(),
@@ -68,6 +80,48 @@ export async function POST(request: NextRequest) {
       );
 
       console.log("💾 Transaction saved:", transactionKey);
+      
+      // Handle successful payment - disburse USDC
+      if (status?.toUpperCase() === "SUCCESS" || status?.toUpperCase() === "COMPLETED") {
+        if (recipientWallet && amount) {
+          try {
+            console.log("🚀 Initiating USDC disbursement...");
+            const disbursementResult = await disburseuSDC(recipientWallet, amount);
+            
+            // Update transaction with disbursement info
+            await db.collection("kes_transactions").updateOne(
+              { transaction_key: transactionKey },
+              {
+                $set: {
+                  disbursement_status: "SUCCESS",
+                  disbursement_tx_hash: disbursementResult.transactionHash,
+                  usdc_amount: disbursementResult.usdcAmount,
+                  disbursement_completed_at: new Date()
+                }
+              }
+            );
+            
+            console.log("✅ USDC disbursement completed:", disbursementResult.transactionHash);
+            
+          } catch (disbursementError) {
+            console.error("❌ USDC disbursement failed:", disbursementError);
+            
+            // Update transaction with disbursement failure
+            await db.collection("kes_transactions").updateOne(
+              { transaction_key: transactionKey },
+              {
+                $set: {
+                  disbursement_status: "FAILED",
+                  disbursement_error: disbursementError instanceof Error ? disbursementError.message : String(disbursementError),
+                  disbursement_failed_at: new Date()
+                }
+              }
+            );
+          }
+        } else {
+          console.warn("⚠️ Cannot disburse: missing wallet address or amount");
+        }
+      }
 
       // Emit real-time event
       eventService.emit("kes_transaction_update", {
@@ -76,6 +130,7 @@ export async function POST(request: NextRequest) {
         status: status?.toUpperCase() || "PENDING",
         amount,
         phone_number,
+        wallet_address: recipientWallet,
       });
     } catch (dbError) {
       console.error("❌ Database error:", dbError);
