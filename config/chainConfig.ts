@@ -59,12 +59,12 @@ export const TOKENS = {
       decimals: 6,
       icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
     },
-    {
-      address: "0x5300000000000000000000000000000000000004",
-      symbol: "WETH",
-      decimals: 18,
-      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
-    },
+    // {
+    //   address: "0x5300000000000000000000000000000000000004",
+    //   symbol: "WETH",
+    //   decimals: 18,
+    //   icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    // },
   ],
 };
 
