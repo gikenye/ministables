@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 interface ISupplierVault {
@@ -211,11 +211,8 @@ contract SavingsCollateralBridge is ReentrancyGuard, AccessControl {
             return 0;
         }
         
-        // Group by token
-        mapping(address => uint256) storage tokenAmounts;
-        
+        // Calculate per deposit
         for (uint256 i = 0; i < pledged.length; i++) {
-            // Since we can't use mapping in memory, we'll calculate per deposit
             (uint256 tokenPrice, uint256 timestamp) = oracles.getMedianRate(pledged[i].token);
             
             if (tokenPrice > 0 && timestamp >= block.timestamp - 1 hours) {
