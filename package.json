@@ -8,7 +8,20 @@
     "lint": "next lint",
     "start": "next start",
     "oracle:push": "node scripts/oracle-push.cjs",
-    "oracle:read": "node scripts/oracle-read.cjs"
+    "oracle:read": "node scripts/oracle-read.cjs",
+    "worker:dev": "node services/disbursement-worker.js",
+    "worker:start": "pm2 start ecosystem.config.json",
+    "worker:stop": "pm2 stop disbursement-worker",
+    "worker:restart": "pm2 restart disbursement-worker",
+    "worker:logs": "pm2 logs disbursement-worker",
+    "worker:status": "pm2 status disbursement-worker",
+    "worker:deploy": "bash scripts/deploy-worker.sh",
+    "balance:check": "node scripts/check-balance.js",
+    "config:validate": "node scripts/validate-config.js",
+    "queue:status": "node scripts/queue-cli.js status",
+    "queue:list": "node scripts/queue-cli.js list",
+    "queue:retry-all": "node scripts/queue-cli.js retry-all",
+    "queue:reset-stuck": "node scripts/queue-cli.js reset-stuck"
   },
   "dependencies": {
     "@auth/core": "^0.40.0",
