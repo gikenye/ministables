@@ -32,3 +32,8 @@ minilend-thirdweb.txt
 thirdweb-api.json
 thirdweb-api.yaml
 ROADMAP.md
+
+# Worker logs
+/logs/
+*.log
+.pm2/
