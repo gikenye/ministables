@@ -61,9 +61,10 @@ export const SUPPORTED_COUNTRIES = {
 } as const;
 
 // Supported assets by chain for onramp
-import { CHAINS } from "@/config/chainConfig";
+import { CHAINS, getVaultAddress as getVaultAddr } from "@/config/chainConfig";
 
-const defaultChainName = (CHAINS && CHAINS.length > 0 && CHAINS[0].name) ? (CHAINS[0].name as string) : "CELO";
+const celoChain = CHAINS.find(c => c.name?.toUpperCase() === "CELO");
+const defaultChainName = celoChain?.name || "Celo";
 
 export const ONRAMP_SUPPORTED_ASSETS =  {
   [defaultChainName.toUpperCase()]: ["cUSD", "USDC", "USDT"],
@@ -80,7 +81,7 @@ export const ASSET_CHAIN_MAPPING = {
 
 // Limits by country
 export const COUNTRY_LIMITS = {
-  KES: { min: 20, max: 250000 },
+  KES: { min: 100, max: 250000 },
   UGX: { min: 500, max: 5000000 },
   CDF: { min: 100, max: 1000000 }, // Estimated limits for Congo
 } as const;
@@ -156,7 +157,7 @@ class OnrampService {
 
       return {
         success: true,
-        name: result.data?.name || result.data?.account_name,
+        name: result.data?.data?.public_name || result.data?.name || result.data?.account_name,
         message: "Validation successful",
       };
     } catch (error: any) {
@@ -170,12 +171,14 @@ class OnrampService {
   // Initiate onramp transaction
   async initiateOnramp(
     request: OnrampRequest,
-    currencyCode: string = "KES"
+    currencyCode: string = "KES",
+    vaultAddress?: string
   ): Promise<OnrampResponse> {
     try {
       const result = await this.makeRequest<any>("/initiate", "POST", {
         ...request,
         currency_code: currencyCode,
+        vault_address: vaultAddress,
       });
 
       return {
@@ -202,7 +205,7 @@ class OnrampService {
         currency: currencyCode,
       });
 
-      return result.data || result;
+      return result.data?.data || result.data || result;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -210,18 +213,39 @@ class OnrampService {
 
   // Helper method to determine if an asset is supported for onramp
   isAssetSupportedForOnramp(asset: string, chain: string = defaultChainName.toUpperCase()): boolean {
+    console.log("[onrampService] isAssetSupportedForOnramp called:", {
+      asset,
+      chain,
+      ONRAMP_SUPPORTED_ASSETS,
+    })
     const supportedAssets = ONRAMP_SUPPORTED_ASSETS[chain as keyof typeof ONRAMP_SUPPORTED_ASSETS];
-    return supportedAssets?.includes(asset as any) || false;
+    console.log("[onrampService] Supported assets for chain:", supportedAssets)
+    const isSupported = supportedAssets?.includes(asset as any) || false;
+    console.log("[onrampService] Asset supported?", isSupported)
+    return isSupported;
   }
 
   // Helper method to get the appropriate chain for an asset
   getChainForAsset(asset: string): string {
-    return ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] || defaultChainName.toUpperCase();
+    console.log("[onrampService] getChainForAsset called:", {
+      asset,
+      ASSET_CHAIN_MAPPING,
+      defaultChainName,
+    })
+    const chain = ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] || defaultChainName.toUpperCase();
+    console.log("[onrampService] Resolved chain:", chain)
+    return chain;
   }
 
   // Helper method to get country limits
   getCountryLimits(currencyCode: string) {
     return COUNTRY_LIMITS[currencyCode as keyof typeof COUNTRY_LIMITS] || { min: 1, max: 1000000 };
+  }
+
+  // Helper method to get vault address
+  getVaultAddress(chainId: number, tokenSymbol: string): string {
+    const { getVaultAddress } = require('@/config/chainConfig');
+    return getVaultAddress(chainId, tokenSymbol);
   }
 }
 

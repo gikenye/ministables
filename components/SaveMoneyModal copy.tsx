@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Check, AlertCircle, Loader2, Plus, Copy } from "lucide-react";
+import { ArrowLeft, Check, AlertCircle, Loader2, Plus } from "lucide-react";
 import {
   useActiveAccount,
   useSendTransaction,
@@ -96,20 +96,7 @@ export function SaveMoneyModal({
     }
     return tokens.map((t) => t.address);
   }, [tokens, chain?.id]);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [depositMethod, setDepositMethod] = useState<"mpesa" | "wallet" | "">(
-    ""
-  );
-
-  // Debug log to check current step
-  if (process.env.NODE_ENV === "development") {
-    console.log(
-      "[SaveMoneyModal] Current step:",
-      currentStep,
-      "Deposit method:",
-      depositMethod
-    );
-  }
+  const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState({
     token: "",
     amount: "",
@@ -131,9 +118,6 @@ export function SaveMoneyModal({
   } | null>(null);
   const [baseAPY, setBaseAPY] = useState<number>(0);
   const [apyLoading, setApyLoading] = useState<boolean>(false);
-  const [tokenAPYs, setTokenAPYs] = useState<Record<string, number>>({});
-  const [fetchingTokenAPYs, setFetchingTokenAPYs] = useState<boolean>(false);
-  const [copied, setCopied] = useState(false);
 
   // Use the working setup's wallet balance hook
   const { data: walletBalanceData, isLoading: isBalanceLoading } =
@@ -150,18 +134,13 @@ export function SaveMoneyModal({
 
   useEffect(() => {
     if (isOpen) {
-      // Force reset all state
-      setCurrentStep(0);
-      setDepositMethod("");
-      setForm({ token: "", amount: "", lockPeriod: "0" });
+      setCurrentStep(1);
       setError(null);
       setIsSaving(false);
       setTransactionStatus(null);
       setDepositSuccess(null);
       setBaseAPY(0);
       setApyLoading(false);
-      setShowOnrampModal(false);
-      setSelectedTokenForOnramp("");
     }
   }, [isOpen]);
 
@@ -169,8 +148,7 @@ export function SaveMoneyModal({
   // or balances from the previously selected chain.
   useEffect(() => {
     if (isOpen) {
-      setCurrentStep(0);
-      setDepositMethod("");
+      setCurrentStep(1);
       setError(null);
       setIsSaving(false);
       setTransactionStatus(null);
@@ -189,42 +167,12 @@ export function SaveMoneyModal({
       const tokenSymbol = tokenInfos[form.token]?.symbol;
       if (tokenSymbol) {
         setApyLoading(true);
-        aaveRatesService
-          .getAPY(chain.id, tokenSymbol)
+        aaveRatesService.getAPY(chain.id, tokenSymbol)
           .then(setBaseAPY)
           .finally(() => setApyLoading(false));
       }
     }
   }, [form.token, chain?.id, tokenInfos]);
-
-  // Fetch APYs for all tokens when on step 1
-  useEffect(() => {
-    if (
-      currentStep === 1 &&
-      chain?.id &&
-      supportedStablecoins.length > 0 &&
-      !fetchingTokenAPYs
-    ) {
-      setFetchingTokenAPYs(true);
-      const fetchAllAPYs = async () => {
-        const apys: Record<string, number> = {};
-        for (const token of supportedStablecoins) {
-          const symbol = tokenInfos[token]?.symbol;
-          if (symbol) {
-            try {
-              const apy = await aaveRatesService.getAPY(chain.id, symbol);
-              apys[token] = apy;
-            } catch (error) {
-              apys[token] = 0;
-            }
-          }
-        }
-        setTokenAPYs(apys);
-        setFetchingTokenAPYs(false);
-      };
-      fetchAllAPYs();
-    }
-  }, [currentStep, chain?.id]);
 
   const prepareDepositTransaction = async () => {
     if (!form.token || !form.amount || !form.lockPeriod || !account) {
@@ -542,8 +490,7 @@ export function SaveMoneyModal({
 
   const handleMakeAnotherDeposit = () => {
     setDepositSuccess(null);
-    setCurrentStep(0);
-    setDepositMethod("");
+    setCurrentStep(1);
     setForm({
       token: "",
       amount: "",
@@ -559,7 +506,6 @@ export function SaveMoneyModal({
       amount: "",
       lockPeriod: "0",
     });
-    setDepositMethod("");
     setDepositSuccess(null);
     onClose();
   };
@@ -597,8 +543,6 @@ export function SaveMoneyModal({
 
   const canProceedToStep = (step: number) => {
     switch (step) {
-      case 1:
-        return depositMethod !== "";
       case 2:
         return form.token !== "";
       case 3:
@@ -621,7 +565,7 @@ export function SaveMoneyModal({
   };
 
   const prevStep = () => {
-    if (currentStep > 0) {
+    if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   };
@@ -630,13 +574,8 @@ export function SaveMoneyModal({
     if (!form.token || !chain?.id) return "0.00%";
     const tokenSymbol = tokenInfos[form.token]?.symbol;
     if (!tokenSymbol) return "0.00%";
-
-    return aaveRatesService.getAPYWithBoost(
-      chain.id,
-      tokenSymbol,
-      period,
-      baseAPY
-    );
+    
+    return aaveRatesService.getAPYWithBoost(chain.id, tokenSymbol, period, baseAPY);
   };
 
   const handleOnrampSuccess = () => {
@@ -678,7 +617,7 @@ export function SaveMoneyModal({
             lock period, and confirming your deposit.
           </DialogDescription>
           <div className="flex items-center justify-between pt-5 pb-3">
-            {currentStep > 0 && currentStep !== 5 && (
+            {currentStep > 1 && currentStep !== 5 && (
               <button
                 onClick={prevStep}
                 className="p-1 text-[#a2c398] hover:text-white transition-colors"
@@ -688,15 +627,14 @@ export function SaveMoneyModal({
             )}
             <div className="flex-1 text-center">
               <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">
-                {currentStep === 0 && "How to Deposit"}
-                {currentStep === 1 && "Choose Asset"}
+                {currentStep === 1 && ""}
                 {currentStep === 2 && "Enter Amount"}
                 {currentStep === 3 && "Lock Period"}
                 {currentStep === 4 && "Review"}
                 {currentStep === 5 && "Success!"}
               </h1>
               <div className="flex justify-center gap-2 mt-2">
-                {[0, 1, 2, 3, 4, 5].map((step) => (
+                {[1, 2, 3, 4, 5].map((step) => (
                   <div
                     key={step}
                     className={`min-w-8 h-7 px-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors ${
@@ -707,12 +645,12 @@ export function SaveMoneyModal({
                           : "bg-[#21301c] text-[#a2c398] border border-[#426039]"
                     }`}
                   >
-                    {step === 5 ? <Check className="w-4 h-4" /> : step + 1}
+                    {step === 5 ? <Check className="w-4 h-4" /> : step}
                   </div>
                 ))}
               </div>
             </div>
-            {currentStep > 0 && currentStep !== 5 && <div className="w-7" />}
+            {currentStep > 1 && currentStep !== 5 && <div className="w-7" />}
           </div>
 
           {error && (
@@ -729,72 +667,17 @@ export function SaveMoneyModal({
           )}
 
           <div className="min-h-[300px]">
-            {currentStep === 0 && (
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDepositMethod("mpesa");
-                      setTimeout(nextStep, 300);
-                    }}
-                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all border ${
-                      depositMethod === "mpesa"
-                        ? "bg-[#8DA33B] text-[#162013] border-[#54d22d] scale-[0.98]"
-                        : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
-                    }`}
-                  >
-                    <img
-                      src="https://img.icons8.com/color/48/mpesa.png"
-                      alt="M-Pesa"
-                      className="w-10 h-10"
-                    />
-                    <div className="flex-1 text-left">
-                      <div className="font-medium">M-Pesa</div>
-                      <div
-                        className={`text-sm ${depositMethod === "mpesa" ? "text-[#162013]/70" : "text-[#a2c398]"}`}
-                      >
-                        Deposit directly from M-Pesa
-                      </div>
-                    </div>
-                    {depositMethod === "mpesa" && <Check className="w-5 h-5" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDepositMethod("wallet");
-                      setTimeout(nextStep, 300);
-                    }}
-                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all border ${
-                      depositMethod === "wallet"
-                        ? "bg-[#54d22d] text-[#162013] border-[#54d22d] scale-[0.98]"
-                        : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
-                    }`}
-                  >
-                    <img
-                      src="https://images.ctfassets.net/clixtyxoaeas/ZBdtfds3uyHpY4r7MWzCL/d3f307181b6bf92b0d886297f409066a/mUSD-hero.png"
-                      alt="Wallet"
-                      className="w-10 h-10 rounded-lg object-cover"
-                    />
-                    <div className="flex-1 text-left">
-                      <div className="font-medium">Wallet or Exchange</div>
-                      <div
-                        className={`text-sm ${depositMethod === "wallet" ? "text-[#162013]/70" : "text-[#a2c398]"}`}
-                      >
-                        Directly to USDT, USDC or cUSD
-                      </div>
-                    </div>
-                    {depositMethod === "wallet" && (
-                      <Check className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
             {currentStep === 1 && (
               <div className="space-y-6">
+                <div className="text-center">
+                  <h3 className="text-white text-lg font-medium mb-2">
+                    Choose asset to deposit
+                  </h3>
+                  <p className="text-[#a2c398] text-sm">
+                    Select which token you'd like to deposit
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   {supportedStablecoins.map((token) => {
                     const symbol = tokenInfos[token]?.symbol || "Unknown";
@@ -832,7 +715,7 @@ export function SaveMoneyModal({
                               )}
                               <div className="flex-1">
                                 <div className="font-medium">{symbol}</div>
-                                {isSelected && depositMethod === "wallet" && (
+                                {isSelected && (
                                   <div
                                     className={`text-sm ${isSelected ? "text-[#162013]/70" : "text-[#a2c398]"}`}
                                   >
@@ -847,29 +730,6 @@ export function SaveMoneyModal({
                                   </div>
                                 )}
                               </div>
-                              {!isSelected && (
-                                <div className="text-right">
-                                  {tokenAPYs[token] !== undefined ? (
-                                    <div
-                                      className={`text-lg font-bold ${isSelected ? "text-[#162013]" : "text-[#54d22d]"}`}
-                                    >
-                                      {aaveRatesService.getAPYWithBoost(
-                                        chain.id,
-                                        symbol,
-                                        "15552000",
-                                        tokenAPYs[token]
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <Loader2 className="w-4 h-4 animate-spin text-[#54d22d]" />
-                                  )}
-                                  <div
-                                    className={`text-xs ${isSelected ? "text-[#162013]/70" : "text-[#a2c398]"}`}
-                                  >
-                                    APY
-                                  </div>
-                                </div>
-                              )}
                               {isSelected && (
                                 <Check className="w-5 h-5 ml-auto" />
                               )}
@@ -880,49 +740,50 @@ export function SaveMoneyModal({
                             <div
                               className={`px-3 pb-3 ${isSelected ? "text-[#162013]" : "text-white"}`}
                             >
-                              {depositMethod === "mpesa" ? (
-                                <button
-                                  onClick={() => {
-                                    console.log("[SaveMoneyModal] Opening onramp modal:", {
-                                      tokenAddress: token,
-                                      tokenSymbol: symbol,
-                                    })
-                                    setSelectedTokenForOnramp(token);
-                                    setShowOnrampModal(true);
-                                  }}
-                                  className="w-full h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
-                                >
-                                  Continue with {symbol}
-                                </button>
+                              {zeroBalance ? (
+                                onrampSupported ? (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedTokenForOnramp(token);
+                                        setShowOnrampModal(true);
+                                      }}
+                                      className="flex-1 h-9 bg-[#162013] text-white text-xs font-medium rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-1 md:h-8"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                      Get {symbol}
+                                    </button>
+                                    <button
+                                      onClick={nextStep}
+                                      className="px-3 h-9 bg-transparent border border-current text-xs rounded-lg hover:opacity-80 transition-colors md:h-8"
+                                    >
+                                      Continue
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs opacity-80 flex-1">
+                                      No {symbol} balance
+                                    </span>
+                                    <button
+                                      onClick={nextStep}
+                                      className="px-3 h-9 bg-transparent border border-current text-xs rounded-lg hover:opacity-80 transition-colors md:h-8"
+                                    >
+                                      Continue anyway
+                                    </button>
+                                  </div>
+                                )
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(account?.address || "");
-                                      setCopied(true);
-                                      setTimeout(() => setCopied(false), 2000);
-                                    }}
-                                    className="flex-1 h-9 bg-transparent border border-current text-xs rounded-lg hover:opacity-80 transition-colors md:h-8 flex items-center justify-center gap-1.5"
-                                  >
-                                    {copied ? (
-                                      <>
-                                        <Check className="w-3 h-3 animate-in fade-in duration-200" />
-                                        Copied!
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy className="w-3 h-3" />
-                                        {account?.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Copy"}
-                                      </>
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={nextStep}
-                                    className="flex-1 h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
-                                  >
-                                    Continue
-                                  </button>
-                                </div>
+                                showBalance && (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={nextStep}
+                                      className="w-full h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
+                                    >
+                                      Continue with {symbol}
+                                    </button>
+                                  </div>
+                                )
                               )}
                             </div>
                           )}
@@ -937,6 +798,9 @@ export function SaveMoneyModal({
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="text-center">
+                  <h3 className="text-white text-lg font-medium mb-2">
+                    How much?
+                  </h3>
                   <p className="text-[#a2c398] text-sm">
                     {isBalanceLoading ? (
                       <span className="flex items-center justify-center gap-1">
@@ -1228,7 +1092,7 @@ export function SaveMoneyModal({
         <OnrampDepositModal
           isOpen={showOnrampModal}
           onClose={() => setShowOnrampModal(false)}
-          selectedAsset={tokenInfos[selectedTokenForOnramp]?.symbol || ""}
+          selectedAsset={selectedTokenForOnramp}
           assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || ""}
           onSuccess={handleOnrampSuccess}
         />
