@@ -6,101 +6,57 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Smartphone, AlertCircle } from "lucide-react"
-import { formatAmount } from "@/lib/utils"
-import { MobileMoneyWithdrawModal } from "./EnhancedMobileMoneyWithdrawModal"
-import { offrampService } from "@/lib/services/offrampService"
-import { getExplorerUrl } from "@/config/chainConfig"
+import { ArrowLeft, AlertCircle } from "lucide-react"
+import { useChain } from "@/components/ChainProvider"
+import { VaultPosition } from "@/lib/services/vaultService"
 
 interface FundsWithdrawalModalProps {
   isOpen: boolean
   onClose: () => void
-  onWithdraw: (token: string, amount: string) => Promise<void>
-  userDeposits: Record<string, string>
-  depositLockEnds: Record<string, number>
-  tokenInfos: Record<string, { symbol: string; decimals: number }>
+  onWithdraw: (tokenSymbol: string, depositIds: number[]) => Promise<void>
+  vaultPositions: VaultPosition[]
+  tokenInfos: Record<string, { symbol: string; decimals: number; icon?: string }>
   loading: boolean
-  userAddress?: string
-  getWithdrawableAmount?: (token: string) => Promise<string>
 }
 
 export function FundsWithdrawalModal({
   isOpen,
   onClose,
   onWithdraw,
-  userDeposits,
-  depositLockEnds,
+  vaultPositions,
   tokenInfos,
   loading,
-  userAddress,
-  getWithdrawableAmount: getActualWithdrawableAmount,
 }: FundsWithdrawalModalProps) {
   const [currentStep, setCurrentStep] = useState(1)
-  const [form, setForm] = useState({
-    token: "",
-    amount: "",
-  })
+  const [selectedToken, setSelectedToken] = useState<string>("")
+  const [selectedDepositIds, setSelectedDepositIds] = useState<number[]>([])
 
   const [error, setError] = useState<string | null>(null)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
-  const [showMobileMoneyModal, setShowMobileMoneyModal] = useState(false)
-
-  const { mutateAsync: sendTransaction, isPending: isTransactionPending } = useSendTransaction()
 
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1)
-      setForm({ token: "", amount: "" })
+      setSelectedToken("")
+      setSelectedDepositIds([])
       setError(null)
     }
   }, [isOpen])
 
   const handleWithdraw = async () => {
-    if (!form.token || !form.amount) return
-
-    const withdrawableAmount = getWithdrawableAmount(form.token)
-    const maxWithdrawable = Number.parseFloat(formatAmount(withdrawableAmount, tokenInfos[form.token]?.decimals || 18))
-    const requestedAmount = Number.parseFloat(form.amount)
-
-    if (requestedAmount > maxWithdrawable) {
-      setError(
-        `Cannot withdraw ${form.amount} ${tokenInfos[form.token]?.symbol}. Maximum available: ${maxWithdrawable.toFixed(6)}`,
-      )
-      return
-    }
-
-    if (withdrawableAmount === "0") {
-      setError("No funds available. Your deposits may still be locked.")
-      return
-    }
+    if (!selectedToken || selectedDepositIds.length === 0) return
 
     setError(null)
     setIsWithdrawing(true)
 
     try {
-      await onWithdraw(form.token, form.amount)
-      setForm({ token: "", amount: "" })
+      await onWithdraw(selectedToken, selectedDepositIds)
+      setSelectedToken("")
+      setSelectedDepositIds([])
       onClose()
     } catch (err: any) {
       console.error("Withdrawal error:", err)
-
-      let errorMessage = "Transaction failed. Please try again."
-
-      if (err.message?.includes("MetaMask") || err.message?.includes("extension not found")) {
-        errorMessage = "Wallet connection failed. Please ensure your wallet is installed and unlocked."
-      } else if (err.message?.includes("network") || err.message?.includes("RPC")) {
-        errorMessage = "Network error. Please check your connection and try again."
-      } else if (err.message?.includes("E4") || err.message?.includes("Insufficient matured deposit balance")) {
-        errorMessage = `Some ${tokenInfos[form.token]?.symbol} deposits may still be locked.`
-      } else if (err.message?.includes("E2") || err.message?.includes("Repay loans")) {
-        errorMessage = "Please repay outstanding loans before withdrawing."
-      } else if (err.message?.includes("E5") || err.message?.includes("Insufficient contract reserve")) {
-        errorMessage = "Insufficient liquidity. Please try again later."
-      } else if (err.message?.includes("rejected") || err.message?.includes("denied")) {
-        errorMessage = "Transaction cancelled by user."
-      }
-
-      setError(errorMessage)
+      setError(err.message || "Transaction failed. Please try again.")
     } finally {
       setIsWithdrawing(false)
     }
@@ -115,33 +71,14 @@ export function FundsWithdrawalModal({
     return new Date(timestamp * 1000).toLocaleDateString()
   }
 
-  const supportedStablecoins = useMemo(() => Object.keys(tokenInfos), [tokenInfos])
-
-  const getWithdrawableAmount = useCallback(
-    (tokenAddress: string) => {
-      const deposit = userDeposits[tokenAddress] || "0"
-      const lockEnd = depositLockEnds[tokenAddress] || 0
-
-      if (deposit === "0") return "0"
-      if (isLocked(lockEnd)) return "0"
-
-      return deposit
-    },
-    [userDeposits, depositLockEnds],
+  const availablePositions = useMemo(
+    () => vaultPositions.filter((pos) => pos.deposits.length > 0),
+    [vaultPositions],
   )
 
-  const hasPotentialMixedLocks = useCallback(
-    (tokenAddress: string) => {
-      const deposit = userDeposits[tokenAddress] || "0"
-      const lockEnd = depositLockEnds[tokenAddress] || 0
-      return deposit !== "0" && lockEnd > 0
-    },
-    [userDeposits, depositLockEnds],
-  )
-
-  const availableTokens = useMemo(
-    () => supportedStablecoins.filter((token) => userDeposits[token] && userDeposits[token] !== "0"),
-    [supportedStablecoins, userDeposits],
+  const selectedPosition = useMemo(
+    () => vaultPositions.find((pos) => pos.tokenSymbol === selectedToken),
+    [vaultPositions, selectedToken],
   )
 
   const goToNextStep = () => {
@@ -158,8 +95,8 @@ export function FundsWithdrawalModal({
     }
   }
 
-  const canProceedToStep2 = form.token && getWithdrawableAmount(form.token) !== "0"
-  const canProceedToStep3 = canProceedToStep2 && form.amount && Number.parseFloat(form.amount) > 0
+  const canProceedToStep2 = selectedToken && selectedPosition && selectedPosition.deposits.some(d => d.canWithdraw)
+  const canProceedToStep3 = canProceedToStep2 && selectedDepositIds.length > 0
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -217,66 +154,50 @@ export function FundsWithdrawalModal({
                 <p className="text-[#a2c398] text-sm">Choose which asset you want to withdraw</p>
               </div>
 
-              {availableTokens.length === 0 ? (
+              {availablePositions.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-[#a2c398] text-sm">No funds available to withdraw</div>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {availableTokens.map((token) => {
-                    const tokenInfo = tokenInfos[token]
-                    const withdrawable = getWithdrawableAmount(token)
-                    const totalDeposit = userDeposits[token] || "0"
-                    const formattedWithdrawable = formatAmount(withdrawable, tokenInfo?.decimals || 18)
-                    const formattedTotal = formatAmount(totalDeposit, tokenInfo?.decimals || 18)
-                    const iconUrl = tokenInfo?.icon || "💱"
-                    const isTokenLocked = isLocked(depositLockEnds[token])
+                  {availablePositions.map((pos) => {
+                    const withdrawableCount = pos.deposits.filter(d => d.canWithdraw).length
+                    const totalValue = Number(BigInt(pos.totalCurrentValue)) / Number(BigInt(10 ** pos.decimals))
+                    const tokenInfo = tokenInfos[pos.tokenAddress]
+                    const iconUrl = tokenInfo?.icon
 
                     return (
                       <button
-                        key={token}
+                        key={pos.tokenSymbol}
                         onClick={() => {
-                          setForm({ ...form, token })
-                          // allow opening details for locked tokens too, but only auto-advance when available
-                          if (!isTokenLocked && withdrawable !== "0") {
+                          setSelectedToken(pos.tokenSymbol)
+                          if (withdrawableCount > 0) {
                             goToNextStep()
                           }
                         }}
-                        disabled={false}
                         className={`w-full p-4 rounded-xl border transition-all ${
-                          form.token === token
+                          selectedToken === pos.tokenSymbol
                             ? "border-[#54d22d] bg-[#54d22d]/10"
-                            : isTokenLocked || withdrawable === "0"
+                            : withdrawableCount === 0
                               ? "border-[#426039] bg-[#21301c]/50"
                               : "border-[#426039] bg-[#21301c] hover:border-[#54d22d] hover:bg-[#2e4328]"
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            {iconUrl.startsWith("http") ? (
-                              <img
-                                src={iconUrl || "/placeholder.svg"}
-                                alt={tokenInfo?.symbol}
-                                className="w-8 h-8 mr-3"
-                              />
+                            {iconUrl ? (
+                              <img src={iconUrl} alt={pos.tokenSymbol} className="w-8 h-8 mr-3 rounded-full" />
                             ) : (
-                              <span className="text-2xl mr-3">{iconUrl}</span>
+                              <span className="text-2xl mr-3">💱</span>
                             )}
                             <div className="text-left">
-                              <div className="text-white font-medium">{tokenInfo?.symbol}</div>
-                              <div className="text-[#a2c398] text-sm">{isTokenLocked ? "Locked" : "Available"}</div>
+                              <div className="text-white font-medium">{pos.tokenSymbol}</div>
+                              <div className="text-[#a2c398] text-sm">{withdrawableCount} available</div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-white font-semibold">{formattedTotal}</div>
-                            {isTokenLocked ? (
-                              <>
-                                <div className="text-red-400 text-xs">Locked • Available: {formattedWithdrawable}</div>
-                                <div className="text-red-400 text-xs">Until {formatDate(depositLockEnds[token])}</div>
-                              </>
-                            ) : (
-                              <div className="text-xs text-[#a2c398]">Available: {formattedWithdrawable}</div>
-                            )}
+                            <div className="text-white font-semibold">{totalValue.toFixed(6)}</div>
+                            <div className="text-xs text-[#a2c398]">{pos.deposits.length} deposits</div>
                           </div>
                         </div>
                       </button>
@@ -287,59 +208,52 @@ export function FundsWithdrawalModal({
             </div>
           )}
 
-          {/* Step 2: Enter Amount */}
-          {currentStep === 2 && form.token && (
+          {/* Step 2: Select Deposits */}
+          {currentStep === 2 && selectedPosition && (
             <div className="space-y-4">
               <div className="text-center">
-                <h3 className="text-white text-lg font-medium mb-2">Enter Amount</h3>
-                <p className="text-[#a2c398] text-sm">
-                  How much {tokenInfos[form.token]?.symbol} do you want to withdraw?
-                </p>
+                <h3 className="text-white text-lg font-medium mb-2">Select Deposits</h3>
+                <p className="text-[#a2c398] text-sm">Choose which deposits to withdraw</p>
               </div>
 
-              <div className="bg-[#21301c] rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[#a2c398] text-sm">Available</span>
-                  <span className="text-[#54d22d] font-semibold">
-                    {formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18)}{" "}
-                    {tokenInfos[form.token]?.symbol}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label className="text-[#a2c398] text-sm">Amount</Label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const maxAmount = formatAmount(
-                        getWithdrawableAmount(form.token),
-                        tokenInfos[form.token]?.decimals || 18,
-                      )
-                      setForm({ ...form, amount: maxAmount })
-                    }}
-                    className="text-[#54d22d] text-sm hover:text-white transition-colors"
-                  >
-                    Use Max
-                  </button>
-                </div>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={form.amount}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                      setForm({ ...form, amount: value })
-                    }
-                    if (error && value !== form.amount) {
-                      setError(null)
-                    }
-                  }}
-                  className="bg-[#21301c] border-[#426039] text-white placeholder-[#a2c398] text-lg h-14 text-center focus:border-[#54d22d] focus:ring-[#54d22d]"
-                />
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {selectedPosition.deposits.map((deposit, idx) => {
+                  const value = Number(BigInt(deposit.currentValue)) / Number(BigInt(10 ** selectedPosition.decimals))
+                  const isSelected = selectedDepositIds.includes(idx)
+                  
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        if (!deposit.canWithdraw) return
+                        setSelectedDepositIds(prev => 
+                          prev.includes(idx) ? prev.filter(id => id !== idx) : [...prev, idx]
+                        )
+                      }}
+                      disabled={!deposit.canWithdraw}
+                      className={`w-full p-3 rounded-xl border transition-all ${
+                        isSelected
+                          ? "border-[#54d22d] bg-[#54d22d]/10"
+                          : !deposit.canWithdraw
+                            ? "border-[#426039] bg-[#21301c]/30 opacity-50"
+                            : "border-[#426039] bg-[#21301c] hover:border-[#54d22d]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <div className="text-white text-sm">Deposit #{idx}</div>
+                          <div className="text-[#a2c398] text-xs">
+                            {deposit.canWithdraw ? "Available" : `Locked until ${formatDate(deposit.lockEnd)}`}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-white font-semibold">{value.toFixed(6)}</div>
+                          <div className="text-[#a2c398] text-xs">{selectedPosition.tokenSymbol}</div>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -362,7 +276,7 @@ export function FundsWithdrawalModal({
           )}
 
           {/* Step 3: Confirm Withdrawal */}
-          {currentStep === 3 && form.token && form.amount && (
+          {currentStep === 3 && selectedPosition && selectedDepositIds.length > 0 && (
             <div className="space-y-4">
               <div className="text-center">
                 <h3 className="text-white text-lg font-medium mb-2">Confirm Withdrawal</h3>
@@ -372,42 +286,24 @@ export function FundsWithdrawalModal({
               <div className="bg-[#21301c] rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-[#a2c398]">Asset</span>
-                  <span className="text-white font-medium">{tokenInfos[form.token]?.symbol}</span>
+                  <span className="text-white font-medium">{selectedPosition.tokenSymbol}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[#a2c398]">Amount</span>
-                  <span className="text-white font-semibold text-lg">{form.amount}</span>
+                  <span className="text-[#a2c398]">Deposits</span>
+                  <span className="text-white font-semibold">{selectedDepositIds.length}</span>
                 </div>
                 <div className="border-t border-[#426039] pt-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-[#a2c398]">You'll receive</span>
+                    <span className="text-[#a2c398]">Total Amount</span>
                     <span className="text-[#54d22d] font-bold text-lg">
-                      {form.amount} {tokenInfos[form.token]?.symbol}
+                      {selectedDepositIds.reduce((sum, id) => {
+                        const deposit = selectedPosition.deposits[id]
+                        return sum + Number(BigInt(deposit.currentValue)) / Number(BigInt(10 ** selectedPosition.decimals))
+                      }, 0).toFixed(6)} {selectedPosition.tokenSymbol}
                     </span>
                   </div>
                 </div>
               </div>
-
-              {/* Mobile Money Option */}
-              {offrampService.isCryptoSupportedForOfframp(tokenInfos[form.token]?.symbol || "") && (
-                <div className="bg-[#2e4328] rounded-xl p-4">
-                  <div className="flex items-center mb-2">
-                    <Smartphone className="w-4 h-4 mr-2 text-[#54d22d]" />
-                    <span className="text-white font-medium">Cash Out Option</span>
-                  </div>
-                  <p className="text-[#a2c398] text-sm mb-3">Convert to local currency via mobile money</p>
-                  <div className="text-xs text-[#a2c398] mb-3">
-                    Limits: KES {offrampService.getMinimumWithdrawalAmount('KES')} - {offrampService.getMaximumWithdrawalAmount('KES').toLocaleString()}
-                  </div>
-                  <Button
-                    onClick={() => setShowMobileMoneyModal(true)}
-                    variant="outline"
-                    className="w-full border-[#54d22d] text-[#54d22d] hover:bg-[#54d22d] hover:text-[#162013] h-10"
-                  >
-                    Cash Out Instead
-                  </Button>
-                </div>
-              )}
 
               <div className="flex gap-3 pt-4">
                 <Button
@@ -429,32 +325,7 @@ export function FundsWithdrawalModal({
           )}
         </div>
 
-        {/* Mobile Money Withdrawal Modal */}
-        {form.token && tokenInfos[form.token] && (
-          <MobileMoneyWithdrawModal
-            isOpen={showMobileMoneyModal}
-            onClose={() => setShowMobileMoneyModal(false)}
-            tokenSymbol={tokenInfos[form.token]?.symbol || ""}
-            tokenAddress={form.token}
-            network={offrampService.detectNetworkFromTokenAddress(form.token) || "CELO"}
-            availableAmount={formatAmount(getWithdrawableAmount(form.token), tokenInfos[form.token]?.decimals || 18)}
-            decimals={tokenInfos[form.token]?.decimals || 18}
-            onWithdrawSuccess={(orderID, amount) => {
-              setShowMobileMoneyModal(false)
-              setForm({ token: "", amount: "" })
-              onClose()
-            }}
-            onBlockchainWithdraw={async (tokenAddress: string, amount: string) => {
-              try {
-                await onWithdraw(tokenAddress, amount)
-                return "0x" + Math.random().toString(16).substr(2, 64)
-              } catch (error) {
-                console.error("Blockchain withdrawal failed:", error)
-                throw new Error("Withdrawal transaction failed")
-              }
-            }}
-          />
-        )}
+
       </DialogContent>
     </Dialog>
   )
