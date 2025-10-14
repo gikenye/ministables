@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label"
 import { useActiveAccount } from "thirdweb/react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Smartphone, AlertCircle, CheckCircle, Loader2, Info } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
 import {
   onrampService,
   SUPPORTED_COUNTRIES,
@@ -15,6 +14,7 @@ import {
   detectCountryFromPhone,
   type OnrampRequest,
 } from "@/lib/services/onrampService"
+import { useChain } from "@/components/ChainProvider"
 
 interface OnrampDepositModalProps {
   isOpen: boolean
@@ -33,7 +33,7 @@ export function OnrampDepositModal({
 }: OnrampDepositModalProps) {
   const account = useActiveAccount()
   const address = account?.address
-  const { toast } = useToast()
+  const { chain } = useChain()
 
   const [currentStep, setCurrentStep] = useState(1)
   const [form, setForm] = useState({
@@ -59,6 +59,8 @@ export function OnrampDepositModal({
 
   const [exchangeRate, setExchangeRate] = useState<number | null>(null)
   const [loadingRate, setLoadingRate] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<"pending" | "completed" | "failed">("pending")
+  const [completedTransaction, setCompletedTransaction] = useState<any>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -81,9 +83,37 @@ export function OnrampDepositModal({
         transactionCode: "",
         error: "",
       })
+      setPaymentStatus("pending")
       loadExchangeRate("KES")
     }
   }, [isOpen])
+
+  // Poll transaction status
+  useEffect(() => {
+    if (currentStep === 4 && transaction.transactionCode && paymentStatus === "pending") {
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await onrampService.getTransactionStatus(
+            transaction.transactionCode,
+            form.countryCode
+          );
+          
+          if (status?.status === "COMPLETE" || status?.status === "SUCCESS") {
+            setCompletedTransaction(status);
+            setPaymentStatus("completed");
+            clearInterval(pollInterval);
+          } else if (status?.status === "FAILED" || status?.status === "CANCELLED") {
+            setPaymentStatus("failed");
+            clearInterval(pollInterval);
+          }
+        } catch (error) {
+          console.error("Failed to check transaction status:", error);
+        }
+      }, 5000);
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [currentStep, transaction.transactionCode, paymentStatus, form.countryCode])
 
   // Auto-detect country when phone number changes
   useEffect(() => {
@@ -132,7 +162,7 @@ export function OnrampDepositModal({
         setValidation({
           isValidating: false,
           isValid: true,
-          accountName: result.name || "Verified",
+          accountName: result.name || "",
           error: "",
         })
       } else {
@@ -166,40 +196,32 @@ export function OnrampDepositModal({
 
   const handleOnrampDeposit = async () => {
     if (!address) {
-      toast({
-        title: "Wallet Not Connected",
-        description: "Please connect your wallet first.",
-        variant: "destructive",
-      })
+      setTransaction((prev) => ({ ...prev, error: "Please connect your wallet first." }))
       return
     }
 
     if (!validation.isValid) {
-      toast({
-        title: "Invalid Phone Number",
-        description: "Please enter a valid phone number.",
-        variant: "destructive",
-      })
+      setTransaction((prev) => ({ ...prev, error: "Please enter a valid phone number." }))
       return
     }
 
     if (!form.amount || Number.parseFloat(form.amount) <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount.",
-        variant: "destructive",
-      })
+      setTransaction((prev) => ({ ...prev, error: "Please enter a valid amount." }))
       return
     }
 
     // Check if asset is supported for onramp
-    const chain = onrampService.getChainForAsset(selectedAsset)
-    if (!onrampService.isAssetSupportedForOnramp(selectedAsset, chain)) {
-      toast({
-        title: "Asset Not Supported",
-        description: `${assetSymbol} is not supported for mobile money deposits.`,
-        variant: "destructive",
-      })
+    const chainName = chain?.id === 42220 ? "CELO" : chain?.name?.split(" ")[0]?.toUpperCase() || "CELO"
+    console.log("[OnrampDepositModal] Checking asset support:", {
+      selectedAsset,
+      assetSymbol,
+      chainName,
+      chainId: chain?.id,
+    })
+    const isSupported = onrampService.isAssetSupportedForOnramp(selectedAsset, chainName)
+    console.log("[OnrampDepositModal] Is asset supported?", isSupported)
+    if (!isSupported) {
+      setTransaction((prev) => ({ ...prev, error: `${assetSymbol} is not supported for mobile money deposits.` }))
       return
     }
 
@@ -207,11 +229,7 @@ export function OnrampDepositModal({
     const limits = onrampService.getCountryLimits(form.countryCode)
     const amount = Number.parseFloat(form.amount)
     if (amount < limits.min || amount > limits.max) {
-      toast({
-        title: "Amount Out of Range",
-        description: `Amount must be between ${limits.min} and ${limits.max} ${form.countryCode}.`,
-        variant: "destructive",
-      })
+      setTransaction((prev) => ({ ...prev, error: `Amount must be between ${limits.min} and ${limits.max} ${form.countryCode}.` }))
       return
     }
 
@@ -220,18 +238,22 @@ export function OnrampDepositModal({
     try {
       const formattedPhone = formatPhoneNumber(form.phoneNumber, form.countryCode)
 
+      // Get vault address for the selected asset
+      const tokenSymbol = assetSymbol
+      const vaultAddress = onrampService.getVaultAddress(42220, tokenSymbol)
+
       const onrampRequest: OnrampRequest = {
         shortcode: formattedPhone,
         amount: Number.parseFloat(form.amount),
-        fee: Math.round(Number.parseFloat(form.amount) * 0.02), // 2% fee estimate
+        fee: Math.round(Number.parseFloat(form.amount) * 0.1), // 10% fee estimate
         mobile_network: form.mobileNetwork,
-        chain: chain,
-        asset: selectedAsset,
+        chain: chainName,
+        asset: tokenSymbol,
         address: address,
         callback_url: `${window.location.origin}/api/onramp/callback`,
       }
 
-      const result = await onrampService.initiateOnramp(onrampRequest, form.countryCode)
+      const result = await onrampService.initiateOnramp(onrampRequest, form.countryCode, vaultAddress)
 
       if (result.success) {
         setTransaction({
@@ -241,16 +263,6 @@ export function OnrampDepositModal({
           error: "",
         })
         setCurrentStep(4)
-
-        toast({
-          title: "Deposit Initiated",
-          description: "Please complete the payment on your phone to receive the tokens.",
-        })
-
-        // Call success callback if provided
-        if (onSuccess) {
-          onSuccess(result.transaction_code || "", Number.parseFloat(form.amount))
-        }
       } else {
         throw new Error(result.error || "Failed to initiate deposit")
       }
@@ -261,17 +273,15 @@ export function OnrampDepositModal({
         transactionCode: "",
         error: error.message || "Failed to process deposit",
       })
-
-      toast({
-        title: "Deposit Failed",
-        description: error.message || "Failed to initiate mobile money deposit.",
-        variant: "destructive",
-      })
     }
   }
 
   const handleClose = () => {
     if (!transaction.isProcessing) {
+      // Call success callback when closing after transaction initiated
+      if (transaction.isComplete && transaction.transactionCode && onSuccess) {
+        onSuccess(transaction.transactionCode, Number.parseFloat(form.amount))
+      }
       onClose()
     }
   }
@@ -306,7 +316,7 @@ export function OnrampDepositModal({
               </button>
             )}
             <div className="flex-1 text-center">
-              <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Get {assetSymbol}</h1>
+              <h1 className="text-white text-[15px] font-medium leading-tight tracking-[-0.015em]"> Depositing {assetSymbol} ...</h1>
               <div className="flex justify-center gap-1 mt-2">
                 {[1, 2, 3, 4].map((step) => (
                   <div
@@ -444,11 +454,6 @@ export function OnrampDepositModal({
 
             {currentStep === 3 && (
               <div className="space-y-6">
-                <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">Enter amount</h3>
-                  <p className="text-[#a2c398] text-sm">How much {form.countryCode} do you want to deposit?</p>
-                </div>
-
                 <div className="space-y-4">
                   <div>
                     <Label className="text-[#a2c398] text-sm font-medium mb-2 block">Amount ({form.countryCode})</Label>
@@ -491,7 +496,7 @@ export function OnrampDepositModal({
                 </div>
 
                 {/* Info Section */}
-                <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4">
+                {/* <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4">
                   <div className="flex items-start gap-3">
                     <Info className="w-4 h-4 text-[#54d22d] mt-0.5 flex-shrink-0" />
                     <div className="text-sm text-[#a2c398]">
@@ -506,7 +511,7 @@ export function OnrampDepositModal({
                       </div>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 <button
                   onClick={handleOnrampDeposit}
@@ -514,7 +519,8 @@ export function OnrampDepositModal({
                     transaction.isProcessing ||
                     !validation.isValid ||
                     !form.amount ||
-                    Number.parseFloat(form.amount) <= 0
+                    Number.parseFloat(form.amount) <= 0 ||
+                    Number.parseFloat(form.amount) < onrampService.getCountryLimits(form.countryCode).min
                   }
                   className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
@@ -535,27 +541,88 @@ export function OnrampDepositModal({
 
             {currentStep === 4 && transaction.isComplete && (
               <div className="text-center space-y-6">
-                <div className="w-16 h-16 bg-[#54d22d]/20 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle className="w-8 h-8 text-[#54d22d]" />
-                </div>
-                <div>
-                  <h3 className="text-white text-lg font-medium mb-2">Deposit Initiated!</h3>
-                  <p className="text-[#a2c398] text-sm mb-4">
-                    Complete the payment on your phone to receive {assetSymbol} in your wallet.
-                  </p>
-                  {transaction.transactionCode && (
-                    <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4 mb-4">
-                      <p className="text-[#a2c398] text-sm mb-1">Transaction Code:</p>
-                      <p className="font-mono text-sm font-medium text-white">{transaction.transactionCode}</p>
+                {paymentStatus === "pending" && (
+                  <>
+                    <div>
+                      <p className="text-[#a2c398] text-sm mb-4">
+                        Check your phone for the M-Pesa prompt and enter your PIN to complete the payment.
+                      </p>
+                      {/* {transaction.transactionCode && (
+                        <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4 mb-4">
+                          <p className="text-[#a2c398] text-sm mb-1">Transaction Code:</p>
+                          <p className="font-mono text-sm font-medium text-white">{transaction.transactionCode}</p>
+                        </div>
+                      )} */}
+                      <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm">
+                        <p className="font-medium mb-1 flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Waiting for payment...
+                        </p>
+                        <p className="text-xs">Once you complete the payment, your {assetSymbol} will be sent to your wallet.</p>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
+
+                {paymentStatus === "completed" && (
+                  <>
+                    <div className="w-16 h-16 bg-[#54d22d]/20 rounded-full flex items-center justify-center mx-auto">
+                      <CheckCircle className="w-8 h-8 text-[#54d22d]" />
+                    </div>
+                    <div>
+                      <h3 className="text-white text-lg font-medium mb-2">Payment Successful!</h3>
+                      <p className="text-[#a2c398] text-sm mb-4">
+                        Your {assetSymbol} has been sent to your wallet.
+                      </p>
+                      <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4 space-y-3 mb-4">
+                        {completedTransaction?.receipt_number && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#a2c398] text-sm">M-Pesa Receipt:</span>
+                            <span className="font-mono text-sm font-medium text-white">{completedTransaction.receipt_number}</span>
+                          </div>
+                        )}
+                        {completedTransaction?.amount && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#a2c398] text-sm">Amount Paid:</span>
+                            <span className="font-medium text-white">{completedTransaction.amount} {completedTransaction.currency_code}</span>
+                          </div>
+                        )}
+                        {completedTransaction?.amount_in_usd && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#a2c398] text-sm">Received:</span>
+                            <span className="font-medium text-[#54d22d]">{completedTransaction.amount_in_usd} {assetSymbol}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="bg-[#54d22d]/10 border border-[#54d22d] text-[#54d22d] p-3 rounded-xl text-sm">
+                        <p className="font-medium">✓ Transaction Complete</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {paymentStatus === "failed" && (
+                  <>
+                    <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
+                      <AlertCircle className="w-8 h-8 text-red-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-white text-lg font-medium mb-2">Payment Failed</h3>
+                      <p className="text-[#a2c398] text-sm mb-4">
+                        The payment was not completed. Please try again.
+                      </p>
+                      <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm">
+                        <p className="font-medium">✗ Transaction Failed</p>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <button
                   onClick={handleClose}
                   className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
                 >
-                  Done
+                  {paymentStatus === "completed" ? "Done" : "Close"}
                 </button>
               </div>
             )}

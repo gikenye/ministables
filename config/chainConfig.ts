@@ -1,10 +1,34 @@
 import { celo, scroll } from "thirdweb/chains";
 
-export const CHAINS = [ scroll, celo];
+export const CHAINS = [celo, scroll];
 
 export const CONTRACTS = {
   [celo.id]: "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c",
   [scroll.id]: "0x31443910a7a6ff042067df8A34328E16a3994f72",
+};
+
+// Vault contracts for Aave integration
+export const VAULT_CONTRACTS = {
+  [celo.id]: {
+    USDC: "0xBEEf1612958A90F3553362c74Ccdf4c181512cf5",
+    USDT: "0x90FF972CC2d12Ba495C8aC0887d6E9FD25B032c4",
+    CUSD: "0x1077E075c879E8C95E7d0545b106B1448d035F37",
+  },
+};
+
+// Additional Aave integration contracts
+export const AAVE_CONTRACTS = {
+  [celo.id]: {
+    // Aave Strategies
+    USDC_STRATEGY: "0x89401f1aC84e1012e294074f6e0C5C5B54f287b6",
+    USDT_STRATEGY: "0xc031F072AB12A0D26Ed513E727352Ee281B5A559",
+    CUSD_STRATEGY: "0xa97bA56C318694E1C08EdE9D8e2f0BDf16cebE21",
+    
+    // Other contracts
+    BORROWER_VAULT: "0x775263BE35Bf0673279AE083bA9206cDac31c9e8",
+    SAVINGS_BRIDGE: "0x9c7523EE4E9ceD985D248eF9f7d2502F2435bc9f",
+    AAVE_POOL: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+  },
 };
 
 export const EXPLORERS = {
@@ -13,7 +37,6 @@ export const EXPLORERS = {
 };
 
 export const TOKENS = {
-
   [celo.id]: [
     {
       address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
@@ -46,7 +69,7 @@ export const TOKENS = {
       icon: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6818d1976757a7c20485226f_Tokens%20(2).avif",
     },
   ],
-    [scroll.id]: [
+  [scroll.id]: [
     {
       address: "0xd62fBDd984241BcFdEe96915b43101912a9fcE69",
       symbol: "BKES",
@@ -124,10 +147,40 @@ export const getTokenInfoMap = (
 
 export const getExplorerUrl = (chainId: number): string => {
   const explorerUrl = EXPLORERS[chainId];
-  if (!explorerUrl) throw new Error(`No explorer URL configured for chain ${chainId}`);
+  if (!explorerUrl)
+    throw new Error(`No explorer URL configured for chain ${chainId}`);
   return explorerUrl;
 };
 
 export const getTransactionUrl = (chainId: number, txHash: string): string => {
   return `${getExplorerUrl(chainId)}/tx/${txHash}`;
+};
+
+export const getVaultAddress = (
+  chainId: number,
+  tokenSymbol: string
+): string => {
+  const vaults = VAULT_CONTRACTS[chainId];
+  if (!vaults)
+    throw new Error(`No vault contracts configured for chain ${chainId}`);
+  const vaultAddress = vaults[tokenSymbol.toUpperCase() as keyof typeof vaults];
+  if (!vaultAddress)
+    throw new Error(`No vault found for ${tokenSymbol} on chain ${chainId}`);
+  return vaultAddress;
+};
+
+export const getAaveContract = (chainId: number, contractName: string): string => {
+  const contracts = AAVE_CONTRACTS[chainId];
+  if (!contracts) throw new Error(`No Aave contracts configured for chain ${chainId}`);
+  const contractAddress = contracts[contractName.toUpperCase() as keyof typeof contracts];
+  if (!contractAddress) throw new Error(`No Aave contract ${contractName} found for chain ${chainId}`);
+  return contractAddress;
+};
+
+export const getStrategyAddress = (chainId: number, tokenSymbol: string): string => {
+  const contracts = AAVE_CONTRACTS[chainId];
+  if (!contracts) throw new Error(`No Aave contracts configured for chain ${chainId}`);
+  const strategyAddress = contracts[`${tokenSymbol.toUpperCase()}_STRATEGY` as keyof typeof contracts];
+  if (!strategyAddress) throw new Error(`No strategy found for ${tokenSymbol} on chain ${chainId}`);
+  return strategyAddress;
 };
