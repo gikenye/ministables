@@ -1,0 +1,57 @@
+{
+  "SupplierVault": [
+    {
+      "inputs": [{"internalType": "address", "name": "user", "type": "address"}, {"internalType": "uint256", "name": "depositId", "type": "uint256"}],
+      "name": "getUserDeposit",
+      "outputs": [{"internalType": "uint256", "name": "principal", "type": "uint256"}, {"internalType": "uint256", "name": "currentValue", "type": "uint256"}, {"internalType": "uint256", "name": "yieldEarned", "type": "uint256"}, {"internalType": "uint256", "name": "lockEnd", "type": "uint256"}, {"internalType": "bool", "name": "canWithdraw", "type": "bool"}],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{"internalType": "address", "name": "", "type": "address"}],
+      "name": "depositCount",
+      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "asset",
+      "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{"internalType": "uint256", "name": "depositId", "type": "uint256"}],
+      "name": "withdraw",
+      "outputs": [{"internalType": "uint256", "name": "amountWithdrawn", "type": "uint256"}],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+      "name": "withdrawFromStrategy",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "AaveStrategy": [
+    {
+      "inputs": [],
+      "name": "totalDeployed",
+      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "IERC20": [
+    {
+      "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
+      "name": "balanceOf",
+      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ]
+}
