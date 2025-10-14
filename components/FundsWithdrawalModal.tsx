@@ -74,12 +74,12 @@ export function FundsWithdrawalModal({
   }
 
   const selectedPosition = useMemo(() => {
-    return vaultPositions.find(p => p.tokenSymbol === selectedTokenSymbol)
+    return vaultPositions?.find(p => p.tokenSymbol === selectedTokenSymbol)
   }, [vaultPositions, selectedTokenSymbol])
 
   const withdrawableDeposits = useMemo(() => {
     if (!selectedPosition) return []
-    return selectedPosition.deposits.filter(d => d.canWithdraw)
+    return selectedPosition.deposits?.filter(d => d.canWithdraw) || []
   }, [selectedPosition])
 
   const goToNextStep = () => {
@@ -149,7 +149,7 @@ export function FundsWithdrawalModal({
           {currentStep === 1 && (
             <div className="space-y-4">
 
-              {vaultPositions.filter(pos => BigInt(pos.totalCurrentValue) > BigInt(0)).length === 0 ? (
+              {!vaultPositions || vaultPositions.filter(pos => BigInt(pos.totalCurrentValue) > BigInt(0)).length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-[#a2c398] text-sm">
                     No deposits available to withdraw yet.
@@ -157,7 +157,7 @@ export function FundsWithdrawalModal({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {vaultPositions.filter(pos => BigInt(pos.totalCurrentValue) > BigInt(0)).map((pos) => {
+                  {vaultPositions?.filter(pos => BigInt(pos.totalCurrentValue) > BigInt(0)).map((pos) => {
                     const tokenInfo = tokenInfos[pos.tokenAddress]
                     const iconUrl = tokenInfo?.icon
                     const hasWithdrawable = pos.deposits.some(d => d.canWithdraw)
