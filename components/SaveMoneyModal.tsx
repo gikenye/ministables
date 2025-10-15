@@ -15,10 +15,8 @@ import {
 } from "thirdweb/react";
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
-import {
-  appendDivviReferralTag,
-  reportTransactionToDivvi,
-} from "@/lib/services/divviService";
+import { reportTransactionToDivvi } from "@/lib/services/divviService";
+import { getReferralTag } from '@divvi/referral-sdk';
 
 // Define the vault contract ABI for deposit function (Aave-integrated vaults on Celo)
 export const vaultABI = [
@@ -331,14 +329,6 @@ export function SaveMoneyModal({
       });
     }
 
-    // Append Divvi referral tag to the transaction
-    if (account) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[SaveMoneyModal] Adding Divvi referral tag");
-      }
-      depositTx = appendDivviReferralTag(depositTx, account.address) as any;
-    }
-
     return depositTx;
   };
 
@@ -397,38 +387,10 @@ export function SaveMoneyModal({
       });
       // Move to success step
       setCurrentStep(5);
-
-      // Report transaction to Divvi for referral tracking
-      if (receipt.transactionHash) {
-        reportTransactionToDivvi(receipt.transactionHash, chain.id)
-          .then(() => {
-            if (process.env.NODE_ENV === "development") {
-              console.log(
-                "[SaveMoneyModal] Reported transaction to Divvi:",
-                receipt.transactionHash
-              );
-            }
-          })
-          .catch((error) => {
-            if (process.env.NODE_ENV === "development") {
-              console.error(
-                "[SaveMoneyModal] Error reporting to Divvi:",
-                error?.message || "Unknown error"
-              );
-            }
-          });
-      }
     }
   };
 
-  const handleTransactionSent = (result: any, _isApproval: boolean = false) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        "[SaveMoneyModal] Transaction sent:",
-        result?.transactionHash || "unknown"
-      );
-    }
-  };
+  const handleTransactionSent = (_result: any, _isApproval: boolean = false) => {};
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
@@ -458,42 +420,17 @@ export function SaveMoneyModal({
     try {
       const depositTx = await prepareDepositTransaction();
 
-      // Check if approval is needed and handle it
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          "[SaveMoneyModal] Checking if approval is needed for deposit transaction"
-        );
-      }
       const approveTx = await getApprovalForTransaction({
         transaction: depositTx as any,
         account: account!,
       });
 
-      // No need to add referral tag to approval transaction, as it's not a direct interaction with our contract
-
       if (approveTx) {
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            "[SaveMoneyModal] Approval required, sending approval transaction"
-          );
-        }
         setTransactionStatus("Authorizing transaction...");
         const approveResult = await sendTransaction(approveTx);
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            "[SaveMoneyModal] Approval transaction submitted:",
-            approveResult?.transactionHash?.substring(0, 10) + "..."
-          );
-        }
-
         handleTransactionSent(approveResult, true);
 
         if (approveResult?.transactionHash) {
-          if (process.env.NODE_ENV === "development") {
-            console.log(
-              "[SaveMoneyModal] Waiting for approval confirmation..."
-            );
-          }
           setTransactionStatus("Processing authorization...");
           const approvalReceipt = await waitForReceipt({
             client,
@@ -502,28 +439,32 @@ export function SaveMoneyModal({
           });
           handleTransactionSuccess(approvalReceipt, true);
         }
-      } else {
-        console.log(
-          "[SaveMoneyModal] No approval needed, proceeding with deposit"
-        );
       }
 
-      // Execute vault deposit transaction
-      console.log("[SaveMoneyModal] Sending vault deposit transaction");
       setTransactionStatus("Completing your deposit...");
-      // Send the transaction normally, without trying to modify the data
-      const depositResult = await sendTransaction(depositTx as any);
-      console.log("[SaveMoneyModal] Vault deposit result:", depositResult);
-
+      
+      // Generate Divvi referral tag
+      let referralTag = "";
+      try {
+        referralTag = getReferralTag({
+          user: account.address as `0x${string}`,
+          consumer: '0xc022BD0b6005Cae66a468f9a20897aDecDE04e95' as `0x${string}`,
+        });
+        referralTag = referralTag.startsWith('0x') ? referralTag.slice(2) : referralTag;
+      } catch (error) {
+        console.log('[SaveMoneyModal] Divvi tag generation skipped:', error);
+      }
+      
+      // Resolve the data function and append referral tag
+      const depositTxWithTag = referralTag && typeof depositTx.data === 'function'
+        ? { ...depositTx, data: async () => (await depositTx.data()) + referralTag }
+        : depositTx;
+      
+      const depositResult = await sendTransaction(depositTxWithTag);
       handleTransactionSent(depositResult, false);
 
       if (depositResult?.transactionHash) {
-        console.log(
-          "[SaveMoneyModal] Deposit transaction submitted with hash:",
-          depositResult.transactionHash
-        );
         setTransactionStatus("Almost done...");
-        // Wait for deposit confirmation
         const depositReceipt = await waitForReceipt({
           client,
           chain,
@@ -531,6 +472,9 @@ export function SaveMoneyModal({
         });
         setTransactionStatus("Success!");
         handleTransactionSuccess(depositReceipt, false);
+        
+        // Report to Divvi after successful transaction
+        reportTransactionToDivvi(depositResult.transactionHash, chain.id);
       }
     } catch (err: any) {
       setTransactionStatus(null);
