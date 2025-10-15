@@ -1,57 +1,36 @@
 import { getReferralTag, submitReferral } from '@divvi/referral-sdk'
 import { PreparedTransaction } from 'thirdweb'
 
-// Divvi consumer address provided by the user
-const DIVVI_CONSUMER_ADDRESS = '0x76E195168791800Ea73F9eae388690868bd0e54d' as const
+const DIVVI_CONSUMER_ADDRESS = '0xc022BD0b6005Cae66a468f9a20897aDecDE04e95' as const
 
-/**
- * Generates a Divvi referral tag for the current user
- * @param userAddress - The address of the user making the transaction
- * @returns The referral tag to append to transaction data
- */
 export function generateDivviReferralTag(userAddress: string): string {
   if (!userAddress) return ''
   
-  return getReferralTag({
-    user: userAddress as `0x${string}`,
-    consumer: DIVVI_CONSUMER_ADDRESS,
-  })
+  try {
+    const tag = getReferralTag({
+      user: userAddress as `0x${string}`,
+      consumer: DIVVI_CONSUMER_ADDRESS,
+    })
+    return tag.startsWith('0x') ? tag.slice(2) : tag
+  } catch (error) {
+    console.log('[DivviService] Tag generation skipped:', error)
+    return ''
+  }
 }
 
-/**
- * Appends a Divvi referral tag to a transaction
- * @param transaction - The prepared transaction to modify
- * @param userAddress - The address of the user making the transaction
- * @returns The modified transaction with referral data appended
- */
 export function appendDivviReferralTag(
   transaction: PreparedTransaction, 
   userAddress: string
 ): PreparedTransaction {
-  // Generate the referral tag
   const referralTag = generateDivviReferralTag(userAddress)
   if (!referralTag || !transaction.data) return transaction
 
-  // Create a new transaction object with modified data
-  // Make sure the original transaction data is preserved correctly
-  // We shouldn't modify the data directly as it may corrupt the transaction format
-  
-  // Instead, attach the referral tag as metadata so we know it needs to be submitted separately
-  const modifiedTransaction = {
+  return {
     ...transaction,
-    // Store the referral tag as metadata rather than modifying the transaction data
-    divviReferralTag: referralTag
+    data: (transaction.data + referralTag) as `0x${string}`
   }
-
-  console.log('[DivviService] Referral tag saved as transaction metadata')
-  return modifiedTransaction as PreparedTransaction
 }
 
-/**
- * Reports a transaction to Divvi for referral tracking
- * @param txHash - The transaction hash
- * @param chainId - The chain ID where the transaction was executed
- */
 export async function reportTransactionToDivvi(txHash: string, chainId: number): Promise<void> {
   if (!txHash) return
   
@@ -60,8 +39,8 @@ export async function reportTransactionToDivvi(txHash: string, chainId: number):
       txHash: txHash as `0x${string}`,
       chainId,
     })
-    console.log('[DivviService] Transaction reported successfully:', txHash)
+    console.log('[DivviService] Referral submitted:', txHash)
   } catch (error) {
-    console.error('[DivviService] Error reporting transaction:', error)
+    console.log('[DivviService] Submission failed (non-critical):', error)
   }
 }
