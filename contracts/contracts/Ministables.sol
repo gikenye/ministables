@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@aave/core-v3/contracts/interfaces/IPool.sol";
 import "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
 import "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
@@ -15,8 +16,10 @@ interface ISortedOracles {
     function getMedianRate(address token) external view returns (uint256 rate, uint256 timestamp);
 }
 
-contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
+    
+    bytes32 public constant BRIDGE_ROLE = keccak256("BRIDGE_ROLE");
 
     // All state variables must be declared here and never reordered in future upgrades
     IPool public aavePool;
@@ -44,6 +47,8 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     }
 
     mapping(address => mapping(address => Deposit[])) public userDeposits;
+    // Track if a specific deposit is pledged as collateral: user => token => depositIndex => isPledged
+    mapping(address => mapping(address => mapping(uint256 => bool))) public depositPledgedStatus;
     mapping(address => mapping(address => uint256)) public userBorrows;
     mapping(address => mapping(address => uint256)) public userCollateral;
     mapping(address => mapping(address => uint256)) public contractReserves;
@@ -100,6 +105,7 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     ) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
+        __AccessControl_init();
 
         require(_poolAddressProvider != address(0), "E1"); // Invalid pool address provider
         require(_oracles != address(0), "E2"); // Invalid oracle address
@@ -139,6 +145,8 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
                 slope2: _slope2s[i]
             });
         }
+        
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -474,7 +482,7 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             }
             uint256 remainingAmount = amount;
             for (uint256 i = 0; i < deposits.length && remainingAmount > 0; i++) {
-                if (block.timestamp >= deposits[i].lockEnd) {
+                if (block.timestamp >= deposits[i].lockEnd && !depositPledgedStatus[msg.sender][token][i]) {
                     if (deposits[i].amount <= remainingAmount) {
                         remainingAmount -= deposits[i].amount;
                         deposits[i].amount = 0;
@@ -484,6 +492,7 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
                     }
                 }
             }
+            require(remainingAmount == 0, "E7"); // Insufficient unpledged balance
             for (uint256 i = deposits.length; i > 0; i--) {
                 if (deposits[i - 1].amount == 0) {
                     deposits[i - 1] = deposits[deposits.length - 1];
@@ -600,6 +609,137 @@ contract Ministables is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         return balance + yield;
     }
 
+    // ========== SAVINGS COLLATERAL BRIDGE FUNCTIONS ==========
+    
+    /**
+     * @notice Set the bridge contract role
+     * @param bridge The bridge contract address
+     */
+    function grantBridgeRole(address bridge) external onlyOwner {
+        require(bridge != address(0), "E1"); // Invalid bridge address
+        _grantRole(BRIDGE_ROLE, bridge);
+    }
+    
+    /**
+     * @notice Revoke bridge role
+     * @param bridge The bridge contract address
+     */
+    function revokeBridgeRole(address bridge) external onlyOwner {
+        _revokeRole(BRIDGE_ROLE, bridge);
+    }
+    
+    /**
+     * @notice Get user deposits for a token (called by bridge)
+     * @param user The user address
+     * @param token The token address
+     * @return deposits Array of deposits
+     */
+    function getUserDeposits(address user, address token) external view returns (Deposit[] memory) {
+        return userDeposits[user][token];
+    }
+    
+    /**
+     * @notice Set pledge status for a deposit (only bridge can call)
+     * @param user The user address
+     * @param token The token address
+     * @param depositIndex The index of the deposit
+     * @param pledged True if pledged, false if unpledged
+     */
+    function setPledgeStatus(
+        address user,
+        address token,
+        uint256 depositIndex,
+        bool pledged
+    ) external onlyRole(BRIDGE_ROLE) {
+        require(depositIndex < userDeposits[user][token].length, "E1"); // Invalid deposit index
+        depositPledgedStatus[user][token][depositIndex] = pledged;
+    }
+    
+    /**
+     * @notice Get pledge status for a deposit
+     * @param user The user address
+     * @param token The token address
+     * @param depositIndex The index of the deposit
+     * @return isPledged True if pledged, false otherwise
+     */
+    function getPledgeStatus(
+        address user,
+        address token,
+        uint256 depositIndex
+    ) external view returns (bool) {
+        return depositPledgedStatus[user][token][depositIndex];
+    }
+    
+    /**
+     * @notice Withdraw a pledged deposit (only bridge can call during liquidation)
+     * @param user The user whose deposit to withdraw
+     * @param token The token address
+     * @param amount The amount to withdraw
+     * @param recipient The recipient address
+     * @return interestEarned The interest earned on the withdrawal
+     */
+    function withdrawPledgedDeposit(
+        address user,
+        address token,
+        uint256 amount,
+        address recipient
+    ) external onlyRole(BRIDGE_ROLE) returns (uint256 interestEarned) {
+        require(amount > 0, "E1"); // Amount must be greater than 0
+        require(recipient != address(0), "E2"); // Invalid recipient
+        
+        Deposit[] storage deposits = userDeposits[user][token];
+        uint256 remainingAmount = amount;
+        
+        // Calculate and withdraw interest
+        if (!isDollarBacked(token)) {
+            uint256 totalDeposits = totalSupply[token];
+            if (totalDeposits > 0 && contractReserves[user][token] >= amount) {
+                interestEarned = (accumulatedInterest[token] * amount) / totalDeposits;
+                if (interestEarned > 0) {
+                    accumulatedInterest[token] = sub(accumulatedInterest[token], interestEarned);
+                    IERC20(token).safeTransfer(recipient, interestEarned);
+                }
+            }
+            contractReserves[user][token] = sub(contractReserves[user][token], amount);
+            totalSupply[token] = sub(totalSupply[token], amount);
+        }
+        
+        // Reduce deposit amounts (prioritize pledged deposits)
+        for (uint256 i = 0; i < deposits.length && remainingAmount > 0; i++) {
+            if (depositPledgedStatus[user][token][i] && block.timestamp >= deposits[i].lockEnd) {
+                if (deposits[i].amount <= remainingAmount) {
+                    remainingAmount -= deposits[i].amount;
+                    deposits[i].amount = 0;
+                    depositPledgedStatus[user][token][i] = false;
+                } else {
+                    deposits[i].amount -= remainingAmount;
+                    remainingAmount = 0;
+                }
+            }
+        }
+        
+        // Clean up empty deposits
+        for (uint256 i = deposits.length; i > 0; i--) {
+            if (deposits[i - 1].amount == 0) {
+                deposits[i - 1] = deposits[deposits.length - 1];
+                deposits.pop();
+            }
+        }
+        
+        // Transfer principal
+        if (isDollarBacked(token)) {
+            try aavePool.withdraw(token, amount, recipient) {
+                totalSupply[token] = sub(totalSupply[token], amount);
+            } catch Error(string memory reason) {
+                revert(string.concat("E3: ", reason)); // Aave withdraw failed
+            }
+        } else {
+            IERC20(token).safeTransfer(recipient, amount);
+        }
+        
+        return interestEarned;
+    }
+    
     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
         require(a >= b, "E1"); // Subtraction underflow
         return a - b;
