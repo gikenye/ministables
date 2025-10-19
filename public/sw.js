@@ -1,6 +1,8 @@
-// Service Worker for MiniLend - Optimized for African users with limited connectivity
+// Service Worker for MiniLend PWA - Optimized for African users with limited connectivity
 
-const CACHE_NAME = 'minilend-cache-v1';
+const CACHE_NAME = 'minilend-pwa-v1';
+const RUNTIME_CACHE = 'minilend-runtime-v1';
+const IMAGE_CACHE = 'minilend-images-v1';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache immediately on install
@@ -9,7 +11,11 @@ const PRECACHE_ASSETS = [
   '/offline.html',
   '/placeholder-logo.svg',
   '/placeholder-user.jpg',
+  '/placeholder.svg',
+  '/new-logo.png',
+  '/minilend-logo.png',
   '/dashboard',
+  '/manifest.json',
 ];
 
 // Install event - precache critical assets
@@ -26,11 +32,12 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
+  const currentCaches = [CACHE_NAME, RUNTIME_CACHE, IMAGE_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (!currentCaches.includes(cacheName)) {
             console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
@@ -75,15 +82,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   // For images, use cache first with network fallback
-  if (event.request.url.match(/\.(jpg|jpeg|png|gif|svg|webp)$/)) {
+  if (event.request.url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/)) {
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
           return response || fetch(event.request)
             .then((fetchResponse) => {
-              // Cache the fetched image
+              // Cache the fetched image in IMAGE_CACHE
               const responseClone = fetchResponse.clone();
-              caches.open(CACHE_NAME).then((cache) => {
+              caches.open(IMAGE_CACHE).then((cache) => {
                 cache.put(event.request, responseClone);
               });
               return fetchResponse;
@@ -100,15 +107,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For all other assets, use stale-while-revalidate strategy
+  // For all other assets (CSS, JS, fonts), use stale-while-revalidate strategy
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         // Return cached response immediately if available
         const fetchPromise = fetch(event.request)
           .then((networkResponse) => {
-            // Update the cache with the new response
-            caches.open(CACHE_NAME).then((cache) => {
+            // Update the cache with the new response in RUNTIME_CACHE
+            caches.open(RUNTIME_CACHE).then((cache) => {
               cache.put(event.request, networkResponse.clone());
             });
             return networkResponse;
@@ -123,6 +130,18 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Background sync for offline actions
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-transactions') {
+    event.waitUntil(syncTransactions());
+  }
+});
+
+async function syncTransactions() {
+  // Placeholder for syncing pending transactions when back online
+  console.log('Syncing pending transactions...');
+}
 
 // Handle offline page
 self.addEventListener('message', (event) => {

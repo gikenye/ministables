@@ -21,7 +21,9 @@
     "queue:status": "node scripts/queue-cli.js status",
     "queue:list": "node scripts/queue-cli.js list",
     "queue:retry-all": "node scripts/queue-cli.js retry-all",
-    "queue:reset-stuck": "node scripts/queue-cli.js reset-stuck"
+    "queue:reset-stuck": "node scripts/queue-cli.js reset-stuck",
+    "pwa:icons": "node scripts/generate-icons.js",
+    "pwa:test": "pnpm build && pnpm start"
   },
   "dependencies": {
     "@auth/core": "^0.40.0",
@@ -101,6 +103,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8.5",
+    "sharp": "^0.34.4",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
   },
