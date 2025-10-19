@@ -6,8 +6,8 @@
 export function registerServiceWorker() {
   if (typeof window !== "undefined" && "serviceWorker" in navigator) {
     window.addEventListener("load", function () {
-      // Use our fixed service worker
-      const swUrl = "/sw-fix.js";
+      // Use our main service worker
+      const swUrl = "/sw.js";
 
       // Unregister any existing service workers first
       navigator.serviceWorker.getRegistrations().then((registrations) => {
