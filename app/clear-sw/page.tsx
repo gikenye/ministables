@@ -4,32 +4,47 @@ export default function ClearServiceWorker() {
   return (
     <html>
       <head>
-        <title>Clear Service Worker - MiniLend</title>
+        <title>Clear Service Worker - Minilend</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body style={{
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        maxWidth: '600px',
-        margin: '50px auto',
-        padding: '20px',
-        background: '#162013',
-        color: 'white'
-      }}>
-        <h1>🔧 MiniLend PWA Debug Tool</h1>
-        <p>Use this page to clear old service workers and test PWA installation.</p>
-        
-        <button onClick={() => clearServiceWorkers()} style={buttonStyle}>Clear All Service Workers</button>
-        <button onClick={() => clearCache()} style={buttonStyle}>Clear All Caches</button>
-        <button onClick={() => testPWA()} style={buttonStyle}>Test PWA Status</button>
-        
-        <div id="status" style={{
-          marginTop: '20px',
-          padding: '15px',
-          background: 'rgba(255,255,255,0.1)',
-          borderRadius: '8px'
-        }}></div>
+      <body
+        style={{
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          maxWidth: "600px",
+          margin: "50px auto",
+          padding: "20px",
+          background: "#162013",
+          color: "white",
+        }}
+      >
+        <h1>🔧 Minilend PWA Debug Tool</h1>
+        <p>
+          Use this page to clear old service workers and test PWA installation.
+        </p>
 
-        <script dangerouslySetInnerHTML={{__html: `
+        <button onClick={() => clearServiceWorkers()} style={buttonStyle}>
+          Clear All Service Workers
+        </button>
+        <button onClick={() => clearCache()} style={buttonStyle}>
+          Clear All Caches
+        </button>
+        <button onClick={() => testPWA()} style={buttonStyle}>
+          Test PWA Status
+        </button>
+
+        <div
+          id="status"
+          style={{
+            marginTop: "20px",
+            padding: "15px",
+            background: "rgba(255,255,255,0.1)",
+            borderRadius: "8px",
+          }}
+        ></div>
+
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
           const status = document.getElementById('status');
 
           async function clearServiceWorkers() {
@@ -79,20 +94,22 @@ export default function ClearServiceWorker() {
           window.clearCache = clearCache;
           window.testPWA = testPWA;
           testPWA();
-        `}} />
+        `,
+          }}
+        />
       </body>
     </html>
   );
 }
 
 const buttonStyle = {
-  background: '#0e6037',
-  color: 'white',
-  border: 'none',
-  padding: '12px 24px',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  fontSize: '16px',
-  margin: '10px 10px 10px 0',
-  display: 'inline-block'
+  background: "#0e6037",
+  color: "white",
+  border: "none",
+  padding: "12px 24px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontSize: "16px",
+  margin: "10px 10px 10px 0",
+  display: "inline-block",
 };

@@ -85,6 +85,23 @@
   }
 }
 
+/* Thirdweb Connect Button - Rounded Edges Override */
+/* Target thirdweb button elements to add rounded corners */
+.tw-connect-button,
+button[class*="tw-connect"],
+[data-testid="connect-wallet-button"],
+button[aria-label*="Connect"] {
+  border-radius: 1000px !important; /* Full rounded */
+  overflow: hidden !important;
+}
+
+/* Override thirdweb's connected wallet display */
+.tw-connected-wallet,
+.tw-connected-wallet button {
+  border-radius: 1000px !important;
+  overflow: hidden !important;
+}
+
 /* Mobile-first responsive design */
 @media (max-width: 480px) {
   .container {
@@ -99,11 +116,13 @@
   
   /* Ultra compact mobile connect button styling */
   [data-testid="connect-wallet-button"],
-  button[aria-label*="Connect"] {
+  button[aria-label*="Connect"],
+  .tw-connected-wallet,
+  button[class*="tw-"] {
     font-size: 9px !important;
     padding: 3px 6px !important;
     min-height: 24px !important;
-    border-radius: 3px !important;
+    border-radius: 9999px !important; /* Keep rounded on mobile */
     min-width: 65px !important;
     font-weight: 500 !important;
     letter-spacing: 0.025em !important;
@@ -118,11 +137,13 @@
   }
   
   [data-testid="connect-wallet-button"],
-  button[aria-label*="Connect"] {
+  button[aria-label*="Connect"],
+  .tw-connected-wallet,
+  button[class*="tw-"] {
     font-size: 8px !important;
     padding: 2px 4px !important;
     min-height: 20px !important;
-    border-radius: 2px !important;
+    border-radius: 9999px !important; /* Keep fully rounded */
     min-width: 55px !important;
     text-transform: uppercase !important;
     letter-spacing: 0.05em !important;
@@ -132,13 +153,13 @@
 /* Ultra small screens (iPhone SE, etc.) */
 @media (max-width: 320px) {
   [data-testid="connect-wallet-button"],
-  /* button[aria-label*="Connect"] { */
-    button[aria-label*="Launch App"] {
-
+  button[aria-label*="Launch App"],
+  .tw-connected-wallet,
+  button[class*="tw-"] {
     font-size: 7px !important;
     padding: 2px 3px !important;
     min-height: 18px !important;
-    border-radius: 2px !important;
+    border-radius: 9999px !important; /* Keep fully rounded */
     min-width: 45px !important;
   }
 }

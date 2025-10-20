@@ -1,103 +1,109 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>Clear Service Worker - MiniLend</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 20px;
-      background: #162013;
-      color: white;
-    }
-    button {
-      background: #0e6037;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 16px;
-      margin: 10px 0;
-    }
-    button:hover {
-      background: #0a4828;
-    }
-    #status {
-      margin-top: 20px;
-      padding: 15px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 8px;
-    }
-  </style>
-</head>
-<body>
-  <h1>🔧 MiniLend PWA Debug Tool</h1>
-  <p>Use this page to clear old service workers and test PWA installation.</p>
-  
-  <button onclick="clearServiceWorkers()">Clear All Service Workers</button>
-  <button onclick="clearCache()">Clear All Caches</button>
-  <button onclick="testPWA()">Test PWA Status</button>
-  
-  <div id="status"></div>
+  <head>
+    <title>Clear Service Worker - Minilend</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #162013;
+        color: white;
+      }
+      button {
+        background: #0e6037;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 10px 0;
+      }
+      button:hover {
+        background: #0a4828;
+      }
+      #status {
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔧 Minilend PWA Debug Tool</h1>
+    <p>Use this page to clear old service workers and test PWA installation.</p>
 
-  <script>
-    const status = document.getElementById('status');
+    <button onclick="clearServiceWorkers()">Clear All Service Workers</button>
+    <button onclick="clearCache()">Clear All Caches</button>
+    <button onclick="testPWA()">Test PWA Status</button>
 
-    async function clearServiceWorkers() {
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (let registration of registrations) {
-          await registration.unregister();
+    <div id="status"></div>
+
+    <script>
+      const status = document.getElementById("status");
+
+      async function clearServiceWorkers() {
+        try {
+          const registrations =
+            await navigator.serviceWorker.getRegistrations();
+          for (let registration of registrations) {
+            await registration.unregister();
+          }
+          status.innerHTML = `✅ Cleared ${registrations.length} service worker(s). Reload the main app to register the new one.`;
+        } catch (error) {
+          status.innerHTML = `❌ Error: ${error.message}`;
         }
-        status.innerHTML = `✅ Cleared ${registrations.length} service worker(s). Reload the main app to register the new one.`;
-      } catch (error) {
-        status.innerHTML = `❌ Error: ${error.message}`;
       }
-    }
 
-    async function clearCache() {
-      try {
+      async function clearCache() {
+        try {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map((name) => caches.delete(name)));
+          status.innerHTML = `✅ Cleared ${cacheNames.length} cache(s).`;
+        } catch (error) {
+          status.innerHTML = `❌ Error: ${error.message}`;
+        }
+      }
+
+      async function testPWA() {
+        let info = "<h3>PWA Status:</h3><ul>";
+
+        // Check if running as PWA
+        const isStandalone =
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone ||
+          document.referrer.includes("android-app://");
+        info += `<li>Running as PWA: ${isStandalone ? "✅ Yes" : "❌ No (in browser)"}</li>`;
+
+        // Check service worker
+        const swRegistrations =
+          await navigator.serviceWorker.getRegistrations();
+        info += `<li>Service Workers: ${swRegistrations.length}</li>`;
+        swRegistrations.forEach((reg, i) => {
+          info += `<li style="margin-left: 20px;">SW ${i + 1}: ${reg.active?.scriptURL || "inactive"}</li>`;
+        });
+
+        // Check manifest
+        const manifestLink = document.querySelector('link[rel="manifest"]');
+        info += `<li>Manifest linked: ${manifestLink ? "✅ Yes" : "❌ No"}</li>`;
+
+        // Check caches
         const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
-        status.innerHTML = `✅ Cleared ${cacheNames.length} cache(s).`;
-      } catch (error) {
-        status.innerHTML = `❌ Error: ${error.message}`;
+        info += `<li>Caches: ${cacheNames.length}</li>`;
+
+        info += "</ul>";
+        status.innerHTML = info;
       }
-    }
 
-    async function testPWA() {
-      let info = '<h3>PWA Status:</h3><ul>';
-      
-      // Check if running as PWA
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches 
-        || window.navigator.standalone 
-        || document.referrer.includes('android-app://');
-      info += `<li>Running as PWA: ${isStandalone ? '✅ Yes' : '❌ No (in browser)'}</li>`;
-      
-      // Check service worker
-      const swRegistrations = await navigator.serviceWorker.getRegistrations();
-      info += `<li>Service Workers: ${swRegistrations.length}</li>`;
-      swRegistrations.forEach((reg, i) => {
-        info += `<li style="margin-left: 20px;">SW ${i+1}: ${reg.active?.scriptURL || 'inactive'}</li>`;
-      });
-      
-      // Check manifest
-      const manifestLink = document.querySelector('link[rel="manifest"]');
-      info += `<li>Manifest linked: ${manifestLink ? '✅ Yes' : '❌ No'}</li>`;
-      
-      // Check caches
-      const cacheNames = await caches.keys();
-      info += `<li>Caches: ${cacheNames.length}</li>`;
-      
-      info += '</ul>';
-      status.innerHTML = info;
-    }
-
-    // Auto-run test on load
-    testPWA();
-  </script>
-</body>
+      // Auto-run test on load
+      testPWA();
+    </script>
+  </body>
 </html>
