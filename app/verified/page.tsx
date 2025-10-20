@@ -35,10 +35,10 @@ export default function VerifiedPage() {
         </div>
 
         <div className="text-center mt-6">
-          <p className="text-gray-600 text-sm">
+          <p className="text-muted-foreground text-sm">
             Age & Identity Verified
           </p>
-          <p className="text-gray-500 text-xs mt-1">
+          <p className="text-muted-foreground text-xs mt-1">
             Redirecting to Minilend...
           </p>
         </div>

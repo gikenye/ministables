@@ -304,9 +304,9 @@ export function PayBackModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden [&>button]:text-white [&>button]:hover:text-[#a2c398]">
-          <div className="flex h-5 w-full items-center justify-center bg-[#162013]">
-            <div className="h-1 w-9 rounded-full bg-[#426039]"></div>
+        <DialogContent className="w-full max-w-md mx-auto bg-background border-0 shadow-lg p-0 overflow-hidden [&>button]:text-foreground [&>button]:hover:text-muted-foreground">
+          <div className="flex h-5 w-full items-center justify-center bg-background">
+            <div className="h-1 w-9 rounded-full bg-muted"></div>
           </div>
 
           <div className="px-4 pb-5">
@@ -314,13 +314,13 @@ export function PayBackModal({
               {currentStep > 1 && (
                 <button
                   onClick={prevStep}
-                  className="p-1 text-[#a2c398] hover:text-white transition-colors"
+                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
               )}
               <div className="flex-1 text-center">
-                <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">
+                <h1 className="text-foreground text-[22px] font-bold leading-tight tracking-[-0.015em]">
                   Pay Back Loan
                 </h1>
                 <div className="flex justify-center gap-1 mt-2">
@@ -328,7 +328,7 @@ export function PayBackModal({
                     <div
                       key={step}
                       className={`w-2 h-2 rounded-full transition-colors ${
-                        step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"
+                        step <= currentStep ? "bg-primary" : "bg-muted"
                       }`}
                     />
                   ))}
@@ -338,7 +338,7 @@ export function PayBackModal({
             </div>
 
             {!account && (
-              <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm mb-4">
+              <div className="bg-warning/20 border border-warning text-foreground p-3 rounded-xl text-sm mb-4">
                 Connect wallet to continue
               </div>
             )}
@@ -347,10 +347,10 @@ export function PayBackModal({
               {currentStep === 1 && (
                 <div className="space-y-6">
                   <div className="text-center">
-                    <h3 className="text-white text-lg font-medium mb-2">
+                    <h3 className="text-foreground text-lg font-medium mb-2">
                       Select loan to pay
                     </h3>
-                    <p className="text-[#a2c398] text-sm">
+                    <p className="text-muted-foreground text-sm">
                       Choose which loan you'd like to pay back
                     </p>
                   </div>
@@ -379,10 +379,10 @@ export function PayBackModal({
               {currentStep === 2 && (
                 <div className="space-y-6">
                   <div className="text-center">
-                    <h3 className="text-white text-lg font-medium mb-2">
+                    <h3 className="text-foreground text-lg font-medium mb-2">
                       How much to pay?
                     </h3>
-                    <p className="text-[#a2c398] text-sm">
+                    <p className="text-muted-foreground text-sm">
                       Balance:{" "}
                       {Number.parseFloat(
                         repayTokenBalance?.displayValue || "0"
@@ -393,18 +393,18 @@ export function PayBackModal({
 
                   {hasZeroBalance() &&
                     isAssetSupportedForOnramp(form.token) && (
-                      <div className="bg-[#2a3d24] border border-[#426039] rounded-xl p-3 mb-4">
+                      <div className="bg-card/80 border border-border rounded-xl p-3 mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <div className="text-[#a2c398] text-sm">
+                          <div className="text-muted-foreground text-sm">
                             No {tokenInfos[form.token]?.symbol} balance
                           </div>
-                          <div className="text-[#54d22d] text-xs">
+                          <div className="text-primary text-xs">
                             Get tokens first
                           </div>
                         </div>
                         <button
                           onClick={() => setShowOnrampModal(true)}
-                          className="w-full h-10 bg-[#54d22d] text-[#162013] text-sm font-medium rounded-lg hover:bg-[#4bc428] transition-colors flex items-center justify-center gap-1"
+                          className="w-full h-10 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
                         >
                           <Plus className="w-4 h-4" />
                           Get {tokenInfos[form.token]?.symbol}
@@ -424,10 +424,10 @@ export function PayBackModal({
                           setForm({ ...form, amount: value });
                         }
                       }}
-                      className="w-full h-16 rounded-xl text-white bg-[#21301c] border-2 border-[#426039] focus:border-[#54d22d] focus:outline-0 focus:ring-0 pl-4 pr-20 text-2xl font-medium text-center"
+                      className="w-full h-16 rounded-xl text-foreground bg-card border-2 border-border focus:border-primary focus:outline-0 focus:ring-0 pl-4 pr-20 text-2xl font-medium text-center"
                       autoFocus
                     />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a2c398] text-sm">
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                       {tokenInfos[form.token]?.symbol}
                     </div>
                   </div>
@@ -449,7 +449,7 @@ export function PayBackModal({
                             ).toFixed(6),
                           })
                         }
-                        className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                        className="h-10 bg-card text-foreground text-sm rounded-lg hover:bg-card/90 transition-colors"
                       >
                         10%
                       </button>
@@ -468,7 +468,7 @@ export function PayBackModal({
                             ).toFixed(6),
                           })
                         }
-                        className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                        className="h-10 bg-card text-foreground text-sm rounded-lg hover:bg-card/90 transition-colors"
                       >
                         50%
                       </button>
@@ -487,7 +487,7 @@ export function PayBackModal({
                             ).toFixed(6),
                           })
                         }
-                        className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                        className="h-10 bg-card text-foreground text-sm rounded-lg hover:bg-card/90 transition-colors"
                       >
                         75%
                       </button>
@@ -502,7 +502,7 @@ export function PayBackModal({
                             ),
                           })
                         }
-                        className="h-10 bg-[#54d22d] text-[#162013] text-sm font-medium rounded-lg hover:bg-[#4bc428] transition-colors"
+                        className="h-10 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
                       >
                         Full
                       </button>
@@ -512,7 +512,7 @@ export function PayBackModal({
                   <button
                     onClick={nextStep}
                     disabled={!form.amount || Number(form.amount) <= 0}
-                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Continue
                   </button>
@@ -522,22 +522,22 @@ export function PayBackModal({
               {currentStep === 3 && !paymentSuccess && (
                 <div className="space-y-6">
                   <div className="text-center">
-                    <h3 className="text-white text-lg font-medium mb-2">
+                    <h3 className="text-foreground text-lg font-medium mb-2">
                       Confirm payment
                     </h3>
-                    <p className="text-[#a2c398] text-sm">
+                    <p className="text-muted-foreground text-sm">
                       Review your loan payment
                     </p>
                   </div>
 
-                  <div className="bg-[#21301c] rounded-xl p-4 space-y-4">
+                  <div className="bg-card rounded-xl p-4 space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#a2c398]">Paying</span>
+                      <span className="text-muted-foreground">Paying</span>
                       <div className="text-right">
-                        <div className="text-white font-medium">
+                        <div className="text-foreground font-medium">
                           {form.amount}
                         </div>
-                        <div className="text-[#a2c398] text-sm">
+                        <div className="text-muted-foreground text-sm">
                           {tokenInfos[form.token]?.symbol}
                         </div>
                       </div>
@@ -545,8 +545,8 @@ export function PayBackModal({
 
                     {selectedLoan && (
                       <div className="flex items-center justify-between">
-                        <span className="text-[#a2c398]">Total owed</span>
-                        <div className="text-white font-medium">
+                        <span className="text-muted-foreground">Total owed</span>
+                        <div className="text-foreground font-medium">
                           {formatAmount(
                             selectedLoan.totalOwed,
                             selectedLoan.decimals
@@ -556,10 +556,10 @@ export function PayBackModal({
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
-                      <span className="text-[#a2c398]">After payment</span>
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <span className="text-muted-foreground">After payment</span>
                       <div className="text-right">
-                        <div className="text-[#54d22d] font-bold">
+                        <div className="text-primary font-bold">
                           {selectedLoan
                             ? (
                                 Number(
@@ -572,7 +572,7 @@ export function PayBackModal({
                             : "0.0000"}{" "}
                           {tokenInfos[form.token]?.symbol}
                         </div>
-                        <div className="text-[#a2c398] text-sm">remaining</div>
+                        <div className="text-muted-foreground text-sm">remaining</div>
                       </div>
                     </div>
                   </div>
@@ -585,7 +585,7 @@ export function PayBackModal({
                       !form.amount ||
                       Number(form.amount) <= 0
                     }
-                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Pay Back Loan
                   </button>
@@ -594,10 +594,10 @@ export function PayBackModal({
 
               {currentStep === 4 && paymentSuccess && (
                 <div className="space-y-6 text-center">
-                  <div className="bg-[#21301c] rounded-xl p-6 space-y-4">
-                    <div className="w-16 h-16 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto">
+                  <div className="bg-card rounded-xl p-6 space-y-4">
+                    <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto">
                       <svg
-                        className="w-8 h-8 text-[#162013]"
+                        className="w-8 h-8 text-primary-foreground"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -608,10 +608,10 @@ export function PayBackModal({
                         />
                       </svg>
                     </div>
-                    <h3 className="text-white text-xl font-bold">
+                    <h3 className="text-foreground text-xl font-bold">
                       Payment Successful!
                     </h3>
-                    <p className="text-[#a2c398] text-sm">
+                    <p className="text-muted-foreground text-sm">
                       Thanks for repaying {form.amount}{" "}
                       {tokenInfos[form.token]?.symbol}.
                       {remainingBalance && Number(remainingBalance) > 0
@@ -619,12 +619,12 @@ export function PayBackModal({
                         : " Your loan is now fully paid off!"}
                     </p>
                   </div>
-                  <p className="text-[#a2c398] text-xs">
+                  <p className="text-muted-foreground text-xs">
                     This modal will close automatically in 5 seconds
                   </p>
                   <button
                     onClick={onClose}
-                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
+                    className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 transition-colors"
                   >
                     Close
                   </button>

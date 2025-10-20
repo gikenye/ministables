@@ -17,11 +17,11 @@ export function TokenLiquidity({ contract, tokenAddress, tokenInfo }: TokenLiqui
   const isPending = isSupplyPending || isBorrowsPending || isThresholdPending || isPausedPending;
 
   if (isPending) {
-    return <span className="text-xs text-gray-500">Loading...</span>;
+    return <span className="text-xs text-muted-foreground">Loading...</span>;
   }
 
   if (isBorrowingPaused) {
-    return <span className="text-xs text-red-500">Paused</span>;
+    return <span className="text-xs text-destructive-foreground0">Paused</span>;
   }
 
   let availableLiquidity = BigInt(0);
@@ -36,12 +36,12 @@ export function TokenLiquidity({ contract, tokenAddress, tokenInfo }: TokenLiqui
   }
 
   if (availableLiquidity === BigInt(0)) {
-    return <span className="text-xs text-gray-500">0 available</span>;
+    return <span className="text-xs text-muted-foreground">0 available</span>;
   }
 
   const formattedAmount = formatAmount(availableLiquidity.toString(), tokenInfo.decimals);
   return (
-    <span className="text-xs text-green-600">
+    <span className="text-xs text-success">
       {parseFloat(formattedAmount).toFixed(2)} available
     </span>
   );

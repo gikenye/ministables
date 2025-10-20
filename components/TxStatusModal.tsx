@@ -26,15 +26,15 @@ export function TxStatusModal({ isOpen, onClose, steps, title = "Transaction" }:
   const getIcon = (status: TxStepStatus) => {
     switch (status) {
       case "success":
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
+        return <CheckCircle className="w-4 h-4 text-success" />;
       case "error":
-        return <XCircle className="w-4 h-4 text-red-600" />;
+        return <XCircle className="w-4 h-4 text-destructive" />;
       case "pending":
         return (
-          <div className="w-4 h-4 border-2 border-gray-300 border-t-primary rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
         );
       default:
-        return <Clock className="w-4 h-4 text-gray-400" />;
+        return <Clock className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
@@ -42,20 +42,20 @@ export function TxStatusModal({ isOpen, onClose, steps, title = "Transaction" }:
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[90vw] max-w-xs mx-auto bg-white border-0 shadow-lg">
         <DialogHeader className="pb-2">
-          <DialogTitle className="text-base font-medium text-gray-900">{title}</DialogTitle>
+          <DialogTitle className="text-base font-medium text-foreground">{title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <ul className="space-y-2">
             {steps.map((step) => (
               <li key={step.id} className="flex items-center gap-2 text-sm">
                 {getIcon(step.status)}
-                <span className={step.status === "error" ? "text-red-700" : "text-gray-800"}>
+                <span className={step.status === "error" ? "text-destructive" : "text-foreground"}>
                   {step.label}
                 </span>
               </li>
             ))}
           </ul>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-muted-foreground">
             {anyPending ? "This may take a few seconds. Please don’t close the app." : "All steps completed."}
           </div>
           <div className="pt-2">

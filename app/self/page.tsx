@@ -146,7 +146,7 @@ export default function Home() {
         <h1 className="text-xl font-bold mb-1 text-primary">
           Identity Verification
         </h1>
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-muted-foreground">
           Scan QR code with Self Protocol App
         </p>
       </div>
@@ -156,7 +156,7 @@ export default function Home() {
         {verifying ? (
           <div className="flex flex-col items-center justify-center py-6">
             <div className="w-12 h-12 border-3 border-primary border-t-transparent rounded-full animate-spin mb-3"></div>
-            <p className="text-gray-600 text-sm">Verifying...</p>
+            <p className="text-muted-foreground text-sm">Verifying...</p>
           </div>
         ) : (
           <div className="flex justify-center mb-4">
@@ -170,8 +170,8 @@ export default function Home() {
                 }}
               />
             ) : (
-              <div className="w-[220px] h-[220px] bg-gray-100 animate-pulse flex items-center justify-center rounded-lg">
-                <p className="text-gray-500 text-xs">Loading QR Code...</p>
+              <div className="w-[220px] h-[220px] bg-muted animate-pulse flex items-center justify-center rounded-lg">
+                <p className="text-muted-foreground text-xs">Loading QR Code...</p>
               </div>
             )}
           </div>
@@ -182,7 +182,7 @@ export default function Home() {
             type="button"
             onClick={openSelfApp}
             disabled={!universalLink}
-            className="w-full bg-primary hover:bg-primary/90 transition-colors text-white p-2 rounded-md text-sm disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="w-full bg-primary hover:bg-primary/90 transition-colors text-white p-2 rounded-md text-sm disabled:bg-muted disabled:cursor-not-allowed"
           >
             Open Self App
           </button>
@@ -191,7 +191,7 @@ export default function Home() {
             type="button"
             onClick={copyToClipboard}
             disabled={!universalLink}
-            className="w-full bg-gray-100 hover:bg-gray-200 transition-colors text-gray-800 p-2 rounded-md text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+            className="w-full bg-muted hover:bg-muted transition-colors text-foreground p-2 rounded-md text-sm disabled:bg-card disabled:text-muted-foreground disabled:cursor-not-allowed"
           >
             {linkCopied ? "Copied!" : "Copy Link"}
           </button>
@@ -200,11 +200,11 @@ export default function Home() {
             <button
               type="button"
               onClick={() => router.push("/")}
-              className="w-full bg-gray-50 hover:bg-gray-100 transition-colors text-gray-600 p-2 rounded-md text-sm border"
+              className="w-full bg-card hover:bg-muted transition-colors text-muted-foreground p-2 rounded-md text-sm border"
             >
               Skip Verification
             </button>
-            <p className="text-xs text-gray-500 text-center mt-1">
+            <p className="text-xs text-muted-foreground text-center mt-1">
               You can verify later for enhanced security
             </p>
           </div>
@@ -212,7 +212,7 @@ export default function Home() {
 
         {/* Toast notification */}
         {showToast && (
-          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white py-2 px-4 rounded-full shadow-lg text-xs">
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-popover text-white py-2 px-4 rounded-full shadow-lg text-xs">
             {toastMessage}
           </div>
         )}

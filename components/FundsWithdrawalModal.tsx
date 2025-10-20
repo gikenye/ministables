@@ -100,7 +100,7 @@ export function FundsWithdrawalModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-sm mx-auto bg-[#162013] border-0 shadow-2xl">
+      <DialogContent className="w-[95vw] max-w-sm mx-auto bg-background border-0 shadow-2xl">
         <DialogHeader className="space-y-3">
           <div className="flex items-center justify-between">
             {currentStep > 1 && (
@@ -108,14 +108,14 @@ export function FundsWithdrawalModal({
                 variant="ghost"
                 size="sm"
                 onClick={goToPreviousStep}
-                className="text-[#a2c398] hover:text-white hover:bg-[#21301c] p-2"
+                className="text-muted-foreground hover:text-foreground hover:bg-card p-2"
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             )}
               <div className="flex-1 text-center">
-              <DialogTitle className="text-white text-lg font-normal">Cash Out</DialogTitle>
-              <DialogDescription className="text-[#a2c398] text-sm">
+              <DialogTitle className="text-foreground text-lg font-normal">Cash Out</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-sm">
                 {currentStep === 1 && "Select deposits to withdraw"}
                 {currentStep === 2 && "Review and confirm"}
               </DialogDescription>
@@ -128,7 +128,7 @@ export function FundsWithdrawalModal({
               <div
                 key={step}
                 className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                  step <= currentStep ? "bg-[#54d22d] scale-110" : "bg-[#426039]"
+                  step <= currentStep ? "bg-primary scale-110" : "bg-muted"
                 }`}
               />
             ))}
@@ -136,7 +136,7 @@ export function FundsWithdrawalModal({
         </DialogHeader>
 
         {error && (
-          <div className="bg-red-900/20 border border-red-500/30 text-red-400 p-3 rounded-xl text-sm animate-in slide-in-from-top-2">
+          <div className="bg-destructive/20 border border-destructive/50 text-destructive p-3 rounded-xl text-sm animate-in slide-in-from-top-2">
             <div className="flex items-center">
               <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
               {error}
@@ -151,7 +151,7 @@ export function FundsWithdrawalModal({
 
               {!vaultPositions || vaultPositions.filter(pos => BigInt(pos.totalCurrentValue) > BigInt(0)).length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-[#a2c398] text-sm">
+                  <div className="text-muted-foreground text-sm">
                     No deposits available to withdraw yet.
                   </div>
                 </div>
@@ -163,7 +163,7 @@ export function FundsWithdrawalModal({
                     const hasWithdrawable = pos.deposits.some(d => d.canWithdraw)
 
                     return (
-                      <div key={pos.tokenAddress} className="border border-[#426039] bg-[#21301c] rounded-xl p-4">
+                      <div key={pos.tokenAddress} className="border border-border bg-card rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center">
                             {iconUrl ? (
@@ -172,13 +172,13 @@ export function FundsWithdrawalModal({
                               <span className="text-2xl mr-3">💱</span>
                             )}
                             <div className="text-left">
-                              <div className="text-white font-medium">{pos.tokenSymbol}</div>
-                              <div className="text-[#a2c398] text-sm">{hasWithdrawable ? "Available" : "All Locked"}</div>
+                              <div className="text-foreground font-medium">{pos.tokenSymbol}</div>
+                              <div className="text-muted-foreground text-sm">{hasWithdrawable ? "Available" : "All Locked"}</div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-white font-normal">{formatAmount(pos.totalCurrentValue, pos.decimals)}</div>
-                            <div className="text-xs text-[#a2c398]">Total</div>
+                            <div className="text-foreground font-normal">{formatAmount(pos.totalCurrentValue, pos.decimals)}</div>
+                            <div className="text-xs text-muted-foreground">Total</div>
                           </div>
                         </div>
 
@@ -206,15 +206,15 @@ export function FundsWithdrawalModal({
                                     className="w-4 h-4"
                                   />
                                   <div>
-                                    <div className="text-sm text-white">{formatAmount(deposit.currentValue, pos.decimals)} {pos.tokenSymbol}</div>
-                                    <div className="text-xs text-[#a2c398]">{deposit.lockEnd > 0 ? `Unlocks: ${formatDate(deposit.lockEnd)}` : "No lock"}</div>
+                                    <div className="text-sm text-foreground">{formatAmount(deposit.currentValue, pos.decimals)} {pos.tokenSymbol}</div>
+                                    <div className="text-xs text-muted-foreground">{deposit.lockEnd > 0 ? `Unlocks: ${formatDate(deposit.lockEnd)}` : "No lock"}</div>
                                   </div>
                                 </div>
                                 <div className="text-xs">
                                   {deposit.canWithdraw ? (
-                                    <span className="text-[#54d22d]">Available</span>
+                                    <span className="text-primary">Available</span>
                                   ) : (
-                                    <span className="text-[#a2c398]">Locked</span>
+                                    <span className="text-muted-foreground">Locked</span>
                                   )}
                                 </div>
                               </div>
@@ -230,7 +230,7 @@ export function FundsWithdrawalModal({
               <Button
                 onClick={goToNextStep}
                 disabled={!canProceedToStep2}
-                className="w-full bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-12 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue
               </Button>
@@ -241,23 +241,23 @@ export function FundsWithdrawalModal({
           {currentStep === 2 && selectedPosition && (
             <div className="space-y-4">
               <div className="text-center">
-                <h3 className="text-white text-lg font-medium mb-2">Confirm Withdrawal</h3>
-                <p className="text-[#a2c398] text-sm">Review your withdrawal details</p>
+                <h3 className="text-foreground text-lg font-medium mb-2">Confirm Withdrawal</h3>
+                <p className="text-muted-foreground text-sm">Review your withdrawal details</p>
               </div>
 
-              <div className="bg-[#21301c] rounded-xl p-4 space-y-3">
+              <div className="bg-card rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-[#a2c398]">Asset</span>
-                  <span className="text-white font-normal">{selectedPosition.tokenSymbol}</span>
+                  <span className="text-muted-foreground">Asset</span>
+                  <span className="text-foreground font-normal">{selectedPosition.tokenSymbol}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[#a2c398]">Deposits</span>
-                  <span className="text-white font-normal text-base">{selectedDepositIds.length}</span>
+                  <span className="text-muted-foreground">Deposits</span>
+                  <span className="text-foreground font-normal text-base">{selectedDepositIds.length}</span>
                 </div>
-                <div className="border-t border-[#426039] pt-3">
+                <div className="border-t border-border pt-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-[#a2c398]">Total Amount</span>
-                    <span className="text-[#54d22d] font-normal text-base">
+                    <span className="text-muted-foreground">Total Amount</span>
+                    <span className="text-primary font-normal text-base">
                       {formatAmount(
                         selectedPosition.deposits
                           .filter(d => selectedDepositIds.includes(d.depositId))
@@ -274,14 +274,14 @@ export function FundsWithdrawalModal({
                 <Button
                   onClick={goToPreviousStep}
                   variant="outline"
-                  className="flex-1 bg-transparent border-[#426039] text-[#a2c398] hover:bg-[#21301c] hover:text-white h-12"
+                  className="flex-1 bg-transparent border-border text-muted-foreground hover:bg-card hover:text-foreground h-12"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleWithdraw}
                   disabled={loading || isWithdrawing}
-                  className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12"
+                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-12"
                 >
                   {loading || isWithdrawing ? "Processing..." : "Confirm Withdrawal"}
                 </Button>

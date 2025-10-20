@@ -34,10 +34,10 @@ export function AppInfo() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h3 className="text-xl font-semibold text-white mb-2">
+        <h3 className="text-xl font-semibold text-foreground mb-2">
           Built for Everyone
         </h3>
-        <p className="text-[#a2c398] text-sm">
+        <p className="text-muted-foreground text-sm">
           Minilend combines the power of DeFi with regulatory compliance to
           provide accessible financial services
         </p>
@@ -49,19 +49,19 @@ export function AppInfo() {
           return (
             <Card
               key={index}
-              className="bg-[#21301c]/40 border border-[#2e4328] text-center"
+              className="bg-card/40 border border-border text-center"
             >
               <CardContent className="p-4">
-                <div className="w-8 h-8 bg-[#54d22d]/20 rounded-lg flex items-center justify-center mx-auto mb-2">
-                  <IconComponent className="w-4 h-4 text-[#54d22d]" />
+                <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <IconComponent className="w-4 h-4 text-primary" />
                 </div>
-                <div className="text-lg font-bold text-white mb-1">
+                <div className="text-lg font-bold text-foreground mb-1">
                   {stat.value}
                 </div>
-                <div className="text-sm font-medium text-[#a2c398] mb-1">
+                <div className="text-sm font-medium text-muted-foreground mb-1">
                   {stat.label}
                 </div>
-                <div className="text-xs text-[#a2c398]/80">
+                <div className="text-xs text-muted-foreground/80">
                   {stat.description}
                 </div>
               </CardContent>

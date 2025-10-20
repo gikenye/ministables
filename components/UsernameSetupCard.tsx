@@ -113,7 +113,7 @@ export function UsernameSetupCard() {
       <CardContent className="p-4">
         {currentUsername && (
           <div className="mb-3">
-            <p className="text-sm text-gray-600">Current username:</p>
+            <p className="text-sm text-muted-foreground">Current username:</p>
             <p className="font-medium text-primary">{currentUsername}</p>
           </div>
         )}
@@ -129,23 +129,23 @@ export function UsernameSetupCard() {
             />
             {isChecking && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               </div>
             )}
             {isAvailable === true && !isChecking && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <Check className="w-4 h-4 text-green-500" />
+                <Check className="w-4 h-4 text-success" />
               </div>
             )}
             {isAvailable === false && !isChecking && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <X className="w-4 h-4 text-red-500" />
+                <X className="w-4 h-4 text-destructive-foreground0" />
               </div>
             )}
           </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          {success && <p className="text-sm text-green-500">Username saved successfully!</p>}
+          {error && <p className="text-sm text-destructive-foreground0">{error}</p>}
+          {success && <p className="text-sm text-success">Username saved successfully!</p>}
 
           <Button
             onClick={handleSaveUsername}
@@ -162,7 +162,7 @@ export function UsernameSetupCard() {
             )}
           </Button>
 
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Your username helps personalize your experience while maintaining your privacy.
           </p>
         </div>

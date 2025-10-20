@@ -23,10 +23,10 @@ export function LoanItem({ contract, userAddress, tokenAddress, tokenInfo, onSel
 
   if (isPending) {
     return (
-      <div className="border rounded p-2 border-gray-200">
+      <div className="border rounded p-2 border-border">
         <div className="flex items-center justify-between">
           <span className="font-medium text-sm">{tokenInfo.symbol}</span>
-          <span className="text-xs text-gray-500">Loading...</span>
+          <span className="text-xs text-muted-foreground">Loading...</span>
         </div>
       </div>
     );
@@ -53,7 +53,7 @@ export function LoanItem({ contract, userAddress, tokenAddress, tokenInfo, onSel
       className={`border rounded p-2 cursor-pointer transition-all ${
         isSelected
           ? "border-primary bg-primary/5"
-          : "border-gray-200 hover:border-primary/50"
+          : "border-border hover:border-primary/50"
       }`}
       onClick={() => onSelect(loan)}
     >
@@ -66,7 +66,7 @@ export function LoanItem({ contract, userAddress, tokenAddress, tokenInfo, onSel
           )}
           <span className="font-medium text-sm">{tokenInfo.symbol}</span>
         </div>
-        <span className="text-sm text-red-600 font-medium">
+        <span className="text-sm text-destructive font-medium">
           {totalOwed.toFixed(4)}
         </span>
       </div>

@@ -37,8 +37,8 @@ export function NetworkStatus() {
   return (
     <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium ${
       isOnline 
-        ? 'bg-green-100 text-green-800 border border-green-200' 
-        : 'bg-red-100 text-red-800 border border-red-200'
+        ? 'bg-success/20 text-success border border-success' 
+        : 'bg-destructive/20 text-destructive border border-destructive'
     }`}>
       <div className="flex items-center space-x-2">
         {isOnline ? (
@@ -61,13 +61,13 @@ export function RateLimitWarning({ show, onDismiss }: { show: boolean; onDismiss
   if (!show) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-100 border border-yellow-200 text-yellow-800 px-4 py-2 rounded-lg shadow-lg text-sm">
+    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-warning/20 border border-warning text-foreground px-4 py-2 rounded-lg shadow-lg text-sm">
       <div className="flex items-center space-x-2">
         <AlertCircle className="w-4 h-4" />
         <span>Network busy, retrying...</span>
         <button 
           onClick={onDismiss}
-          className="ml-2 text-yellow-600 hover:text-yellow-800"
+          className="ml-2 text-warning hover:text-foreground"
         >
           ×
         </button>

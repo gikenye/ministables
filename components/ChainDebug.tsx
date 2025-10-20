@@ -41,18 +41,18 @@ export function ChainDebug() {
   const isChainMismatch = walletChainId && customChain.id !== walletChainId;
 
   return (
-    <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm mb-4">
+    <div className="bg-warning/20 border border-warning text-foreground p-3 rounded-xl text-sm mb-4">
       <h4 className="font-semibold mb-2">🔍 Chain Debug Info</h4>
       <div className="space-y-1 text-xs">
         <div>Custom Chain Provider: {customChain.name} (ID: {customChain.id})</div>
         <div>Wallet Chain ID: {walletChainId || 'Loading...'}</div>
         {isChainMismatch && (
-          <div className="text-red-300 font-bold">
+          <div className="text-destructive-foreground font-bold">
             ⚠️ MISMATCH DETECTED! Your app thinks you're on {customChain.name} but your wallet is on chain {walletChainId}
           </div>
         )}
         {!isChainMismatch && walletChainId && (
-          <div className="text-green-300">✅ Chains are synchronized</div>
+          <div className="text-foreground">✅ Chains are synchronized</div>
         )}
       </div>
     </div>

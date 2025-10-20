@@ -52,13 +52,13 @@ function DefaultErrorFallback({ error, retry }: { error?: Error; retry: () => vo
                          error?.message?.includes('429');
 
   return (
-    <Card className="bg-white border-red-200 shadow-sm">
+    <Card className="bg-white border-destructive shadow-sm">
       <CardContent className="p-4 text-center">
-        <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-red-500" />
-        <h3 className="text-lg font-semibold text-red-700 mb-2">
+        <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-destructive-foreground0" />
+        <h3 className="text-lg font-semibold text-destructive mb-2">
           {isNetworkError ? 'Network Issue' : 'Something went wrong'}
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           {isNetworkError 
             ? 'Having trouble connecting to the network. Please check your connection and try again.'
             : 'An unexpected error occurred. Please try refreshing the page.'
@@ -66,7 +66,7 @@ function DefaultErrorFallback({ error, retry }: { error?: Error; retry: () => vo
         </p>
         <Button 
           onClick={retry}
-          className="bg-red-600 hover:bg-red-700 text-white"
+          className="bg-destructive hover:bg-destructive text-white"
           size="sm"
         >
           <RefreshCw className="w-4 h-4 mr-2" />

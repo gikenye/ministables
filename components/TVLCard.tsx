@@ -30,9 +30,9 @@ export default function TVLCard({
       <h2 className="text-lg font-semibold text-center text-primary mb-3">
         Total Value Locked
       </h2>
-      <div className="text-center p-3 bg-green-50 rounded-lg mb-4">
-        <TrendingUp className="w-5 h-5 mx-auto mb-1 text-green-600" />
-        <p className="text-xs font-medium mb-1 text-gray-600">Available Liquidity</p>
+      <div className="text-center p-3 bg-success/10 rounded-lg mb-4">
+        <TrendingUp className="w-5 h-5 mx-auto mb-1 text-success" />
+        <p className="text-xs font-medium mb-1 text-muted-foreground">Available Liquidity</p>
         <TVLSummary 
           contract={contract}
           aavePoolContract={aavePoolContract}
@@ -91,11 +91,11 @@ function TVLSummary({
   totalTVL = tokenData.reduce((acc, val) => acc + val, 0);
 
   if (!allLoaded) {
-    return <p className="text-lg font-bold text-green-600">Loading...</p>;
+    return <p className="text-lg font-bold text-success">Loading...</p>;
   }
 
   return (
-    <p className="text-lg font-bold text-green-600">
+    <p className="text-lg font-bold text-success">
       ${totalTVL.toFixed(2)}
     </p>
   );
@@ -121,8 +121,8 @@ function TokenReserveItem({
   if (isPending) {
     return (
       <div className="flex justify-between items-center">
-        <span className="font-medium text-xs text-gray-700">{tokenInfo.symbol}</span>
-        <span className="text-green-600 font-semibold text-xs">Loading...</span>
+        <span className="font-medium text-xs text-foreground">{tokenInfo.symbol}</span>
+        <span className="text-success font-semibold text-xs">Loading...</span>
       </div>
     );
   }
@@ -133,8 +133,8 @@ function TokenReserveItem({
 
   return (
     <div className="flex justify-between items-center">
-      <span className="font-medium text-xs text-gray-700">{tokenInfo.symbol}</span>
-      <span className="text-green-600 font-semibold text-xs">
+      <span className="font-medium text-xs text-foreground">{tokenInfo.symbol}</span>
+      <span className="text-success font-semibold text-xs">
         {formatAmount(totalSupply.toString(), tokenInfo.decimals)}
       </span>
     </div>

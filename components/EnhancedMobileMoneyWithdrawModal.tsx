@@ -391,14 +391,14 @@ export function MobileMoneyWithdrawModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] max-w-[420px] mx-auto bg-[#162013] border-0 shadow-2xl rounded-xl p-0 max-h-[90vh] overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b border-[#2e4328]">
+      <DialogContent className="w-[95vw] max-w-[420px] mx-auto bg-background border-0 shadow-2xl rounded-xl p-0 max-h-[90vh] overflow-hidden">
+        <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center min-w-0">
-              <Smartphone className="w-5 h-5 mr-3 text-[#54d22d] flex-shrink-0" />
+              <Smartphone className="w-5 h-5 mr-3 text-primary flex-shrink-0" />
               <div className="min-w-0">
-                <DialogTitle className="text-white text-base font-normal truncate">Send to Phone</DialogTitle>
-                <DialogDescription className="text-[#a2c398] text-sm mt-1">
+                <DialogTitle className="text-foreground text-base font-normal truncate">Send to Phone</DialogTitle>
+                <DialogDescription className="text-muted-foreground text-sm mt-1">
                   Convert {tokenSymbol} to mobile money
                 </DialogDescription>
               </div>
@@ -407,7 +407,7 @@ export function MobileMoneyWithdrawModal({
               onClick={handleClose}
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 text-[#a2c398] hover:text-white hover:bg-[#2e4328]"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-card"
               disabled={processing}
             >
               <X className="w-4 h-4" />
@@ -415,7 +415,7 @@ export function MobileMoneyWithdrawModal({
           </div>
         </DialogHeader>
 
-        <div className="px-6 py-4 border-b border-[#2e4328] bg-[#21301c]">
+        <div className="px-6 py-4 border-b border-border bg-card">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
@@ -423,10 +423,10 @@ export function MobileMoneyWithdrawModal({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
                       step.completed
-                        ? "bg-[#54d22d] text-[#162013]"
+                        ? "bg-primary text-primary-foreground"
                         : step.current
-                          ? "bg-[#426039] text-white"
-                          : "bg-[#2e4328] text-[#a2c398]"
+                          ? "bg-muted text-foreground"
+                          : "bg-card text-muted-foreground"
                     }`}
                   >
                     {step.completed ? <CheckCircle className="w-4 h-4" /> : step.id}
@@ -434,7 +434,7 @@ export function MobileMoneyWithdrawModal({
                   <div className="text-xs text-center mt-2 max-w-[60px]">
                     <div
                       className={`font-medium ${
-                        step.current ? "text-[#54d22d]" : step.completed ? "text-[#54d22d]" : "text-[#a2c398]"
+                        step.current ? "text-primary" : step.completed ? "text-primary" : "text-muted-foreground"
                       }`}
                     >
                       {step.title}
@@ -442,7 +442,7 @@ export function MobileMoneyWithdrawModal({
                   </div>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-8 h-0.5 mx-2 ${step.completed ? "bg-[#54d22d]" : "bg-[#2e4328]"}`} />
+                  <div className={`w-8 h-0.5 mx-2 ${step.completed ? "bg-primary" : "bg-card"}`} />
                 )}
               </div>
             ))}
@@ -454,17 +454,17 @@ export function MobileMoneyWithdrawModal({
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Currency {fiatConfig?.flag}</Label>
+                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Currency {fiatConfig?.flag}</Label>
                   <Select
                     value={form.fiatCurrency}
                     onValueChange={(value) => setForm((prev) => ({ ...prev, fiatCurrency: value }))}
                   >
-                    <SelectTrigger className="h-12 bg-[#21301c] border-[#426039] text-white">
+                    <SelectTrigger className="h-12 bg-card border-border text-foreground">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#21301c] border-[#426039]">
+                    <SelectContent className="bg-card border-border">
                       {Object.entries(ENHANCED_OFFRAMP_FIAT).map(([currency, config]) => (
-                        <SelectItem key={currency} value={currency} className="text-white hover:bg-[#2e4328]">
+                        <SelectItem key={currency} value={currency} className="text-foreground hover:bg-card">
                           {config.flag} {currency}
                         </SelectItem>
                       ))}
@@ -473,32 +473,32 @@ export function MobileMoneyWithdrawModal({
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Available</Label>
-                  <div className="h-12 px-4 py-3 bg-[#21301c] border border-[#426039] rounded-md flex items-center text-sm font-medium text-white">
+                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Available</Label>
+                  <div className="h-12 px-4 py-3 bg-card border border-border rounded-md flex items-center text-sm font-medium text-foreground">
                     {Number.parseFloat(availableAmount).toFixed(4)} {tokenSymbol}
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Phone Number</Label>
+                <Label className="text-sm font-medium text-muted-foreground mb-2 block">Phone Number</Label>
                 <Input
                   type="tel"
                   placeholder={form.fiatCurrency === "KES" ? "0712345678" : "+1234567890"}
                   value={form.phoneNumber}
                   onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
-                  className="h-12 bg-[#21301c] border-[#426039] text-white placeholder:text-[#a2c398]"
+                  className="h-12 bg-card border-border text-foreground placeholder:text-muted-foreground"
                 />
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-[#a2c398] mb-2 block">Amount ({tokenSymbol})</Label>
+                <Label className="text-sm font-medium text-muted-foreground mb-2 block">Amount ({tokenSymbol})</Label>
                 <Input
                   type="number"
                   placeholder="0.00"
                   value={form.amount}
                   onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                  className="h-12 bg-[#21301c] border-[#426039] text-white placeholder:text-[#a2c398]"
+                  className="h-12 bg-card border-border text-foreground placeholder:text-muted-foreground"
                   min="0.01"
                   step="0.01"
                   max={availableAmount}
@@ -511,7 +511,7 @@ export function MobileMoneyWithdrawModal({
                         key={percentage}
                         type="button"
                         variant="outline"
-                        className="h-8 text-xs bg-[#21301c] border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
+                        className="h-8 text-xs bg-card border-border text-muted-foreground hover:bg-card hover:text-foreground"
                         onClick={() =>
                           setForm((prev) => ({
                             ...prev,
@@ -526,31 +526,31 @@ export function MobileMoneyWithdrawModal({
                 )}
 
                 {loadingQuote && (
-                  <div className="mt-3 flex items-center text-sm text-[#a2c398]">
+                  <div className="mt-3 flex items-center text-sm text-muted-foreground">
                     <Loader2 className="w-3 h-3 animate-spin mr-2" />
                     Getting rates...
                   </div>
                 )}
 
                 {quote && !loadingQuote && (
-                  <div className="mt-3 bg-[#21301c] border border-[#426039] rounded-lg p-4">
+                  <div className="mt-3 bg-card border border-border rounded-lg p-4">
                     <div className="text-sm">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-[#a2c398]">You'll receive:</span>
-                        <span className="font-normal text-[#54d22d] text-base">
+                        <span className="text-muted-foreground">You'll receive:</span>
+                        <span className="font-normal text-primary text-base">
                           {formatEnhancedCurrencyAmount(Number.parseFloat(quote.outputAmount), form.fiatCurrency)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 text-xs text-[#a2c398] pt-2 border-t border-[#2e4328]">
+                      <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground pt-2 border-t border-border">
                         <div className="flex justify-between">
                           <span>Rate:</span>
-                          <span className="text-white">
+                          <span className="text-foreground">
                             1 {tokenSymbol} = {quote.exchangeRate} {form.fiatCurrency}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Fee:</span>
-                          <span className="text-white">
+                          <span className="text-foreground">
                             {formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}
                           </span>
                         </div>
@@ -560,12 +560,12 @@ export function MobileMoneyWithdrawModal({
                 )}
 
                 {constraintValidation && !constraintValidation.valid && (
-                  <div className="mt-3 bg-[#2e1a1a] border border-[#5c2e2e] rounded-lg p-4">
+                  <div className="mt-3 bg-destructive/10 border border-destructive/30 rounded-lg p-4">
                     <div className="flex items-start">
-                      <AlertCircle className="w-4 h-4 text-[#ff6b6b] mr-2 mt-0.5 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-destructive mr-2 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <div className="font-medium text-[#ff6b6b] mb-1">Cannot Process</div>
-                        <div className="text-[#ffb3b3] text-xs">
+                        <div className="font-medium text-destructive mb-1">Cannot Process</div>
+                        <div className="text-destructive/70 text-xs">
                           {constraintValidation.reason.includes("exceeds")
                             ? "Amount exceeds your available balance."
                             : constraintValidation.reason.includes("Minimum")
@@ -582,50 +582,50 @@ export function MobileMoneyWithdrawModal({
 
           {currentStep === 2 && quote && (
             <div className="p-6 space-y-6">
-              <div className="bg-[#21301c] border border-[#426039] rounded-lg p-4">
-                <h3 className="font-normal text-white mb-4 flex items-center">
-                  <Shield className="w-4 h-4 mr-2 text-[#54d22d]" />
+              <div className="bg-card border border-border rounded-lg p-4">
+                <h3 className="font-normal text-foreground mb-4 flex items-center">
+                  <Shield className="w-4 h-4 mr-2 text-primary" />
                   Review Details
                 </h3>
 
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-[#a2c398]">Sending:</span>
-                    <span className="font-medium text-white">
+                    <span className="text-muted-foreground">Sending:</span>
+                    <span className="font-medium text-foreground">
                       {form.amount} {tokenSymbol}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#a2c398]">To phone:</span>
-                    <span className="font-medium text-white">{form.phoneNumber}</span>
+                    <span className="text-muted-foreground">To phone:</span>
+                    <span className="font-medium text-foreground">{form.phoneNumber}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#a2c398]">Exchange rate:</span>
-                    <span className="font-medium text-white">
+                    <span className="text-muted-foreground">Exchange rate:</span>
+                    <span className="font-medium text-foreground">
                       1 {tokenSymbol} = {quote.exchangeRate} {form.fiatCurrency}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#a2c398]">Fee:</span>
-                    <span className="font-medium text-white">
+                    <span className="text-muted-foreground">Fee:</span>
+                    <span className="font-medium text-foreground">
                       {formatEnhancedCurrencyAmount(quote.fee?.feeInOutputCurrency || 0, form.fiatCurrency)}
                     </span>
                   </div>
-                  <div className="border-t border-[#2e4328] pt-3 flex justify-between font-normal text-base">
-                    <span className="text-white">They'll receive:</span>
-                    <span className="text-[#54d22d]">
+                  <div className="border-t border-border pt-3 flex justify-between font-normal text-base">
+                    <span className="text-foreground">They'll receive:</span>
+                    <span className="text-primary">
                       {formatEnhancedCurrencyAmount(Number.parseFloat(quote.outputAmount), form.fiatCurrency)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-[#2e2a1a] border border-[#5c5439] rounded-lg p-4">
+              <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
                 <div className="flex items-start">
-                  <Info className="w-4 h-4 text-[#f59e0b] mr-2 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-[#fbbf24]">
+                  <Info className="w-4 h-4 text-warning mr-2 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-warning">
                     <div className="font-medium mb-1">Processing Time</div>
-                    <div className="text-xs text-[#fcd34d]">
+                    <div className="text-xs text-warning/70">
                       Money will be sent within {quote.processingTime || "5-10 minutes"}
                     </div>
                   </div>
@@ -636,12 +636,12 @@ export function MobileMoneyWithdrawModal({
 
           {currentStep === 3 && (
             <div className="p-6 text-center space-y-6">
-              <div className="w-16 h-16 bg-[#21301c] rounded-full flex items-center justify-center mx-auto">
-                <Loader2 className="w-8 h-8 text-[#54d22d] animate-spin" />
+              <div className="w-16 h-16 bg-card rounded-full flex items-center justify-center mx-auto">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
               <div>
-                <h3 className="text-base font-normal text-white mb-2">Sending Money</h3>
-                <p className="text-sm text-[#a2c398]">
+                <h3 className="text-base font-normal text-foreground mb-2">Sending Money</h3>
+                <p className="text-sm text-muted-foreground">
                   Converting your {tokenSymbol} and sending to {form.phoneNumber}...
                 </p>
               </div>
@@ -652,26 +652,26 @@ export function MobileMoneyWithdrawModal({
             <div className="p-6 text-center space-y-6">
               {orderID ? (
                 <>
-                  <div className="w-16 h-16 bg-[#21301c] rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle className="w-8 h-8 text-[#54d22d]" />
+                  <div className="w-16 h-16 bg-card rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-8 h-8 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-base font-normal text-white mb-2">Money Sent!</h3>
-                    <p className="text-sm text-[#a2c398] mb-4">Your mobile money transfer is being processed.</p>
-                    <div className="bg-[#21301c] border border-[#426039] rounded-lg p-3">
-                      <p className="text-xs text-[#a2c398] mb-1">Reference:</p>
-                      <p className="font-mono text-sm font-medium text-white">{orderID}</p>
+                    <h3 className="text-base font-normal text-foreground mb-2">Money Sent!</h3>
+                    <p className="text-sm text-muted-foreground mb-4">Your mobile money transfer is being processed.</p>
+                    <div className="bg-card border border-border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground mb-1">Reference:</p>
+                      <p className="font-mono text-sm font-medium text-foreground">{orderID}</p>
                     </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 bg-[#21301c] rounded-full flex items-center justify-center mx-auto">
-                    <Clock className="w-8 h-8 text-[#54d22d]" />
+                  <div className="w-16 h-16 bg-card rounded-full flex items-center justify-center mx-auto">
+                    <Clock className="w-8 h-8 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-base font-normal text-white mb-2">Almost Done</h3>
-                    <p className="text-sm text-[#a2c398]">Setting up your mobile money transfer...</p>
+                    <h3 className="text-base font-normal text-foreground mb-2">Almost Done</h3>
+                    <p className="text-sm text-muted-foreground">Setting up your mobile money transfer...</p>
                   </div>
                 </>
               )}
@@ -679,13 +679,13 @@ export function MobileMoneyWithdrawModal({
           )}
         </div>
 
-        <div className="border-t border-[#2e4328] bg-[#21301c] p-6">
+        <div className="border-t border-border bg-card p-6">
           {currentStep === 1 && (
             <div className="flex gap-3">
               <Button
                 onClick={handleClose}
                 variant="outline"
-                className="flex-1 h-12 bg-[#162013] border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
+                className="flex-1 h-12 bg-background border-border text-muted-foreground hover:bg-card hover:text-foreground"
                 disabled={processing}
               >
                 Cancel
@@ -693,7 +693,7 @@ export function MobileMoneyWithdrawModal({
               <Button
                 onClick={handleNext}
                 disabled={!quote || !validateForm() || loadingQuote}
-                className="flex-1 bg-[#54d22d] hover:bg-[#4bc226] text-[#162013] h-12 font-medium"
+                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-medium"
               >
                 {loadingQuote ? (
                   <>
@@ -712,7 +712,7 @@ export function MobileMoneyWithdrawModal({
               <Button
                 onClick={() => setCurrentStep(1)}
                 variant="outline"
-                className="flex-1 h-12 bg-[#162013] border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
+                className="flex-1 h-12 bg-background border-border text-muted-foreground hover:bg-card hover:text-foreground"
                 disabled={processing}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -721,7 +721,7 @@ export function MobileMoneyWithdrawModal({
               <Button
                 onClick={handleNext}
                 disabled={processing}
-                className="flex-1 bg-[#54d22d] hover:bg-[#4bc226] text-[#162013] h-12 font-medium"
+                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-medium"
               >
                 {processing ? (
                   <>
@@ -739,7 +739,7 @@ export function MobileMoneyWithdrawModal({
             <Button
               onClick={handleClose}
               disabled={processing && !orderID}
-              className="w-full bg-[#54d22d] hover:bg-[#4bc226] text-[#162013] h-12 font-medium"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-medium"
             >
               {orderID ? "Done" : "Processing..."}
             </Button>

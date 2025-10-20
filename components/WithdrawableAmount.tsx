@@ -13,11 +13,11 @@ export function WithdrawableAmount({ contract, userAddress, tokenAddress, tokenI
   const { data: depositData, isPending } = useUserDeposits(contract, userAddress, tokenAddress, 0);
 
   if (isPending) {
-    return <span className="text-xs text-gray-500">Loading...</span>;
+    return <span className="text-xs text-muted-foreground">Loading...</span>;
   }
 
   if (!depositData || depositData[0] === BigInt(0)) {
-    return <span className="text-xs text-gray-500">0</span>;
+    return <span className="text-xs text-muted-foreground">0</span>;
   }
 
   const currentTime = Math.floor(Date.now() / 1000);
@@ -25,12 +25,12 @@ export function WithdrawableAmount({ contract, userAddress, tokenAddress, tokenI
   const isLocked = lockEnd > currentTime;
 
   if (isLocked) {
-    return <span className="text-xs text-red-500">Locked</span>;
+    return <span className="text-xs text-destructive-foreground0">Locked</span>;
   }
 
   const formattedAmount = formatAmount(depositData[0].toString(), tokenInfo.decimals);
   return (
-    <span className="text-xs text-green-600">
+    <span className="text-xs text-success">
       {parseFloat(formattedAmount).toFixed(4)}
     </span>
   );

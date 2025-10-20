@@ -13,8 +13,8 @@ export function Logo({ size = "md", className = "" }: LogoProps) {
 
   return (
     <h1 className={`font-bold ${sizeClasses[size]} ${className}`}>
-      <span className="text-white">Mini</span>
-      <span className="text-[#54d22d]">Lend</span>
+      <span className="text-foreground">Mini</span>
+      <span className="text-primary">Lend</span>
     </h1>
   );
 }

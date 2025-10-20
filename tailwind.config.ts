@@ -1,6 +1,8 @@
 import type { Config } from "tailwindcss";
 
-// all in fixtures is set to tailwind v3 as interims solutions
+// Tailwind v3 configuration with theme system
+// Light Theme: "Greenish" by Daniel Hollick
+// Dark Theme: "Christmas Dark" by Ian Spryn
 
 const config: Config = {
   darkMode: ["class"],
@@ -13,39 +15,63 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "hsl(var(--background-hsl))",
-        foreground: "hsl(var(--foreground-hsl))",
+        // Base colors
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+
+        // Card
         card: {
-          DEFAULT: "hsl(var(--card-hsl))",
-          foreground: "hsl(var(--card-foreground-hsl))",
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
         },
+
+        // Popover
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
+
+        // Primary
         primary: {
-          DEFAULT: "hsl(var(--primary-hsl))",
-          foreground: "hsl(var(--primary-foreground-hsl))",
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
         },
+
+        // Secondary
         secondary: {
-          DEFAULT: "hsl(var(--secondary-hsl))",
-          foreground: "hsl(var(--secondary-foreground-hsl))",
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
         },
+
+        // Muted
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
+
+        // Accent
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+
+        // Destructive
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+
+        // State colors (NEW - from theme files)
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        info: "hsl(var(--info))",
+
+        // UI elements
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+
+        // Chart colors
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",
@@ -53,6 +79,8 @@ const config: Config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+
+        // Sidebar (mapped to existing semantic tokens)
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

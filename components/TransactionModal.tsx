@@ -36,18 +36,18 @@ export function TransactionModal({
         <DialogHeader>
           <DialogTitle className="flex items-center justify-center">
             {type === "success" ? (
-              <CheckCircle className="w-8 h-8 text-green-500 mr-2" />
+              <CheckCircle className="w-8 h-8 text-success mr-2" />
             ) : type === "error" ? (
-              <XCircle className="w-8 h-8 text-red-500 mr-2" />
+              <XCircle className="w-8 h-8 text-destructive mr-2" />
             ) : (
-              <Loader2 className="w-8 h-8 text-blue-500 mr-2 animate-spin" />
+              <Loader2 className="w-8 h-8 text-info mr-2 animate-spin" />
             )}
             {type === "success" ? "Success!" : type === "error" ? "Error" : "Processing..."}
           </DialogTitle>
         </DialogHeader>
 
         <div className="text-center space-y-4">
-          <p className="text-gray-700 font-medium">{message}</p>
+          <p className="text-foreground font-medium">{message}</p>
 
           {(type === "success" || type === "pending") && txHash && (
             <Button
@@ -66,7 +66,7 @@ export function TransactionModal({
               className={`w-full ${
                 type === "success"
                   ? "bg-primary hover:bg-secondary"
-                  : "bg-red-500 hover:bg-red-600"
+                  : "bg-destructive hover:bg-destructive"
               } text-white`}
             >
               Close

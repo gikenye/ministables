@@ -59,33 +59,33 @@ export function PWAInstallPrompt() {
 
   return (
     <div className="fixed bottom-20 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 animate-in slide-in-from-bottom-5">
-      <div className="bg-[#21301c] border border-[#54d22d]/30 rounded-xl p-4 shadow-2xl backdrop-blur-md">
+      <div className="bg-card border border-primary/30 rounded-xl p-4 shadow-2xl backdrop-blur-md">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-2">
-            <Download className="w-5 h-5 text-[#54d22d]" />
-            <h3 className="font-semibold text-white">Install Minilend</h3>
+            <Download className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-foreground">Install Minilend</h3>
           </div>
           <button
             onClick={handleDismiss}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <p className="text-sm text-gray-300 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           Install our app for faster access and offline support
         </p>
         <div className="flex space-x-2">
           <Button
             onClick={handleInstall}
-            className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013]"
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             Install
           </Button>
           <Button
             onClick={handleDismiss}
             variant="outline"
-            className="flex-1 border-[#426039] text-white hover:bg-[#426039]/20"
+            className="flex-1 border-border text-foreground hover:bg-muted/20"
           >
             Not now
           </Button>

@@ -7,7 +7,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Check, AlertCircle, Loader2, Plus, Copy } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  AlertCircle,
+  Loader2,
+  Plus,
+  Copy,
+} from "lucide-react";
 import {
   useActiveAccount,
   useSendTransaction,
@@ -16,7 +23,7 @@ import {
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
-import { getReferralTag } from '@divvi/referral-sdk';
+import { getReferralTag } from "@divvi/referral-sdk";
 
 // Define the vault contract ABI for deposit function (Aave-integrated vaults on Celo)
 export const vaultABI = [
@@ -390,7 +397,10 @@ export function SaveMoneyModal({
     }
   };
 
-  const handleTransactionSent = (_result: any, _isApproval: boolean = false) => {};
+  const handleTransactionSent = (
+    _result: any,
+    _isApproval: boolean = false
+  ) => {};
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
@@ -442,24 +452,31 @@ export function SaveMoneyModal({
       }
 
       setTransactionStatus("Completing your deposit...");
-      
+
       // Generate Divvi referral tag
       let referralTag = "";
       try {
         referralTag = getReferralTag({
           user: account.address as `0x${string}`,
-          consumer: '0xc022BD0b6005Cae66a468f9a20897aDecDE04e95' as `0x${string}`,
+          consumer:
+            "0xc022BD0b6005Cae66a468f9a20897aDecDE04e95" as `0x${string}`,
         });
-        referralTag = referralTag.startsWith('0x') ? referralTag.slice(2) : referralTag;
+        referralTag = referralTag.startsWith("0x")
+          ? referralTag.slice(2)
+          : referralTag;
       } catch (error) {
-        console.log('[SaveMoneyModal] Divvi tag generation skipped:', error);
+        console.log("[SaveMoneyModal] Divvi tag generation skipped:", error);
       }
-      
+
       // Resolve the data function and append referral tag
-      const depositTxWithTag = referralTag && typeof depositTx.data === 'function'
-        ? { ...depositTx, data: async () => (await depositTx.data()) + referralTag }
-        : depositTx;
-      
+      const depositTxWithTag =
+        referralTag && typeof depositTx.data === "function"
+          ? {
+              ...depositTx,
+              data: async () => (await depositTx.data()) + referralTag,
+            }
+          : depositTx;
+
       const depositResult = await sendTransaction(depositTxWithTag);
       handleTransactionSent(depositResult, false);
 
@@ -472,7 +489,7 @@ export function SaveMoneyModal({
         });
         setTransactionStatus("Success!");
         handleTransactionSuccess(depositReceipt, false);
-        
+
         // Report to Divvi after successful transaction
         reportTransactionToDivvi(depositResult.transactionHash, chain.id);
       }
@@ -610,9 +627,9 @@ export function SaveMoneyModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden [&>button]:text-white [&>button]:hover:text-[#a2c398]">
-        <div className="flex h-5 w-full items-center justify-center bg-[#162013]">
-          <div className="h-1 w-9 rounded-full bg-[#426039]"></div>
+      <DialogContent className="w-full max-w-md mx-auto bg-background border-0 shadow-lg p-0 overflow-hidden [&>button]:text-foreground [&>button]:hover:text-muted-foreground">
+        <div className="flex h-5 w-full items-center justify-center bg-background">
+          <div className="h-1 w-9 rounded-full bg-border"></div>
         </div>
 
         <div className="px-4 pb-5">
@@ -625,13 +642,13 @@ export function SaveMoneyModal({
             {currentStep > 0 && currentStep !== 5 && (
               <button
                 onClick={prevStep}
-                className="p-1 text-[#a2c398] hover:text-white transition-colors"
+                className="p-1 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div className="flex-1 text-center">
-              <h1 className="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">
+              <h1 className="text-foreground text-[22px] font-bold leading-tight tracking-[-0.015em]">
                 {currentStep === 0 && "How to Deposit"}
                 {currentStep === 1 && "Choose Asset"}
                 {currentStep === 2 && "Enter Amount"}
@@ -645,10 +662,10 @@ export function SaveMoneyModal({
                     key={step}
                     className={`min-w-8 h-7 px-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors ${
                       step === currentStep
-                        ? "bg-[#54d22d] text-[#162013]"
+                        ? "bg-primary text-primary-foreground"
                         : step < currentStep
-                          ? "bg-[#2e4328] text-white"
-                          : "bg-[#21301c] text-[#a2c398] border border-[#426039]"
+                          ? "bg-card text-foreground"
+                          : "bg-card text-muted-foreground border border-border"
                     }`}
                   >
                     {step === 5 ? <Check className="w-4 h-4" /> : step + 1}
@@ -660,14 +677,14 @@ export function SaveMoneyModal({
           </div>
 
           {error && (
-            <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm mb-4 flex items-start gap-2">
+            <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-3 rounded-xl text-sm mb-4 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {requiresAuth && (
-            <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm mb-4">
+            <div className="bg-warning/20 border border-warning text-foreground p-3 rounded-xl text-sm mb-4">
               Sign in required to complete transactions
             </div>
           )}
@@ -684,8 +701,8 @@ export function SaveMoneyModal({
                     }}
                     className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all border ${
                       depositMethod === "mpesa"
-                        ? "bg-[#8DA33B] text-[#162013] border-[#54d22d] scale-[0.98]"
-                        : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                        ? "bg-primary text-primary-foreground border-primary scale-[0.98]"
+                        : "bg-card text-foreground border-border hover:border-primary hover:bg-card/80"
                     }`}
                   >
                     <img
@@ -696,7 +713,7 @@ export function SaveMoneyModal({
                     <div className="flex-1 text-left">
                       <div className="font-medium">M-Pesa</div>
                       <div
-                        className={`text-sm ${depositMethod === "mpesa" ? "text-[#162013]/70" : "text-[#a2c398]"}`}
+                        className={`text-sm ${depositMethod === "mpesa" ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                       >
                         Deposit directly from M-Pesa
                       </div>
@@ -712,8 +729,8 @@ export function SaveMoneyModal({
                     }}
                     className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all border ${
                       depositMethod === "wallet"
-                        ? "bg-[#54d22d] text-[#162013] border-[#54d22d] scale-[0.98]"
-                        : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                        ? "bg-primary text-primary-foreground border-primary scale-[0.98]"
+                        : "bg-card text-foreground border-border hover:border-primary hover:bg-card/80"
                     }`}
                   >
                     <img
@@ -724,7 +741,7 @@ export function SaveMoneyModal({
                     <div className="flex-1 text-left">
                       <div className="font-medium">Wallet or Exchange</div>
                       <div
-                        className={`text-sm ${depositMethod === "wallet" ? "text-[#162013]/70" : "text-[#a2c398]"}`}
+                        className={`text-sm ${depositMethod === "wallet" ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                       >
                         Directly to USDT, USDC or cUSD
                       </div>
@@ -753,8 +770,8 @@ export function SaveMoneyModal({
                         <div
                           className={`w-full rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-[#54d22d] text-[#162013] border-[#54d22d]"
-                              : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-card text-foreground border-border hover:border-primary hover:bg-card/80"
                           }`}
                         >
                           <div className="flex items-center gap-3 p-3">
@@ -770,7 +787,7 @@ export function SaveMoneyModal({
                                   className="w-8 h-8 rounded-full"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
                                   {symbol.charAt(0)}
                                 </div>
                               )}
@@ -778,7 +795,7 @@ export function SaveMoneyModal({
                                 <div className="font-medium">{symbol}</div>
                                 {isSelected && depositMethod === "wallet" && (
                                   <div
-                                    className={`text-sm ${isSelected ? "text-[#162013]/70" : "text-[#a2c398]"}`}
+                                    className={`text-sm ${isSelected ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                                   >
                                     {isBalanceLoading ? (
                                       <span className="flex items-center gap-1">
@@ -795,7 +812,7 @@ export function SaveMoneyModal({
                                 <div className="text-right">
                                   {tokenAPYs[token] !== undefined ? (
                                     <div
-                                      className={`text-lg font-bold ${isSelected ? "text-[#162013]" : "text-[#54d22d]"}`}
+                                      className={`text-lg font-bold ${isSelected ? "text-primary-foreground" : "text-primary"}`}
                                     >
                                       {aaveRatesService.getAPYWithBoost(
                                         chain.id,
@@ -805,10 +822,10 @@ export function SaveMoneyModal({
                                       )}
                                     </div>
                                   ) : (
-                                    <Loader2 className="w-4 h-4 animate-spin text-[#54d22d]" />
+                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
                                   )}
                                   <div
-                                    className={`text-xs ${isSelected ? "text-[#162013]/70" : "text-[#a2c398]"}`}
+                                    className={`text-xs ${isSelected ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                                   >
                                     APY
                                   </div>
@@ -822,19 +839,22 @@ export function SaveMoneyModal({
 
                           {isSelected && (
                             <div
-                              className={`px-3 pb-3 ${isSelected ? "text-[#162013]" : "text-white"}`}
+                              className={`px-3 pb-3 ${isSelected ? "text-primary-foreground" : "text-foreground"}`}
                             >
                               {depositMethod === "mpesa" ? (
                                 <button
                                   onClick={() => {
-                                    console.log("[SaveMoneyModal] Opening onramp modal:", {
-                                      tokenAddress: token,
-                                      tokenSymbol: symbol,
-                                    })
+                                    console.log(
+                                      "[SaveMoneyModal] Opening onramp modal:",
+                                      {
+                                        tokenAddress: token,
+                                        tokenSymbol: symbol,
+                                      }
+                                    );
                                     setSelectedTokenForOnramp(token);
                                     setShowOnrampModal(true);
                                   }}
-                                  className="w-full h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
+                                  className="w-full h-9 bg-background text-foreground text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
                                 >
                                   Continue with {symbol}
                                 </button>
@@ -842,7 +862,9 @@ export function SaveMoneyModal({
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => {
-                                      navigator.clipboard.writeText(account?.address || "");
+                                      navigator.clipboard.writeText(
+                                        account?.address || ""
+                                      );
                                       setCopied(true);
                                       setTimeout(() => setCopied(false), 2000);
                                     }}
@@ -856,13 +878,15 @@ export function SaveMoneyModal({
                                     ) : (
                                       <>
                                         <Copy className="w-3 h-3" />
-                                        {account?.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Copy"}
+                                        {account?.address
+                                          ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}`
+                                          : "Copy"}
                                       </>
                                     )}
                                   </button>
                                   <button
                                     onClick={nextStep}
-                                    className="flex-1 h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
+                                    className="flex-1 h-9 bg-background text-foreground text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
                                   >
                                     Continue
                                   </button>
@@ -881,7 +905,7 @@ export function SaveMoneyModal({
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <p className="text-[#a2c398] text-sm">
+                  <p className="text-muted-foreground text-sm">
                     {isBalanceLoading ? (
                       <span className="flex items-center justify-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -905,10 +929,10 @@ export function SaveMoneyModal({
                         setForm({ ...form, amount: value });
                       }
                     }}
-                    className="w-full h-16 rounded-xl text-white bg-[#21301c] border-2 border-[#426039] focus:border-[#54d22d] focus:outline-0 focus:ring-0 pl-4 pr-20 text-2xl font-medium text-center"
+                    className="w-full h-16 rounded-xl text-foreground bg-card border-2 border-border focus:border-primary focus:outline-0 focus:ring-0 pl-4 pr-20 text-2xl font-medium text-center"
                     autoFocus
                   />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a2c398] text-sm">
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                     {tokenInfos[form.token]?.symbol}
                   </div>
                 </div>
@@ -917,21 +941,21 @@ export function SaveMoneyModal({
                   <button
                     type="button"
                     onClick={() => setAmountByPercent(0.25)}
-                    className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                    className="h-10 bg-card text-foreground text-sm rounded-lg hover:bg-card/90 transition-colors"
                   >
                     25%
                   </button>
                   <button
                     type="button"
                     onClick={() => setAmountByPercent(0.5)}
-                    className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                    className="h-10 bg-card text-foreground text-sm rounded-lg hover:bg-card/90 transition-colors"
                   >
                     50%
                   </button>
                   <button
                     type="button"
                     onClick={() => setAmountByPercent(0.75)}
-                    className="h-10 bg-[#2e4328] text-white text-sm rounded-lg hover:bg-[#3a5533] transition-colors"
+                    className="h-10 bg-card text-foreground text-sm rounded-lg hover:bg-card/90 transition-colors"
                   >
                     75%
                   </button>
@@ -941,7 +965,7 @@ export function SaveMoneyModal({
                       const maxAmount = formatDisplayNumber(walletBalance);
                       setForm({ ...form, amount: maxAmount });
                     }}
-                    className="h-10 bg-[#54d22d] text-[#162013] text-sm font-medium rounded-lg hover:bg-[#4bc428] transition-colors"
+                    className="h-10 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
                   >
                     Max
                   </button>
@@ -950,7 +974,7 @@ export function SaveMoneyModal({
                 <button
                   onClick={nextStep}
                   disabled={!form.amount}
-                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Continue
                 </button>
@@ -960,10 +984,10 @@ export function SaveMoneyModal({
             {currentStep === 3 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">
+                  <h3 className="text-foreground text-lg font-medium mb-2">
                     Lock period
                   </h3>
-                  <p className="text-[#a2c398] text-sm">
+                  <p className="text-muted-foreground text-sm">
                     Longer = higher rewards
                   </p>
                 </div>
@@ -979,8 +1003,8 @@ export function SaveMoneyModal({
                       }}
                       className={`w-full flex items-center justify-between p-4 rounded-xl transition-all border ${
                         form.lockPeriod === period
-                          ? "bg-[#54d22d] text-[#162013] border-[#54d22d] scale-[0.98]"
-                          : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                          ? "bg-primary text-primary-foreground border-primary scale-[0.98]"
+                          : "bg-card text-foreground border-border hover:border-primary hover:bg-card/80"
                       }`}
                     >
                       <div>
@@ -992,8 +1016,8 @@ export function SaveMoneyModal({
                         <div
                           className={`text-lg font-bold ${
                             form.lockPeriod === period
-                              ? "text-[#162013]"
-                              : "text-[#54d22d]"
+                              ? "text-primary-foreground"
+                              : "text-primary"
                           }`}
                         >
                           {apyLoading ? (
@@ -1003,7 +1027,7 @@ export function SaveMoneyModal({
                           )}
                         </div>
                         <div
-                          className={`text-xs ${form.lockPeriod === period ? "text-[#162013]/70" : "text-[#a2c398]"}`}
+                          className={`text-xs ${form.lockPeriod === period ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                         >
                           APY
                         </div>
@@ -1020,43 +1044,45 @@ export function SaveMoneyModal({
             {currentStep === 4 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">
+                  <h3 className="text-foreground text-lg font-medium mb-2">
                     Deposit {tokenInfos[form.token]?.symbol}
                   </h3>
-                  <p className="text-[#a2c398] text-sm">Review your deposit</p>
+                  <p className="text-muted-foreground text-sm">
+                    Review your deposit
+                  </p>
                 </div>
 
-                <div className="bg-[#21301c] rounded-xl p-4 space-y-4">
+                <div className="bg-card rounded-xl p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-[#a2c398]">Depositing</span>
+                    <span className="text-muted-foreground">Depositing</span>
                     <div className="text-right">
-                      <div className="text-white font-medium">
+                      <div className="text-foreground font-medium">
                         {form.amount}
                       </div>
-                      <div className="text-[#a2c398] text-sm">
+                      <div className="text-muted-foreground text-sm">
                         {tokenInfos[form.token]?.symbol}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-[#a2c398]">Lock period</span>
-                    <div className="text-white font-medium">
+                    <span className="text-muted-foreground">Lock period</span>
+                    <div className="text-foreground font-medium">
                       {getLockPeriodText(form.lockPeriod)}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
-                    <span className="text-[#a2c398]">You'll earn</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className="text-muted-foreground">You'll earn</span>
                     <div className="text-right">
-                      <div className="text-[#54d22d] font-bold text-lg">
+                      <div className="text-primary font-bold text-lg">
                         {apyLoading ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           getAPY(form.lockPeriod)
                         )}
                       </div>
-                      <div className="text-[#a2c398] text-sm">APY</div>
+                      <div className="text-muted-foreground text-sm">APY</div>
                     </div>
                   </div>
                 </div>
@@ -1073,7 +1099,7 @@ export function SaveMoneyModal({
                     isSaving ||
                     isTransactionPending
                   }
-                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isSaving || isTransactionPending ? (
                     <span className="inline-flex items-center gap-2">
@@ -1092,55 +1118,55 @@ export function SaveMoneyModal({
             {currentStep === 5 && depositSuccess && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-[#54d22d] rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Check className="w-8 h-8 text-[#162013]" />
+                  <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Check className="w-8 h-8 text-primary-foreground" />
                   </div>
-                  <h3 className="text-white text-lg font-medium mb-2">
+                  <h3 className="text-foreground text-lg font-medium mb-2">
                     Deposit Successful!
                   </h3>
-                  <p className="text-[#a2c398] text-sm">
+                  <p className="text-muted-foreground text-sm">
                     Your funds have been deposited and are now earning rewards
                   </p>
                 </div>
 
-                <div className="bg-[#21301c] rounded-xl p-4 space-y-4">
+                <div className="bg-card rounded-xl p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-[#a2c398]">Deposited</span>
+                    <span className="text-muted-foreground">Deposited</span>
                     <div className="text-right">
-                      <div className="text-white font-medium">
+                      <div className="text-foreground font-medium">
                         {depositSuccess.amount}
                       </div>
-                      <div className="text-[#a2c398] text-sm">
+                      <div className="text-muted-foreground text-sm">
                         {tokenInfos[depositSuccess.token]?.symbol}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-[#a2c398]">Lock period</span>
-                    <div className="text-white font-medium">
+                    <span className="text-muted-foreground">Lock period</span>
+                    <div className="text-foreground font-medium">
                       {getLockPeriodText(depositSuccess.lockPeriod)}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
-                    <span className="text-[#a2c398]">Earning</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className="text-muted-foreground">Earning</span>
                     <div className="text-right">
-                      <div className="text-[#54d22d] font-bold text-lg">
+                      <div className="text-primary font-bold text-lg">
                         {getAPY(depositSuccess.lockPeriod)}
                       </div>
-                      <div className="text-[#a2c398] text-sm">APY</div>
+                      <div className="text-muted-foreground text-sm">APY</div>
                     </div>
                   </div>
 
                   {depositSuccess.transactionHash && (
-                    <div className="flex items-center justify-between pt-2 border-t border-[#426039]">
-                      <span className="text-[#a2c398]">Transaction</span>
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <span className="text-muted-foreground">Transaction</span>
                       <a
                         href={`${getExplorerUrl(chain?.id || 42220)}/tx/${depositSuccess.transactionHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[#54d22d] text-sm hover:underline truncate max-w-32"
+                        className="text-primary text-sm hover:underline truncate max-w-32"
                       >
                         {`${depositSuccess.transactionHash.slice(0, 6)}...${depositSuccess.transactionHash.slice(-4)}`}
                       </a>
@@ -1152,14 +1178,14 @@ export function SaveMoneyModal({
                   <button
                     type="button"
                     onClick={handleMakeAnotherDeposit}
-                    className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
+                    className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 transition-colors"
                   >
                     Make Another Deposit
                   </button>
                   <button
                     type="button"
                     onClick={handleCloseSuccess}
-                    className="w-full h-12 bg-transparent border border-[#426039] text-white text-base font-medium rounded-xl hover:bg-[#21301c] transition-colors"
+                    className="w-full h-12 bg-transparent border border-border text-foreground text-base font-medium rounded-xl hover:bg-card transition-colors"
                   >
                     Close
                   </button>

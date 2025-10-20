@@ -539,15 +539,15 @@ export function BorrowMoneyModal({
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">What do you need?</h3>
-              <p className="text-sm text-[#a2c398]">Choose the currency you'd like to borrow</p>
+              <h3 className="text-lg font-semibold text-foreground">What do you need?</h3>
+              <p className="text-sm text-muted-foreground">Choose the currency you'd like to borrow</p>
             </div>
 
             <div className="space-y-3">
               {SUPPORTED_STABLECOINS.length === 0 ? (
                 <div className="text-center py-8">
-                  <AlertCircle className="w-12 h-12 text-[#a2c398] mx-auto mb-3" />
-                  <p className="text-[#a2c398]">No currencies available right now</p>
+                  <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">No currencies available right now</p>
                 </div>
               ) : (
                 SUPPORTED_STABLECOINS.map((token) => {
@@ -561,8 +561,8 @@ export function BorrowMoneyModal({
                       onClick={() => setForm({ ...form, token: token })}
                       className={`w-full p-4 rounded-xl border-2 transition-all ${
                         isSelected
-                          ? "border-[#54d22d] bg-[#21301c]"
-                          : "border-[#426039] bg-[#2e4328] hover:border-[#54d22d]"
+                          ? "border-primary bg-card"
+                          : "border-border bg-card hover:border-primary"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -573,30 +573,30 @@ export function BorrowMoneyModal({
                             className="w-8 h-8 rounded-full"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
                             {symbol.charAt(0)}
                           </div>
                         )}
                         <div className="flex-1 text-left">
-                          <div className="font-semibold text-white">{symbol}</div>
+                          <div className="font-semibold text-foreground">{symbol}</div>
                           {(() => {
                             const tokenData = allTokenLiquidity[token]
                             if (tokenData?.isLoading) {
-                              return <div className="text-xs text-[#a2c398]">Loading...</div>
+                              return <div className="text-xs text-muted-foreground">Loading...</div>
                             }
                             if (tokenData?.isPaused) {
-                              return <div className="text-xs text-red-400">Currently paused</div>
+                              return <div className="text-xs text-destructive">Currently paused</div>
                             }
                             if (tokenData?.liquidity === "0") {
-                              return <div className="text-xs text-red-400">Not available</div>
+                              return <div className="text-xs text-destructive">Not available</div>
                             }
                             if (tokenData?.liquidity && isSelected) {
-                              return <div className="text-xs text-[#54d22d]">Available: {tokenData.liquidity}</div>
+                              return <div className="text-xs text-primary">Available: {tokenData.liquidity}</div>
                             }
-                            return <div className="text-xs text-[#a2c398]">Tap to select</div>
+                            return <div className="text-xs text-muted-foreground">Tap to select</div>
                           })()}
                         </div>
-                        {isSelected && <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />}
+                        {isSelected && <CheckCircle2 className="w-5 h-5 text-primary" />}
                       </div>
                     </button>
                   )
@@ -610,8 +610,8 @@ export function BorrowMoneyModal({
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">How much do you need?</h3>
-              <p className="text-sm text-[#a2c398]">Enter the amount you'd like to borrow</p>
+              <h3 className="text-lg font-semibold text-foreground">How much do you need?</h3>
+              <p className="text-sm text-muted-foreground">Enter the amount you'd like to borrow</p>
             </div>
 
             <div className="space-y-4">
@@ -621,17 +621,17 @@ export function BorrowMoneyModal({
                   placeholder="0.00"
                   value={form.amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  className="h-16 text-2xl text-center bg-[#2e4328] border-[#426039] text-white placeholder:text-[#a2c398] focus:border-[#54d22d]"
+                  className="h-16 text-2xl text-center bg-card border-border text-foreground placeholder:text-muted-foreground focus:border-primary"
                   min="0.01"
                   step="0.01"
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a2c398] font-medium">
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
                   {tokenInfos[form.token]?.symbol}
                 </div>
               </div>
 
               {selectedTokenData?.liquidity && selectedTokenData.liquidity !== "0" && (
-                <div className="text-center text-sm text-[#a2c398]">
+                <div className="text-center text-sm text-muted-foreground">
                   Available to borrow: {selectedTokenData.liquidity} {tokenInfos[form.token]?.symbol}
                 </div>
               )}
@@ -643,8 +643,8 @@ export function BorrowMoneyModal({
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">Choose your security</h3>
-              <p className="text-sm text-[#a2c398]">Select what you'll use to secure this loan</p>
+              <h3 className="text-lg font-semibold text-foreground">Choose your security</h3>
+              <p className="text-sm text-muted-foreground">Select what you'll use to secure this loan</p>
             </div>
 
             <div className="space-y-3">
@@ -660,8 +660,8 @@ export function BorrowMoneyModal({
                     onClick={() => setForm({ ...form, collateralToken: token })}
                     className={`w-full p-4 rounded-xl border-2 transition-all ${
                       isSelected
-                        ? "border-[#54d22d] bg-[#21301c]"
-                        : "border-[#426039] bg-[#2e4328] hover:border-[#54d22d]"
+                        ? "border-primary bg-card"
+                        : "border-border bg-card hover:border-primary"
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -672,17 +672,17 @@ export function BorrowMoneyModal({
                           className="w-8 h-8 rounded-full"
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
                           {symbol.charAt(0)}
                         </div>
                       )}
                       <div className="flex-1 text-left">
-                        <div className="font-semibold text-white">{symbol}</div>
-                        <div className="text-xs text-[#a2c398]">
+                        <div className="font-semibold text-foreground">{symbol}</div>
+                        <div className="text-xs text-muted-foreground">
                           Balance: {balance} {symbol}
                         </div>
                       </div>
-                      {isSelected && <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />}
+                      {isSelected && <CheckCircle2 className="w-5 h-5 text-primary" />}
                     </div>
                   </button>
                 )
@@ -695,29 +695,29 @@ export function BorrowMoneyModal({
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">Confirm your loan</h3>
-              <p className="text-sm text-[#a2c398]">Review the details before proceeding</p>
+              <h3 className="text-lg font-semibold text-foreground">Confirm your loan</h3>
+              <p className="text-sm text-muted-foreground">Review the details before proceeding</p>
             </div>
 
             <div className="space-y-4">
-              <div className="bg-[#2e4328] rounded-xl p-4 space-y-3">
+              <div className="bg-card rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-[#a2c398]">You'll receive</span>
-                  <span className="text-white font-semibold">
+                  <span className="text-muted-foreground">You'll receive</span>
+                  <span className="text-foreground font-semibold">
                     {form.amount} {tokenInfos[form.token]?.symbol}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-[#a2c398]">Security required</span>
+                  <span className="text-muted-foreground">Security required</span>
                   <div className="text-right">
-                    <span className="text-white font-semibold">
+                    <span className="text-foreground font-semibold">
                       {fetchingRate ? "Calculating..." : requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
                     </span>
                     <button 
                       onClick={refreshExchangeRate}
                       disabled={fetchingRate || !form.token || !form.collateralToken || !form.amount}
-                      className="ml-2 p-1 rounded-full hover:bg-[#426039] text-[#a2c398] hover:text-white"
+                      className="ml-2 p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
                     >
                       <RefreshCw className={`w-4 h-4 ${fetchingRate ? "animate-spin" : ""}`} />
                     </button>
@@ -726,8 +726,8 @@ export function BorrowMoneyModal({
                 
                 {exchangeRate && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-[#a2c398]">Current exchange rate</span>
-                    <span className="text-[#a2c398]">
+                    <span className="text-muted-foreground">Current exchange rate</span>
+                    <span className="text-muted-foreground">
                       1 {tokenInfos[form.collateralToken]?.symbol} = {exchangeRate.toFixed(4)} {tokenInfos[form.token]?.symbol}
                     </span>
                   </div>
@@ -743,8 +743,8 @@ export function BorrowMoneyModal({
                     
                     // Only show the "Get more" section if wallet balance is insufficient
                     return walletBalance < requiredAmount ? (
-                      <div className="border-t border-[#426039] pt-3">
-                        <div className="text-xs text-[#a2c398] mb-2">
+                      <div className="border-t border-border pt-3">
+                        <div className="text-xs text-muted-foreground mb-2">
                           You need more {tokenInfos[form.collateralToken]?.symbol}
                         </div>
                         {onrampService.isAssetSupportedForOnramp(tokenInfos[form.collateralToken]?.symbol || "") && (
@@ -752,7 +752,7 @@ export function BorrowMoneyModal({
                             onClick={() => setShowOnrampModal(true)}
                             variant="outline"
                             size="sm"
-                            className="w-full bg-[#54d22d] text-[#162013] border-[#54d22d] hover:bg-[#4bc226]"
+                            className="w-full bg-primary text-primary-foreground border-primary hover:bg-primary/90"
                           >
                             <CreditCard className="w-4 h-4 mr-2" />
                             Get {tokenInfos[form.collateralToken]?.symbol}
@@ -764,8 +764,8 @@ export function BorrowMoneyModal({
               </div>
 
               {transactionStatus && (
-                <div className="bg-[#21301c] border border-[#54d22d] rounded-xl p-4">
-                  <div className="text-sm text-[#54d22d] font-medium text-center" style={{ whiteSpace: 'pre-line' }}>{transactionStatus}</div>
+                <div className="bg-card border border-primary rounded-xl p-4">
+                  <div className="text-sm text-primary font-medium text-center" style={{ whiteSpace: 'pre-line' }}>{transactionStatus}</div>
                   
                   {/* Show a "View Dashboard" button if transaction is complete */}
                   {transactionStatus.includes("check your wallet") && (
@@ -782,7 +782,7 @@ export function BorrowMoneyModal({
                           // Make sure to leave some time for wallet to persist
                           setTimeout(() => router.push("/dashboard"), 300);
                         }}
-                        className="bg-[#54d22d] text-[#162013] hover:bg-[#4bc226] font-semibold px-4 py-2 rounded"
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-4 py-2 rounded"
                       >
                         View Dashboard
                       </Button>
@@ -801,7 +801,7 @@ export function BorrowMoneyModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[90vw] max-w-md mx-auto bg-[#162013] border-[#426039] shadow-2xl [&>button]:text-white [&>button]:hover:text-[#a2c398]">
+      <DialogContent className="w-[90vw] max-w-md mx-auto bg-background border-border shadow-2xl [&>button]:text-foreground [&>button]:hover:text-muted-foreground">
         <DialogHeader className="pb-6">
           <DialogTitle className="sr-only">Borrow Money</DialogTitle>
           <DialogDescription className="sr-only">
@@ -813,19 +813,19 @@ export function BorrowMoneyModal({
                 onClick={goToPreviousStep}
                 variant="ghost"
                 size="sm"
-                className="p-2 text-[#a2c398] hover:text-white hover:bg-[#2e4328]"
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-card"
                 disabled={isProcessing}
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             )}
             <div className="flex-1">
-              <DialogTitle className="text-xl font-bold text-white">Get Cash</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-foreground">Get Cash</DialogTitle>
               <div className="flex gap-1 mt-2">
                 {[1, 2, 3, 4].map((step) => (
                   <div
                     key={step}
-                    className={`h-1 flex-1 rounded-full ${step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"}`}
+                    className={`h-1 flex-1 rounded-full ${step <= currentStep ? "bg-primary" : "bg-muted"}`}
                   />
                 ))}
               </div>
@@ -840,7 +840,7 @@ export function BorrowMoneyModal({
             <Button
               onClick={onClose}
               variant="outline"
-              className="flex-1 bg-transparent border-[#426039] text-[#a2c398] hover:bg-[#2e4328] hover:text-white"
+              className="flex-1 bg-transparent border-border text-muted-foreground hover:bg-card hover:text-foreground"
               disabled={isProcessing}
             >
               Cancel
@@ -850,7 +850,7 @@ export function BorrowMoneyModal({
               <Button
                 onClick={goToNextStep}
                 disabled={!canProceedToNextStep() || isProcessing}
-                className="flex-1 bg-[#54d22d] text-[#162013] hover:bg-[#4bc226] font-semibold"
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
               >
                 Continue
               </Button>
@@ -870,7 +870,7 @@ export function BorrowMoneyModal({
                   // Disable button if transaction is complete and showing final message
                   transactionStatus?.includes("check your wallet")
                 }
-                className="flex-1 bg-[#54d22d] text-[#162013] hover:bg-[#4bc226] font-semibold"
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
               >
                 {isProcessing ? "Processing..." : "Get Cash"}
               </Button>

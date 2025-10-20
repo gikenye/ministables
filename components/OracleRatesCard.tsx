@@ -126,14 +126,14 @@ export function OracleRatesCard({ tokens, localTokenAddress }: OracleRatesCardPr
             key={rate.address}
             className="flex items-center justify-between py-1"
           >
-            <span className="font-medium text-gray-900 text-sm">
+            <span className="font-medium text-foreground text-sm">
               {rate.symbol}
             </span>
             <span className="font-semibold text-primary text-sm">
               ${rate.usdValue}
             </span>
             {rate.localValue && (
-              <span className="text-gray-500 text-xs ml-2">{rate.localValue}</span>
+              <span className="text-muted-foreground text-xs ml-2">{rate.localValue}</span>
             )}
           </div>
         ))}

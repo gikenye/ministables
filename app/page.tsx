@@ -81,7 +81,7 @@ const ActionCardsGrid = ({
       return (
         <Card
           key={card.id}
-          className="group cursor-pointer border border-[#2e4328] shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-[#21301c]/80 backdrop-blur-sm overflow-hidden"
+          className="group cursor-pointer border border-border shadow-md sm:shadow-lg hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 bg-card/80 backdrop-blur-sm overflow-hidden"
           onClick={handleClick}
         >
           <CardContent className="p-3 sm:p-6 text-center relative">
@@ -92,13 +92,13 @@ const ActionCardsGrid = ({
                 className={`w-5 h-5 sm:w-8 sm:h-8 ${card.iconColor}`}
               />
             </div>
-            <h3 className="text-sm sm:text-lg font-semibold text-white mb-0.5 sm:mb-2">
+            <h3 className="text-sm sm:text-lg font-semibold text-foreground mb-0.5 sm:mb-2">
               {card.title}
             </h3>
-            <p className="text-xs sm:text-sm text-[#a2c398] line-clamp-2">
+            <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
               {card.description}
             </p>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#54d22d]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
+            <div className="absolute inset-0 bg-gradient-to-t from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg" />
           </CardContent>
         </Card>
       );
@@ -668,32 +668,32 @@ export default function AppPage() {
         title: "Start Saving",
         description: "From as low as 100KES or 2000NGN",
         icon: TrendingUp,
-        color: "bg-[#54d22d]",
-        iconColor: "text-[#162013]",
+        color: "bg-primary",
+        iconColor: "text-primary-foreground",
       },
       {
         id: "borrow",
         title: "Borrow Cash",
         description: "using your savings as security",
         icon: ArrowDownLeft,
-        color: "bg-[#426039]",
-        iconColor: "text-white",
+        color: "bg-muted",
+        iconColor: "text-foreground",
       },
       {
         id: "withdraw",
         title: "Withdraw",
         description: "directly to your mobile money wallet",
         icon: ArrowUpRight,
-        color: "bg-[#2e4328]",
-        iconColor: "text-white",
+        color: "bg-card",
+        iconColor: "text-foreground",
       },
       {
         id: "payback",
         title: "Repay Loans",
         description: "directly from your M-Pesa or Airtel Money",
         icon: ArrowUpRight,
-        color: "bg-[#21301c]",
-        iconColor: "text-white",
+        color: "bg-card",
+        iconColor: "text-foreground",
       },
     ],
     []
@@ -702,16 +702,16 @@ export default function AppPage() {
   // Show error if chain configuration is invalid
   if (!chainConfigValid) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4 p-8">
-          <div className="text-red-400 text-xl font-semibold">
+          <div className="text-destructive text-xl font-semibold">
             Chain Configuration Error
           </div>
-          <div className="text-gray-300 max-w-md">
+          <div className="text-muted-foreground max-w-md">
             The current chain is not properly configured. Please check the chain
             configuration or switch to a supported network.
           </div>
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-muted-foreground">
             Chain: {chain?.name || "Unknown"}
           </div>
         </div>
@@ -746,8 +746,8 @@ export default function AppPage() {
 
           <div className="flex items-center space-x-3 flex-shrink-0">
             {/* Chain indicator */}
-            {/* <div className="hidden sm:flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[#54d22d]/20 text-[#54d22d] border border-[#54d22d]/30">
-              <div className="w-2 h-2 rounded-full bg-[#54d22d] mr-2"></div>
+            {/* <div className="hidden sm:flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/20 text-primary border border-primary/30">
+              <div className="w-2 h-2 rounded-full bg-primary mr-2"></div>
               {chain.name}
             </div> */}
             <ConnectWallet />
@@ -769,7 +769,7 @@ export default function AppPage() {
       {/* Main Content */}
       <main className="px-3 py-6 sm:px-4 sm:py-8 max-w-6xl mx-auto relative z-10">
         {!isOnline && (
-          <div className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm">
+          <div className="bg-destructive/30 border border-destructive/50 text-destructive-foreground rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm">
             <WifiOff className="w-4 h-4 mr-2" />
             <p>You are currently offline. Some features may be limited.</p>
           </div>
@@ -785,12 +785,12 @@ export default function AppPage() {
           <div className="text-center mb-6">
             {/* <div className="flex flex-wrap justify-center gap-2">
               {session?.user?.verified ? (
-                // <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/30 text-green-300 backdrop-blur-sm">
+                // <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-success/30 text-foreground backdrop-blur-sm">
                 //   <Shield className="w-4 h-4 mr-1" />
                 //   Verified Account
                 // </div>
               ) : (
-                // <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-600/30 text-yellow-300 backdrop-blur-sm">
+                // <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-warning/30 text-foreground backdrop-blur-sm">
                   
                 //   <Button
                 //   onClick={() => router.push("/self")}
@@ -801,7 +801,7 @@ export default function AppPage() {
                 // </div>
               )}
               {isSDKLoaded && context && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/30 text-purple-300 backdrop-blur-sm">
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-accent/30 text-accent-foreground backdrop-blur-sm">
                   🚀 Farcaster Mini App
                 </div>
               )}
@@ -815,14 +815,14 @@ export default function AppPage() {
           />
         </div>
         <div className="bg-black/40 backdrop-blur-md rounded-xl p-4 border border-white/20 shadow-2xl">
-          <h3 className="text-lg font-semibold text-white mb-4 text-center">
+          <h3 className="text-lg font-semibold text-foreground mb-4 text-center">
             Quick Actions
           </h3>
           <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
             <Link href="/dashboard" className="w-full sm:w-auto">
               <Button
                 variant="outline"
-                className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
+                className="w-full bg-primary border-border text-primary-foreground hover:bg-primary hover:text-primary-foreground transition-all duration-200 rounded-xl"
               >
                 <BarChart3 className="w-4 h-4 mr-2" />
                 View Dashboard
@@ -831,13 +831,13 @@ export default function AppPage() {
           </div>
         </div>
 
-        {/* <div className="bg-[#21301c]/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-[#2e4328] shadow-lg">
-              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 text-center">Quick Actions</h3>
+        {/* <div className="bg-card/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-2x3 mx-auto border border-border shadow-lg">
+              <h3 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4 text-center">Quick Actions</h3>
               <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                 <Link href="/dashboard" className="w-full sm:w-auto">
                   <Button
                     variant="outline"
-                    className="w-full bg-[#54d22d] border-[#426039] text-[#162013] hover:bg-[#54d22d] hover:text-[#162013] transition-all duration-200 rounded-xl"
+                    className="w-full bg-primary border-border text-primary-foreground hover:bg-primary hover:text-primary-foreground transition-all duration-200 rounded-xl"
                   >
                     <BarChart3 className="w-4 h-4 mr-2" />
                     View Dashboard

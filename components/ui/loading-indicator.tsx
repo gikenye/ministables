@@ -47,7 +47,7 @@ export function LoadingIndicator({
     primary: "text-primary",
     secondary: "text-secondary",
     white: "text-white",
-    gray: "text-gray-400",
+    gray: "text-muted-foreground",
   };
 
   // Simplified loading indicator for low bandwidth
@@ -59,7 +59,7 @@ export function LoadingIndicator({
         }`}
       >
         <div className={`text-${color} font-bold text-lg`}>Loading...</div>
-        {text && <p className="text-sm text-gray-500 mt-2">{text}</p>}
+        {text && <p className="text-sm text-muted-foreground mt-2">{text}</p>}
       </div>
     );
   }
@@ -77,7 +77,7 @@ export function LoadingIndicator({
             : color
         }`}
       />
-      {text && <p className="text-sm text-gray-500 mt-2">{text}</p>}
+      {text && <p className="text-sm text-muted-foreground mt-2">{text}</p>}
     </div>
   );
 }
@@ -97,7 +97,7 @@ export function SkeletonLoader({
       {items.map((i) => (
         <div
           key={i}
-          className={`animate-pulse bg-gray-200 rounded-md ${className}`}
+          className={`animate-pulse bg-muted rounded-md ${className}`}
         />
       ))}
     </>
@@ -134,16 +134,16 @@ export function OptimizedImage({
     <div className="relative" style={{ width, height }}>
       {!loaded && !error && (
         <div
-          className={`absolute inset-0 bg-gray-200 animate-pulse rounded-md ${className}`}
+          className={`absolute inset-0 bg-muted animate-pulse rounded-md ${className}`}
           style={{ width, height }}
         />
       )}
       {error && (
         <div
-          className={`absolute inset-0 bg-gray-100 flex items-center justify-center rounded-md ${className}`}
+          className={`absolute inset-0 bg-muted flex items-center justify-center rounded-md ${className}`}
           style={{ width, height }}
         >
-          <span className="text-gray-400 text-sm">Image not available</span>
+          <span className="text-muted-foreground text-sm">Image not available</span>
         </div>
       )}
       <img

@@ -303,26 +303,26 @@ export function OnrampDepositModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden">
-        <div className="flex h-5 w-full items-center justify-center bg-[#162013]">
-          <div className="h-1 w-9 rounded-full bg-[#426039]"></div>
+      <DialogContent className="w-full max-w-md mx-auto bg-background border-0 shadow-lg p-0 overflow-hidden">
+        <div className="flex h-5 w-full items-center justify-center bg-background">
+          <div className="h-1 w-9 rounded-full bg-muted"></div>
         </div>
 
         <div className="px-4 pb-5">
           <div className="flex items-center justify-between pt-5 pb-3">
             {currentStep > 1 && !transaction.isComplete && (
-              <button onClick={prevStep} className="p-1 text-[#a2c398] hover:text-white transition-colors">
+              <button onClick={prevStep} className="p-1 text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div className="flex-1 text-center">
-              <h1 className="text-white text-[15px] font-medium leading-tight tracking-[-0.015em]"> Depositing {assetSymbol} ...</h1>
+              <h1 className="text-foreground text-[15px] font-medium leading-tight tracking-[-0.015em]"> Depositing {assetSymbol} ...</h1>
               <div className="flex justify-center gap-1 mt-2">
                 {[1, 2, 3, 4].map((step) => (
                   <div
                     key={step}
                     className={`w-2 h-2 rounded-full transition-colors ${
-                      step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"
+                      step <= currentStep ? "bg-primary" : "bg-muted"
                     }`}
                   />
                 ))}
@@ -332,7 +332,7 @@ export function OnrampDepositModal({
           </div>
 
           {transaction.error && (
-            <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm mb-4 flex items-start gap-2">
+            <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-3 rounded-xl text-sm mb-4 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>{transaction.error}</span>
             </div>
@@ -342,13 +342,13 @@ export function OnrampDepositModal({
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">Select country & network</h3>
-                  <p className="text-[#a2c398] text-sm">Choose your mobile money provider</p>
+                  <h3 className="text-foreground text-lg font-medium mb-2">Select country & network</h3>
+                  <p className="text-muted-foreground text-sm">Choose your mobile money provider</p>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-[#a2c398] text-sm font-medium mb-2 block">Country</Label>
+                    <Label className="text-muted-foreground text-sm font-medium mb-2 block">Country</Label>
                     <Select
                       value={form.countryCode}
                       onValueChange={(value) => {
@@ -356,12 +356,12 @@ export function OnrampDepositModal({
                         loadExchangeRate(value)
                       }}
                     >
-                      <SelectTrigger className="h-12 bg-[#21301c] border-[#426039] text-white focus:border-[#54d22d]">
+                      <SelectTrigger className="h-12 bg-card border-border text-foreground focus:border-primary">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#21301c] border-[#426039]">
+                      <SelectContent className="bg-card border-border">
                         {Object.entries(SUPPORTED_COUNTRIES).map(([code, country]) => (
-                          <SelectItem key={code} value={code} className="text-white hover:bg-[#2a3d24]">
+                          <SelectItem key={code} value={code} className="text-foreground hover:bg-card/80">
                             <span className="flex items-center gap-2">
                               <span className="text-lg">{country.flag}</span>
                               <span>{code}</span>
@@ -373,17 +373,17 @@ export function OnrampDepositModal({
                   </div>
 
                   <div>
-                    <Label className="text-[#a2c398] text-sm font-medium mb-2 block">Mobile Network</Label>
+                    <Label className="text-muted-foreground text-sm font-medium mb-2 block">Mobile Network</Label>
                     <Select
                       value={form.mobileNetwork}
                       onValueChange={(value) => setForm((prev) => ({ ...prev, mobileNetwork: value }))}
                     >
-                      <SelectTrigger className="h-12 bg-[#21301c] border-[#426039] text-white focus:border-[#54d22d]">
+                      <SelectTrigger className="h-12 bg-card border-border text-foreground focus:border-primary">
                         <SelectValue placeholder="Select network" />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#21301c] border-[#426039]">
+                      <SelectContent className="bg-card border-border">
                         {availableNetworks.map((network) => (
-                          <SelectItem key={network} value={network} className="text-white hover:bg-[#2a3d24]">
+                          <SelectItem key={network} value={network} className="text-foreground hover:bg-card/80">
                             {network}
                           </SelectItem>
                         ))}
@@ -395,7 +395,7 @@ export function OnrampDepositModal({
                 <button
                   onClick={nextStep}
                   disabled={!form.countryCode || !form.mobileNetwork}
-                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Continue
                 </button>
@@ -405,36 +405,36 @@ export function OnrampDepositModal({
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">Enter phone number</h3>
-                  <p className="text-[#a2c398] text-sm">We'll verify your {form.mobileNetwork} account</p>
+                  <h3 className="text-foreground text-lg font-medium mb-2">Enter phone number</h3>
+                  <p className="text-muted-foreground text-sm">We'll verify your {form.mobileNetwork} account</p>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-[#a2c398] text-sm font-medium mb-2 block">Phone Number</Label>
+                    <Label className="text-muted-foreground text-sm font-medium mb-2 block">Phone Number</Label>
                     <div className="relative">
                       <Input
                         type="tel"
                         placeholder="0712345678"
                         value={form.phoneNumber}
                         onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
-                        className="h-12 bg-[#21301c] border-[#426039] text-white focus:border-[#54d22d] pr-10"
+                        className="h-12 bg-card border-border text-foreground focus:border-primary pr-10"
                       />
                       {validation.isValidating && (
-                        <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 animate-spin text-[#a2c398]" />
+                        <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
                       )}
                       {validation.isValid && !validation.isValidating && (
-                        <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#54d22d]" />
+                        <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-primary" />
                       )}
                     </div>
                     {validation.isValid && validation.accountName && (
-                      <p className="text-sm text-[#54d22d] mt-2 flex items-center gap-1">
+                      <p className="text-sm text-primary mt-2 flex items-center gap-1">
                         <CheckCircle className="w-3 h-3" />
                         {validation.accountName}
                       </p>
                     )}
                     {validation.error && (
-                      <p className="text-sm text-red-400 mt-2 flex items-center gap-1">
+                      <p className="text-sm text-destructive mt-2 flex items-center gap-1">
                         <AlertCircle className="w-3 h-3" />
                         {validation.error}
                       </p>
@@ -445,7 +445,7 @@ export function OnrampDepositModal({
                 <button
                   onClick={nextStep}
                   disabled={!validation.isValid}
-                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Continue
                 </button>
@@ -456,18 +456,18 @@ export function OnrampDepositModal({
               <div className="space-y-6">
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-[#a2c398] text-sm font-medium mb-2 block">Amount ({form.countryCode})</Label>
+                    <Label className="text-muted-foreground text-sm font-medium mb-2 block">Amount ({form.countryCode})</Label>
                     <div className="relative">
                       <Input
                         type="number"
                         placeholder="100"
                         value={form.amount}
                         onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                        className="h-16 bg-[#21301c] border-[#426039] text-white focus:border-[#54d22d] text-2xl font-medium text-center pr-16"
+                        className="h-16 bg-card border-border text-foreground focus:border-primary text-2xl font-medium text-center pr-16"
                         min="1"
                         step="1"
                       />
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a2c398] text-sm">
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                         {form.countryCode}
                       </div>
                     </div>
@@ -475,10 +475,10 @@ export function OnrampDepositModal({
                     {/* Exchange Rate & Limits */}
                     <div className="mt-3 space-y-2">
                       {exchangeRate && form.amount && (
-                        <div className="bg-[#21301c] border border-[#426039] rounded-xl p-3">
+                        <div className="bg-card border border-border rounded-xl p-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-[#a2c398] text-sm">You receive:</span>
-                            <span className="font-medium text-[#54d22d]">
+                            <span className="text-muted-foreground text-sm">You receive:</span>
+                            <span className="font-medium text-primary">
                               ≈ {(Number.parseFloat(form.amount) / exchangeRate).toFixed(4)} {assetSymbol}
                             </span>
                           </div>
@@ -486,7 +486,7 @@ export function OnrampDepositModal({
                       )}
 
                       {form.countryCode && (
-                        <p className="text-xs text-[#a2c398] text-center">
+                        <p className="text-xs text-muted-foreground text-center">
                           Limits: {onrampService.getCountryLimits(form.countryCode).min}-
                           {onrampService.getCountryLimits(form.countryCode).max} {form.countryCode}
                         </p>
@@ -496,17 +496,17 @@ export function OnrampDepositModal({
                 </div>
 
                 {/* Info Section */}
-                {/* <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4">
+                {/* <div className="bg-card border border-border rounded-xl p-4">
                   <div className="flex items-start gap-3">
-                    <Info className="w-4 h-4 text-[#54d22d] mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-[#a2c398]">
-                      <div className="font-medium text-white mb-2">How it works:</div>
+                    <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-muted-foreground">
+                      <div className="font-medium text-foreground mb-2">How it works:</div>
                       <div className="space-y-1">
                         <div>1. Confirm your deposit details</div>
                         <div>2. Complete payment on your phone</div>
                         <div>3. Receive {assetSymbol} in your wallet</div>
                       </div>
-                      <div className="text-[#54d22d] mt-2 text-xs">
+                      <div className="text-primary mt-2 text-xs">
                         To: {address?.slice(0, 8)}...{address?.slice(-6)}
                       </div>
                     </div>
@@ -522,7 +522,7 @@ export function OnrampDepositModal({
                     Number.parseFloat(form.amount) <= 0 ||
                     Number.parseFloat(form.amount) < onrampService.getCountryLimits(form.countryCode).min
                   }
-                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {transaction.isProcessing ? (
                     <>
@@ -544,16 +544,16 @@ export function OnrampDepositModal({
                 {paymentStatus === "pending" && (
                   <>
                     <div>
-                      <p className="text-[#a2c398] text-sm mb-4">
+                      <p className="text-muted-foreground text-sm mb-4">
                         Check your phone for the M-Pesa prompt and enter your PIN to complete the payment.
                       </p>
                       {/* {transaction.transactionCode && (
-                        <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4 mb-4">
-                          <p className="text-[#a2c398] text-sm mb-1">Transaction Code:</p>
-                          <p className="font-mono text-sm font-medium text-white">{transaction.transactionCode}</p>
+                        <div className="bg-card border border-border rounded-xl p-4 mb-4">
+                          <p className="text-muted-foreground text-sm mb-1">Transaction Code:</p>
+                          <p className="font-mono text-sm font-medium text-foreground">{transaction.transactionCode}</p>
                         </div>
                       )} */}
-                      <div className="bg-yellow-900/20 border border-yellow-700 text-yellow-300 p-3 rounded-xl text-sm">
+                      <div className="bg-warning/20 border border-warning text-foreground p-3 rounded-xl text-sm">
                         <p className="font-medium mb-1 flex items-center justify-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Waiting for payment...
@@ -566,35 +566,35 @@ export function OnrampDepositModal({
 
                 {paymentStatus === "completed" && (
                   <>
-                    <div className="w-16 h-16 bg-[#54d22d]/20 rounded-full flex items-center justify-center mx-auto">
-                      <CheckCircle className="w-8 h-8 text-[#54d22d]" />
+                    <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto">
+                      <CheckCircle className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-white text-lg font-medium mb-2">Payment Successful!</h3>
-                      <p className="text-[#a2c398] text-sm mb-4">
+                      <h3 className="text-foreground text-lg font-medium mb-2">Payment Successful!</h3>
+                      <p className="text-muted-foreground text-sm mb-4">
                         Your {assetSymbol} has been sent to your wallet.
                       </p>
-                      <div className="bg-[#21301c] border border-[#426039] rounded-xl p-4 space-y-3 mb-4">
+                      <div className="bg-card border border-border rounded-xl p-4 space-y-3 mb-4">
                         {completedTransaction?.receipt_number && (
                           <div className="flex justify-between items-center">
-                            <span className="text-[#a2c398] text-sm">M-Pesa Receipt:</span>
-                            <span className="font-mono text-sm font-medium text-white">{completedTransaction.receipt_number}</span>
+                            <span className="text-muted-foreground text-sm">M-Pesa Receipt:</span>
+                            <span className="font-mono text-sm font-medium text-foreground">{completedTransaction.receipt_number}</span>
                           </div>
                         )}
                         {completedTransaction?.amount && (
                           <div className="flex justify-between items-center">
-                            <span className="text-[#a2c398] text-sm">Amount Paid:</span>
-                            <span className="font-medium text-white">{completedTransaction.amount} {completedTransaction.currency_code}</span>
+                            <span className="text-muted-foreground text-sm">Amount Paid:</span>
+                            <span className="font-medium text-foreground">{completedTransaction.amount} {completedTransaction.currency_code}</span>
                           </div>
                         )}
                         {completedTransaction?.amount_in_usd && (
                           <div className="flex justify-between items-center">
-                            <span className="text-[#a2c398] text-sm">Received:</span>
-                            <span className="font-medium text-[#54d22d]">{completedTransaction.amount_in_usd} {assetSymbol}</span>
+                            <span className="text-muted-foreground text-sm">Received:</span>
+                            <span className="font-medium text-primary">{completedTransaction.amount_in_usd} {assetSymbol}</span>
                           </div>
                         )}
                       </div>
-                      <div className="bg-[#54d22d]/10 border border-[#54d22d] text-[#54d22d] p-3 rounded-xl text-sm">
+                      <div className="bg-primary/10 border border-primary text-primary p-3 rounded-xl text-sm">
                         <p className="font-medium">✓ Transaction Complete</p>
                       </div>
                     </div>
@@ -603,15 +603,15 @@ export function OnrampDepositModal({
 
                 {paymentStatus === "failed" && (
                   <>
-                    <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
-                      <AlertCircle className="w-8 h-8 text-red-500" />
+                    <div className="w-16 h-16 bg-destructive/20 rounded-full flex items-center justify-center mx-auto">
+                      <AlertCircle className="w-8 h-8 text-destructive" />
                     </div>
                     <div>
-                      <h3 className="text-white text-lg font-medium mb-2">Payment Failed</h3>
-                      <p className="text-[#a2c398] text-sm mb-4">
+                      <h3 className="text-foreground text-lg font-medium mb-2">Payment Failed</h3>
+                      <p className="text-muted-foreground text-sm mb-4">
                         The payment was not completed. Please try again.
                       </p>
-                      <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm">
+                      <div className="bg-destructive/20 border border-destructive text-destructive-foreground p-3 rounded-xl text-sm">
                         <p className="font-medium">✗ Transaction Failed</p>
                       </div>
                     </div>
@@ -620,7 +620,7 @@ export function OnrampDepositModal({
 
                 <button
                   onClick={handleClose}
-                  className="w-full h-12 bg-[#54d22d] text-[#162013] text-base font-bold rounded-xl hover:bg-[#4bc428] transition-colors"
+                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold rounded-xl hover:bg-primary/90 transition-colors"
                 >
                   {paymentStatus === "completed" ? "Done" : "Close"}
                 </button>
