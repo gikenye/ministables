@@ -41,17 +41,21 @@ export function ConnectWallet({ className }: { className?: string }) {
       client={client}
       chains={CHAINS}
       wallets={wallets}
-      connectButton={{ label: "sign in" }}
+      connectButton={{
+        label: "Sign in",
+        className:
+          "rounded-full px-4 py-2 text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#54d22d]/60 bg-gradient-to-r from-[#54d22d] to-[#2e4328] text-white",
+      }}
       connectModal={{
         showThirdwebBranding: false,
         size: "compact",
         title: "Minilend",
-        titleIcon: "https://www.minilend.xyz/static/new-logo.png"
+        titleIcon: "https://www.minilend.xyz/static/new-logo.png",
       }}
       theme={darkTheme({
         colors: {
           modalBg: "hsl(148, 19%, 15%)",
-          borderColor: "hsl(217, 19%, 27%)",
+          borderColor: "hsl(147, 25%, 25%)",
           accentText: "hsl(193, 100%, 55%)",
           primaryButtonBg: "hsl(150, 75%, 22%)",
           primaryButtonText: "hsl(0, 0%, 100%)",

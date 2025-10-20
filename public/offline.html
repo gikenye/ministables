@@ -1,166 +1,182 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-  <title>MiniLend - Offline</title>
-  <style>
-    :root {
-      --primary: #0e6037;
-      --secondary: #008c45;
-      --background: #f5f5f5;
-      --text: #333333;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background-color: var(--background);
-      color: var(--text);
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    
-    header {
-      background-color: white;
-      border-bottom: 1px solid #e5e5e5;
-      padding: 1rem;
-    }
-    
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    
-    .logo-icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(to bottom right, var(--primary), var(--secondary));
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-    }
-    
-    .logo-text h1 {
-      margin: 0;
-      font-size: 1.5rem;
-      color: var(--primary);
-    }
-    
-    .logo-text p {
-      margin: 0;
-      font-size: 0.875rem;
-      color: #666;
-    }
-    
-    main {
-      flex: 1;
-      padding: 2rem 1rem;
-      max-width: 600px;
-      margin: 0 auto;
-      text-align: center;
-    }
-    
-    .offline-card {
-      background-color: white;
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      margin-top: 2rem;
-    }
-    
-    .icon-large {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      color: var(--primary);
-    }
-    
-    h2 {
-      margin-top: 0;
-      color: var(--primary);
-    }
-    
-    .button {
-      background-color: var(--primary);
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 500;
-      cursor: pointer;
-      display: inline-block;
-      margin-top: 1rem;
-      text-decoration: none;
-      min-height: 44px;
-      min-width: 44px;
-      line-height: 1.5;
-    }
-    
-    .tips {
-      margin-top: 2rem;
-      text-align: left;
-    }
-    
-    .tips h3 {
-      color: var(--primary);
-    }
-    
-    .tips ul {
-      padding-left: 1.5rem;
-    }
-    
-    .tips li {
-      margin-bottom: 0.5rem;
-    }
-    
-    footer {
-      background-color: white;
-      border-top: 1px solid #e5e5e5;
-      padding: 1rem;
-      text-align: center;
-      font-size: 0.875rem;
-      color: #666;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <div class="logo">
-      <div class="logo-icon">M</div>
-      <div class="logo-text">
-        <h1>MiniLend</h1>
-        <p>Grow Your Money</p>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes"
+    />
+    <title>Minilend - Offline</title>
+    <style>
+      :root {
+        --primary: #0e6037;
+        --secondary: #008c45;
+        --background: #f5f5f5;
+        --text: #333333;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+        background-color: var(--background);
+        color: var(--text);
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      header {
+        background-color: white;
+        border-bottom: 1px solid #e5e5e5;
+        padding: 1rem;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .logo-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(
+          to bottom right,
+          var(--primary),
+          var(--secondary)
+        );
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+      }
+
+      .logo-text h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: var(--primary);
+      }
+
+      .logo-text p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #666;
+      }
+
+      main {
+        flex: 1;
+        padding: 2rem 1rem;
+        max-width: 600px;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .offline-card {
+        background-color: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        margin-top: 2rem;
+      }
+
+      .icon-large {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: var(--primary);
+      }
+
+      h2 {
+        margin-top: 0;
+        color: var(--primary);
+      }
+
+      .button {
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-block;
+        margin-top: 1rem;
+        text-decoration: none;
+        min-height: 44px;
+        min-width: 44px;
+        line-height: 1.5;
+      }
+
+      .tips {
+        margin-top: 2rem;
+        text-align: left;
+      }
+
+      .tips h3 {
+        color: var(--primary);
+      }
+
+      .tips ul {
+        padding-left: 1.5rem;
+      }
+
+      .tips li {
+        margin-bottom: 0.5rem;
+      }
+
+      footer {
+        background-color: white;
+        border-top: 1px solid #e5e5e5;
+        padding: 1rem;
+        text-align: center;
+        font-size: 0.875rem;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo">
+        <div class="logo-icon">M</div>
+        <div class="logo-text">
+          <h1>Minilend</h1>
+          <p>Grow Your Money</p>
+        </div>
       </div>
-    </div>
-  </header>
-  
-  <main>
-    <div class="offline-card">
-      <div class="icon-large">📶</div>
-      <h2>You're Offline</h2>
-      <p>It looks like you've lost your internet connection. Some features may be limited until you're back online.</p>
-      <button class="button" onclick="window.location.reload()">Try Again</button>
-    </div>
-    
-    <div class="tips">
-      <h3>Tips for Low Connectivity:</h3>
-      <ul>
-        <li>Try moving to an area with better signal</li>
-        <li>Switch between Wi-Fi and mobile data</li>
-        <li>Some previously visited pages may still work offline</li>
-        <li>Your data is safely stored and will sync when you're back online</li>
-      </ul>
-    </div>
-  </main>
-  
-  <footer>
-    <p>MiniLend &copy; 2025 - Optimized for African users</p>
-  </footer>
-</body>
+    </header>
+
+    <main>
+      <div class="offline-card">
+        <div class="icon-large">📶</div>
+        <h2>You're Offline</h2>
+        <p>
+          It looks like you've lost your internet connection. Some features may
+          be limited until you're back online.
+        </p>
+        <button class="button" onclick="window.location.reload()">
+          Try Again
+        </button>
+      </div>
+
+      <div class="tips">
+        <h3>Tips for Low Connectivity:</h3>
+        <ul>
+          <li>Try moving to an area with better signal</li>
+          <li>Switch between Wi-Fi and mobile data</li>
+          <li>Some previously visited pages may still work offline</li>
+          <li>
+            Your data is safely stored and will sync when you're back online
+          </li>
+        </ul>
+      </div>
+    </main>
+
+    <footer>
+      <p>Minilend &copy; 2025 - Optimized for African users</p>
+    </footer>
+  </body>
 </html>

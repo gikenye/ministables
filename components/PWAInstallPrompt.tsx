@@ -10,14 +10,15 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function PWAInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      
+
       // Check if user has dismissed the prompt before
       const dismissed = localStorage.getItem("pwa-install-dismissed");
       if (!dismissed) {
@@ -62,7 +63,7 @@ export function PWAInstallPrompt() {
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-2">
             <Download className="w-5 h-5 text-[#54d22d]" />
-            <h3 className="font-semibold text-white">Install MiniLend</h3>
+            <h3 className="font-semibold text-white">Install Minilend</h3>
           </div>
           <button
             onClick={handleDismiss}
