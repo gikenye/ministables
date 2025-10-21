@@ -58,7 +58,7 @@ import { client } from "@/lib/thirdweb/client";
 
 import { parseUnits } from "viem";
 import { useChain } from "@/components/ChainProvider";
-import { getExplorerUrl, getVaultAddress } from "@/config/chainConfig";
+import { getExplorerUrl, getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { aaveRatesService } from "@/lib/services/aaveRatesService";
 
 interface SaveMoneyModalProps {
@@ -75,7 +75,7 @@ export function SaveMoneyModal({
   requiresAuth = false,
 }: SaveMoneyModalProps) {
   const account = useActiveAccount();
-  const { chain, contractAddress, tokens, tokenInfos } = useChain();
+  const { chain, tokens, tokenInfos } = useChain();
 
   // Only show deposit-appropriate tokens per chain
   const supportedStablecoins = useMemo(() => {
@@ -230,7 +230,7 @@ export function SaveMoneyModal({
     }
 
     const chainId = chain?.id || 42220;
-    const isCelo = chainId === 42220;
+    const isVaultChain = hasVaultContracts(chainId);
     const decimals = tokenInfos[form.token]?.decimals || 18;
     const amountWei = parseUnits(form.amount, decimals);
     const tokenSymbol = tokenInfos[form.token]?.symbol;
@@ -238,7 +238,7 @@ export function SaveMoneyModal({
     if (process.env.NODE_ENV === "development") {
       console.log("[SaveMoneyModal] Starting save with params:", {
         chainId,
-        isCelo,
+        isVaultChain,
         tokenAddress: form.token?.substring(0, 10) + "...",
         tokenSymbol,
         amount: "REDACTED",
@@ -248,13 +248,13 @@ export function SaveMoneyModal({
 
     let depositTx: any;
 
-    if (isCelo) {
-      // Celo: Use new vault-based system with Aave integration
+    if (isVaultChain) {
+      // Celo/Base: Use new vault-based system with Aave integration
       try {
         const vaultAddress = getVaultAddress(chainId, tokenSymbol);
 
         if (process.env.NODE_ENV === "development") {
-          console.log("[SaveMoneyModal] Using Aave vault for Celo:", {
+          console.log("[SaveMoneyModal] Using Aave vault:", {
             token: tokenSymbol,
             vault: vaultAddress?.substring(0, 10) + "...",
           });
@@ -301,32 +301,7 @@ export function SaveMoneyModal({
         throw error;
       }
     } else {
-      // Scroll or other chains: Use legacy contract system
-      if (process.env.NODE_ENV === "development") {
-        console.log("[SaveMoneyModal] Using legacy contract for Scroll");
-      }
-
-      const legacyContract = getContract({
-        client,
-        chain: chain,
-        address: contractAddress,
-        abi: legacyDepositABI,
-      });
-
-      // Legacy system uses lockPeriod in seconds directly
-      depositTx = prepareContractCall({
-        contract: legacyContract,
-        method: "deposit",
-        params: [
-          form.token, // token address
-          amountWei,
-          BigInt(form.lockPeriod), // lockPeriod in seconds
-        ],
-        erc20Value: {
-          tokenAddress: form.token,
-          amountWei,
-        },
-      });
+      throw new Error("This chain is not yet supported for deposits");
     }
 
     return depositTx;

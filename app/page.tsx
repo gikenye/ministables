@@ -17,13 +17,7 @@ import {
 // import FooterNavigation from "@/components/Footer"
 import { useActiveAccount, useSendTransaction } from "thirdweb/react";
 import { ConnectWallet } from "@/components/ConnectWallet";
-import {
-  useSupportedStablecoins,
-  useSupportedCollateral,
-  useUserBorrows,
-  useUserCollateral,
-  useUserDeposits,
-} from "../lib/thirdweb/minilend-contract";
+
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { allowance, approve } from "thirdweb/extensions/erc20";
 import { getWalletBalance } from "thirdweb/wallets";
@@ -131,14 +125,14 @@ export default function AppPage() {
     payModal: false,
   });
   const { isSDKLoaded, context } = useMiniApp();
-  const { chain, contract, contractAddress, tokens, tokenInfos } = useChain();
+  const { chain, tokens, tokenInfos } = useChain();
 
   // Validate chain configuration
   const chainConfigValid = useMemo(() => {
     return (
-      chain && contractAddress && tokens && tokens.length > 0 && tokenInfos
+      chain && tokens && tokens.length > 0 && tokenInfos
     );
-  }, [chain, contractAddress, tokens, tokenInfos]);
+  }, [chain, tokens, tokenInfos]);
 
   // Contract functions (no longer needed with direct sendTransaction)
   // const borrowFn = useBorrow();
@@ -153,38 +147,8 @@ export default function AppPage() {
     [tokens]
   );
 
-  // Read supported tokens from contract (first few indices)
-  const stablecoin0 = useSupportedStablecoins(contract, BigInt(0));
-  const stablecoin1 = useSupportedStablecoins(contract, BigInt(1));
-  const stablecoin2 = useSupportedStablecoins(contract, BigInt(2));
-  const collateral0 = useSupportedCollateral(contract, BigInt(0));
-  const collateral1 = useSupportedCollateral(contract, BigInt(1));
-
-  // Get supported tokens from contract with chain config fallback
-  const supportedStablecoins = useMemo(() => {
-    const contractTokens = [
-      stablecoin0.data,
-      stablecoin1.data,
-      stablecoin2.data,
-    ].filter(
-      (token) => token && token !== "0x0000000000000000000000000000000000000000"
-    );
-    // Use contract tokens if available, otherwise use all tokens from chain config
-    return contractTokens.length > 0 ? contractTokens : allTokenAddresses;
-  }, [stablecoin0.data, stablecoin1.data, stablecoin2.data, allTokenAddresses]);
-
-  const supportedCollateral = useMemo(() => {
-    const contractTokens = [collateral0.data, collateral1.data].filter(
-      (token) => token && token !== "0x0000000000000000000000000000000000000000"
-    );
-    // Use contract tokens if available, otherwise use all tokens from chain config
-    return contractTokens.length > 0 ? contractTokens : allTokenAddresses;
-  }, [collateral0.data, collateral1.data, allTokenAddresses]);
-
-  // All unique tokens
-  const allTokens = useMemo(() => {
-    return [...new Set([...supportedStablecoins, ...supportedCollateral])];
-  }, [supportedStablecoins, supportedCollateral]);
+  // Use all tokens from chain config
+  const allTokens = allTokenAddresses;
 
   // Get actual wallet balances from ERC20 contracts
   const [walletBalances, setWalletBalances] = useState<Record<string, string>>(
@@ -239,108 +203,34 @@ export default function AppPage() {
     fetchWalletBalances();
   }, [address, isConnected, allTokens, chain, tokens, client]);
 
-  const userBorrow0 = useUserBorrows(
-    contract,
-    address || "",
-    allTokens[0] || ""
-  );
-  const userBorrow1 = useUserBorrows(
-    contract,
-    address || "",
-    allTokens[1] || ""
-  );
-  const userBorrow2 = useUserBorrows(
-    contract,
-    address || "",
-    allTokens[2] || ""
-  );
 
-  const userCollateral0 = useUserCollateral(
-    contract,
-    address || "",
-    allTokens[0] || ""
-  );
-  const userCollateral1 = useUserCollateral(
-    contract,
-    address || "",
-    allTokens[1] || ""
-  );
-  const userCollateral2 = useUserCollateral(
-    contract,
-    address || "",
-    allTokens[2] || ""
-  );
-
-  const userDeposit0 = useUserDeposits(
-    contract,
-    address || "",
-    allTokens[0] || "",
-    BigInt(0)
-  );
-  const userDeposit1 = useUserDeposits(
-    contract,
-    address || "",
-    allTokens[1] || "",
-    BigInt(0)
-  );
-  const userDeposit2 = useUserDeposits(
-    contract,
-    address || "",
-    allTokens[2] || "",
-    BigInt(0)
-  );
 
   // Use wallet balances for SaveMoneyModal
   const userBalances = walletBalances;
 
   const userBorrows = useMemo(() => {
     const borrows: Record<string, string> = {};
-    if (allTokens[0])
-      borrows[allTokens[0]] = userBorrow0.data?.toString() || "0";
-    if (allTokens[1])
-      borrows[allTokens[1]] = userBorrow1.data?.toString() || "0";
-    if (allTokens[2])
-      borrows[allTokens[2]] = userBorrow2.data?.toString() || "0";
+    allTokens.forEach(token => { borrows[token] = "0"; });
     return borrows;
-  }, [userBorrow0.data, userBorrow1.data, userBorrow2.data, allTokens]);
+  }, [allTokens]);
 
   const userCollaterals = useMemo(() => {
     const collaterals: Record<string, string> = {};
-    if (allTokens[0])
-      collaterals[allTokens[0]] = userCollateral0.data?.toString() || "0";
-    if (allTokens[1])
-      collaterals[allTokens[1]] = userCollateral1.data?.toString() || "0";
-    if (allTokens[2])
-      collaterals[allTokens[2]] = userCollateral2.data?.toString() || "0";
+    allTokens.forEach(token => { collaterals[token] = "0"; });
     return collaterals;
-  }, [
-    userCollateral0.data,
-    userCollateral1.data,
-    userCollateral2.data,
-    allTokens,
-  ]);
+  }, [allTokens]);
 
   const userDeposits = useMemo(() => {
     const deposits: Record<string, string> = {};
-    if (allTokens[0] && userDeposit0.data)
-      deposits[allTokens[0]] = userDeposit0.data[0]?.toString() || "0";
-    if (allTokens[1] && userDeposit1.data)
-      deposits[allTokens[1]] = userDeposit1.data[0]?.toString() || "0";
-    if (allTokens[2] && userDeposit2.data)
-      deposits[allTokens[2]] = userDeposit2.data[0]?.toString() || "0";
+    allTokens.forEach(token => { deposits[token] = "0"; });
     return deposits;
-  }, [userDeposit0.data, userDeposit1.data, userDeposit2.data, allTokens]);
+  }, [allTokens]);
 
   const depositLockEnds = useMemo(() => {
     const lockEnds: Record<string, number> = {};
-    if (allTokens[0] && userDeposit0.data)
-      lockEnds[allTokens[0]] = Number(userDeposit0.data[1]) || 0;
-    if (allTokens[1] && userDeposit1.data)
-      lockEnds[allTokens[1]] = Number(userDeposit1.data[1]) || 0;
-    if (allTokens[2] && userDeposit2.data)
-      lockEnds[allTokens[2]] = Number(userDeposit2.data[1]) || 0;
+    allTokens.forEach(token => { lockEnds[token] = 0; });
     return lockEnds;
-  }, [userDeposit0.data, userDeposit1.data, userDeposit2.data, allTokens]);
+  }, [allTokens]);
 
   // Token info from chain context
 
@@ -351,10 +241,7 @@ export default function AppPage() {
   const [isOnline, setIsOnline] = useState(true);
   const [dataSaverEnabled, setDataSaverEnabled] = useState(false);
 
-  // Check if any critical hooks are loading (only check first few to reduce loading time)
-  const loading = useMemo(() => {
-    return userBorrow0.isLoading || userDeposit0.isLoading;
-  }, [userBorrow0.isLoading, userDeposit0.isLoading]);
+  const loading = false;
 
   // Check localStorage for verification skip state
   useEffect(() => {
@@ -427,57 +314,8 @@ export default function AppPage() {
     const amountWei = parseUnits(amount, tokenInfo.decimals);
 
     try {
-      // 1. Check allowance
-      const tokenContract = getContract({
-        client,
-        chain: chain,
-        address: token,
-      });
-      const currentAllowance = await allowance({
-        contract: tokenContract,
-        owner: account.address,
-        spender: contractAddress,
-      });
-
-      // 2. Approve if needed and wait for receipt per v5 docs
-      if (currentAllowance < amountWei) {
-        console.log(
-          `[SaveMoney] Approving ${tokenInfo.symbol} spending for contract`
-        );
-        const approveTx = approve({
-          contract: tokenContract,
-          spender: contractAddress,
-          amount: amountWei.toString(),
-        });
-        const result = await sendTransaction(approveTx);
-        if (result?.transactionHash) {
-          console.log(
-            `[SaveMoney] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-          );
-          await waitForReceipt({
-            client,
-            chain: chain,
-            transactionHash: result.transactionHash,
-          });
-        }
-      }
-
-      // 3. Deposit
-      console.log(
-        `[SaveMoney] Depositing ${amount} ${tokenInfo.symbol} for ${lockPeriod} seconds`
-      );
-      const depositTx = prepareContractCall({
-        contract,
-        method:
-          "function deposit(address token, uint256 amount, uint256 lockPeriod)",
-        params: [token, amountWei, BigInt(lockPeriod)],
-      });
-      const result = await sendTransaction(depositTx);
-      if (result?.transactionHash) {
-        console.log(
-          `[SaveMoney] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-        );
-      }
+      console.log(`[SaveMoney] Vault operations not yet implemented for ${tokenInfo.symbol}`);
+      // TODO: Implement vault deposit logic
     } catch (error) {
       console.error(`[SaveMoney] Error on ${chain.name}:`, error);
     }
@@ -492,24 +330,8 @@ export default function AppPage() {
 
     try {
       const tokenInfo = getTokenInfo(token);
-      const collateralInfo = getTokenInfo(collateralToken);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-
-      console.log(
-        `[BorrowMoney] Borrowing ${amount} ${tokenInfo.symbol} against ${collateralInfo.symbol} collateral on ${chain.name}`
-      );
-      const borrowTx = prepareContractCall({
-        contract,
-        method:
-          "function borrow(address token, uint256 amount, address collateralToken)",
-        params: [token, amountWei, collateralToken],
-      });
-      const result = await sendTransaction(borrowTx);
-      if (result?.transactionHash) {
-        console.log(
-          `[BorrowMoney] Borrow tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-        );
-      }
+      console.log(`[BorrowMoney] Vault operations not yet implemented for ${tokenInfo.symbol}`);
+      // TODO: Implement vault borrow logic
     } catch (error) {
       console.error(`[BorrowMoney] Error on ${chain.name}:`, error);
     }
@@ -519,51 +341,9 @@ export default function AppPage() {
     if (!token || !amount || !account?.address) return;
 
     const tokenInfo = getTokenInfo(token);
-    const amountWei = parseUnits(amount, tokenInfo.decimals);
-
     try {
-      const tokenContract = getContract({
-        client,
-        chain: chain,
-        address: token,
-      });
-      const currentAllowance = await allowance({
-        contract: tokenContract,
-        owner: account.address,
-        spender: contractAddress,
-      });
-
-      if (currentAllowance < amountWei) {
-        console.log(
-          `[DepositCollateral] Approving ${tokenInfo.symbol} spending for contract`
-        );
-        const approveTx = approve({
-          contract: tokenContract,
-          spender: contractAddress,
-          amount: amountWei.toString(),
-        });
-        const result = await sendTransaction(approveTx);
-        if (result?.transactionHash) {
-          console.log(
-            `[DepositCollateral] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-          );
-        }
-      }
-
-      console.log(
-        `[DepositCollateral] Depositing ${amount} ${tokenInfo.symbol} as collateral on ${chain.name}`
-      );
-      const depositTx = prepareContractCall({
-        contract,
-        method: "function depositCollateral(address token, uint256 amount)",
-        params: [token, amountWei],
-      });
-      const result = await sendTransaction(depositTx);
-      if (result?.transactionHash) {
-        console.log(
-          `[DepositCollateral] Deposit tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-        );
-      }
+      console.log(`[DepositCollateral] Vault operations not yet implemented for ${tokenInfo.symbol}`);
+      // TODO: Implement vault collateral deposit logic
     } catch (error) {
       console.error(`[DepositCollateral] Error on ${chain.name}:`, error);
     }
@@ -573,51 +353,9 @@ export default function AppPage() {
     if (!token || !amount || !account?.address) return;
 
     const tokenInfo = getTokenInfo(token);
-    const amountWei = parseUnits(amount, tokenInfo.decimals);
-
     try {
-      const tokenContract = getContract({
-        client,
-        chain: chain,
-        address: token,
-      });
-      const currentAllowance = await allowance({
-        contract: tokenContract,
-        owner: account.address,
-        spender: contractAddress,
-      });
-
-      if (currentAllowance < amountWei) {
-        console.log(
-          `[PayBack] Approving ${tokenInfo.symbol} spending for repayment`
-        );
-        const approveTx = approve({
-          contract: tokenContract,
-          spender: contractAddress,
-          amount: amountWei.toString(),
-        });
-        const result = await sendTransaction(approveTx);
-        if (result?.transactionHash) {
-          console.log(
-            `[PayBack] Approval tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-          );
-        }
-      }
-
-      console.log(
-        `[PayBack] Repaying ${amount} ${tokenInfo.symbol} loan on ${chain.name}`
-      );
-      const repayTx = prepareContractCall({
-        contract,
-        method: "function repay(address token, uint256 amount)",
-        params: [token, amountWei],
-      });
-      const result = await sendTransaction(repayTx);
-      if (result?.transactionHash) {
-        console.log(
-          `[PayBack] Repay tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-        );
-      }
+      console.log(`[PayBack] Vault operations not yet implemented for ${tokenInfo.symbol}`);
+      // TODO: Implement vault repay logic
     } catch (error) {
       console.error(`[PayBack] Error on ${chain.name}:`, error);
     }
@@ -628,22 +366,8 @@ export default function AppPage() {
 
     try {
       const tokenInfo = getTokenInfo(token);
-      const amountWei = parseUnits(amount, tokenInfo.decimals);
-
-      console.log(
-        `[Withdraw] Withdrawing ${amount} ${tokenInfo.symbol} on ${chain.name}`
-      );
-      const withdrawTx = prepareContractCall({
-        contract,
-        method: "function withdraw(address token, uint256 amount)",
-        params: [token, amountWei],
-      });
-      const result = await sendTransaction(withdrawTx);
-      if (result?.transactionHash) {
-        console.log(
-          `[Withdraw] Withdraw tx: ${getTransactionUrl(chain.id, result.transactionHash)}`
-        );
-      }
+      console.log(`[Withdraw] Vault operations not yet implemented for ${tokenInfo.symbol}`);
+      // TODO: Implement vault withdraw logic
     } catch (error) {
       console.error(`[Withdraw] Error on ${chain.name}:`, error);
     }

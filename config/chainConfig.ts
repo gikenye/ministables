@@ -1,11 +1,11 @@
-import { celo, scroll } from "thirdweb/chains";
+import { base, celo, scroll } from "thirdweb/chains";
 
-export const CHAINS = [celo, scroll];
+export const CHAINS = [celo, scroll, base];
 
-export const CONTRACTS = {
-  [celo.id]: "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c",
-  [scroll.id]: "0x31443910a7a6ff042067df8A34328E16a3994f72",
-};
+// export const CONTRACTS = { // bruh, these are depreciated. Use VAULT_CONTRACTS instead
+//   [celo.id]: "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c",
+//   [scroll.id]: "0x31443910a7a6ff042067df8A34328E16a3994f72",
+// };
 
 // Vault contracts for Aave integration
 export const VAULT_CONTRACTS = {
@@ -14,6 +14,10 @@ export const VAULT_CONTRACTS = {
     USDT: "0x90FF972CC2d12Ba495C8aC0887d6E9FD25B032c4",
     CUSD: "0x1077E075c879E8C95E7d0545b106B1448d035F37",
   },
+  [base.id]:{
+    USDC: "0xc9E71bf55860E2Fc6DE3Fa856D11eDBa910Ac64b",
+    USDT: "0x6f61982e10cbC3C80AB6FC6fB91eb7a60eB93C6E",
+  }
 };
 
 // Additional Aave integration contracts
@@ -29,11 +33,13 @@ export const AAVE_CONTRACTS = {
     SAVINGS_BRIDGE: "0x9c7523EE4E9ceD985D248eF9f7d2502F2435bc9f",
     AAVE_POOL: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
   },
+  
 };
 
 export const EXPLORERS = {
   [celo.id]: "https://celoscan.io",
   [scroll.id]: "https://scrollscan.com",
+  [base.id]: "https://basescan.org",
 };
 
 export const TOKENS = {
@@ -89,14 +95,28 @@ export const TOKENS = {
       icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
     },
   ],
+  [base.id]: [
+    {
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      symbol: "USDC",
+      decimals: 6,
+      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
+    },
+    {
+      address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+      symbol: "USDT",
+      decimals: 6,
+      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/825.png",
+    },
+  ]
 };
 
 // Helper functions for config-driven lookups
-export const getContractAddress = (chainId: number): string => {
-  const address = CONTRACTS[chainId];
-  if (!address)
+export const getContractAddress = (chainId: number) => {
+  const vaults = VAULT_CONTRACTS[chainId];
+  if (!vaults)
     throw new Error(`No contract address configured for chain ${chainId}`);
-  return address;
+  return vaults;
 };
 
 export const getTokens = (chainId: number) => {
@@ -183,4 +203,8 @@ export const getStrategyAddress = (chainId: number, tokenSymbol: string): string
   const strategyAddress = contracts[`${tokenSymbol.toUpperCase()}_STRATEGY` as keyof typeof contracts];
   if (!strategyAddress) throw new Error(`No strategy found for ${tokenSymbol} on chain ${chainId}`);
   return strategyAddress;
+};
+
+export const hasVaultContracts = (chainId: number): boolean => {
+  return !!VAULT_CONTRACTS[chainId];
 };
