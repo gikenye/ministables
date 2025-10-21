@@ -6,20 +6,20 @@
 # Minilend
 
 
-Minilend is a decentralized lending protocol built on the Celo blockchain that enables users to borrow and lend various stablecoins with robust compliance mechanisms powered by zkSelf.
+Minilend is a  savings & lending protocol that enables users to save & borrow various stablecoins with robust compliance mechanisms powered by zkSelf.
 
 ## Overview
 
 Minilend addresses the challenge of accessible, compliant lending in decentralized finance by providing a platform where users can:
 
 - Borrow stablecoins using other stablecoins as collateral
-- Lend stablecoins to earn interest
+- Convert fiat savings to stablecoins and earn interest.
 - Swap between different stablecoins
 - Maintain regulatory compliance through zkSelf identity verification
 
 ## Key Features
 
-- **Multi-Stablecoin Support**: Compatible with various stablecoins on the Celo network
+- **Multi-Stablecoin Support**: Compatible with various stablecoins on the Celo, Base and Scroll networks
 - **Compliance-First Approach**: Integration with zkSelf for KYC/AML compliance
 - **Oracle-Based Pricing**: Reliable price feeds through SortedOracles
 - **User-Friendly Interface**: Modern React/Next.js frontend for seamless interaction
@@ -54,14 +54,19 @@ Built with Next.js and React, featuring:
 
 ### Supported Stablecoins
 
-#### Borrowable Stablecoins
-- USDC: [0xcebA9300f2b948710d2653dD7B07f33A8B32118C](https://celoscan.io/address/0xcebA9300f2b948710d2653dD7B07f33A8B32118C)
-- cUSD: [0x765DE816845861e75A25fCA122bb6898B8B1282a](https://celoscan.io/address/0x765DE816845861e75A25fCA122bb6898B8B1282a)
-- cEUR: [0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73](https://celoscan.io/address/0xD8763CBa276a3738E6DE85b4b3bF5FDed6D6cA73)
-- cREAL: [0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787](https://celoscan.io/address/0xe8537a3d056DA446677B9E9d6c5dB704EaAb4787)
-- USDT: [0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e](https://celoscan.io/address/0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e)
-- cKES: [0x456a3D042C0DbD3db53D5489e98dFb038553B0d0](https://celoscan.io/address/0x456a3D042C0DbD3db53D5489e98dFb038553B0d0)
-- USDGLO: [0x4F604735c1cF31399C6E711D5962b2B3E0225AD3](https://celoscan.io/address/0x4F604735c1cF31399C6E711D5962b2B3E0225AD3)
+#### Per Chain Stablecoins
+
+## SCROLL
+- USDC, USDT
+- BKES
+  
+## CELO
+- USDC, USDT, cUSD
+- cKES, cNGN
+  
+## BASE
+- USDC, USDT
+
 
 Additional supported stablecoins can be found in the deployment configuration.
 
