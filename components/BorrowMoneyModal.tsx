@@ -79,13 +79,7 @@ export function BorrowMoneyModal({
   const { toast } = useToast()
   const account = useActiveAccount()
   const router = useRouter()
-  const { chain, contractAddress, tokens, tokenInfos } = useChain()
-
-  const contract = getContract({
-    client,
-    chain,
-    address: contractAddress,
-  })
+  const { chain, tokens, tokenInfos } = useChain()
 
   // Valid collateral assets - only specific tokens per chain
   const SUPPORTED_COLLATERAL = useMemo(() => {
@@ -228,39 +222,9 @@ export function BorrowMoneyModal({
     return result.slice(0, maxTokens);
   }, [SUPPORTED_STABLECOINS]);
 
-  // Always call the same number of hooks regardless of chain
+  // Liquidity queries disabled - using vault contracts now
   const allLiquidityQueries = paddedTokens.map((token) => {
-    const { data: totalSupply } = useReadContract({
-      contract,
-      method: "function totalSupply(address) view returns (uint256)",
-      params: token ? [token] : ["0x0000000000000000000000000000000000000000"],
-      queryOptions: {
-        enabled: isOpen && !!token,
-        retry: 2,
-      },
-    })
-
-    const { data: totalBorrows } = useReadContract({
-      contract,
-      method: "function totalBorrows(address) view returns (uint256)",
-      params: token ? [token] : ["0x0000000000000000000000000000000000000000"],
-      queryOptions: {
-        enabled: isOpen && !!token,
-        retry: 2,
-      },
-    })
-
-    const { data: isBorrowingPaused } = useReadContract({
-      contract,
-      method: "function isBorrowingPaused(address) view returns (bool)",
-      params: token ? [token] : ["0x0000000000000000000000000000000000000000"],
-      queryOptions: {
-        enabled: isOpen && !!token,
-        retry: 2,
-      },
-    })
-
-    return { token, totalSupply, totalBorrows, isBorrowingPaused }
+    return { token, totalSupply: undefined, totalBorrows: undefined, isBorrowingPaused: undefined }
   })
 
   // Filter out null entries after all hooks have been called
@@ -381,13 +345,8 @@ export function BorrowMoneyModal({
           const amountToWrap = Math.min(required - walletBalance, nativeBal)
           if (amountToWrap > 0) {
             setTransactionStatus("Converting CELO for collateral...")
-            const celoContract = getContract({ client, chain: chain, address: CELO_ERC20 })
-            const wrapTx = prepareContractCall({
-              contract: celoContract,
-              method: "function deposit()",
-              params: [],
-              value: parseUnits(amountToWrap.toString(), 18),
-            })
+            // TODO: Implement CELO wrapping for vault
+            throw new Error("CELO wrapping not yet implemented for vaults")
             
             const wrapResult = await sendTransaction({ transaction: wrapTx, account })
             logThirdweb('wrapResult', wrapResult)
@@ -411,75 +370,14 @@ export function BorrowMoneyModal({
         setTransactionStatus("Adding security...")
         const amount = parseUnits(requiredCollateral, tokenInfos[form.collateralToken]?.decimals || 18)
         
-        // Prepare ERC20 approval
-        const tokenContract = getContract({
-          client,
-          chain: chain,
-          address: form.collateralToken,
-        })
-
-        const allowanceTx = prepareContractCall({
-          contract: tokenContract,
-          method: "function approve(address spender, uint256 amount)",
-          params: [contractAddress, amount],
-        })
-        
-        // Execute approval transaction
-        setTransactionStatus("Approving collateral use...")
-        const allowanceResult = await sendTransaction({ transaction: allowanceTx, account })
-  logThirdweb('allowanceResult', allowanceResult)
-        if (allowanceResult?.transactionHash) {
-          await waitForReceipt({ client, chain: chain, transactionHash: allowanceResult.transactionHash })
-        }
-        
-        // Prepare deposit collateral transaction
-        const depositTx = prepareContractCall({
-          contract,
-          method: "function depositCollateral(address token, uint256 amount)",
-          params: [form.collateralToken, amount],
-        })
-        
-        // Execute deposit transaction
-        setTransactionStatus("Depositing your security...")
-        const depositResult = await sendTransaction({ transaction: depositTx, account })
-  logThirdweb('depositResult', depositResult)
-          if (depositResult?.transactionHash) {
-            await waitForReceipt({ client, chain: chain, transactionHash: depositResult.transactionHash })
-
-            // Report collateral deposit transaction to Divvi
-            reportTransactionToDivvi(depositResult.transactionHash, chain?.id)
-              .then(() => console.log("[BorrowMoneyModal] Reported collateral deposit to Divvi:", depositResult.transactionHash))
-              .catch((error) => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
-          }
-        
-        setTransactionStatus("Security added ✓")
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        // TODO: Implement vault collateral deposit
+        setTransactionStatus("Vault operations not yet implemented")
+        throw new Error("Vault operations not yet implemented")
       }
 
-      // Execute borrow transaction
-      setTransactionStatus("Getting your cash...")
-      const borrowAmount = parseUnits(form.amount, tokenInfos[form.token]?.decimals || 18)
-      
-
-      const borrowTx = prepareContractCall({
-        contract,
-        method: "function borrow(address token, uint256 amount, address collateralToken)",
-        params: [form.token, borrowAmount, form.collateralToken],
-      })
-      
-      const borrowResult = await sendTransaction({ transaction: borrowTx, account })
-  logThirdweb('borrowResult', borrowResult)
-      if (borrowResult?.transactionHash) {
-        setTransactionStatus("Processing transaction...")
-        await waitForReceipt({ client, chain: chain, transactionHash: borrowResult.transactionHash })
-
-        // Report borrow transaction to Divvi
-        reportTransactionToDivvi(borrowResult.transactionHash, chain?.id)
-          .then(() => console.log("[BorrowMoneyModal] Reported borrow transaction to Divvi:", borrowResult.transactionHash))
-          .catch((error) => console.error("[BorrowMoneyModal] Error reporting to Divvi:", error))
-      }
-
-      setTransactionStatus("Cash sent to your wallet ✓")
+      // TODO: Implement vault borrow
+      setTransactionStatus("Vault operations not yet implemented")
+      throw new Error("Vault operations not yet implemented")
       
       // Instead of automatically closing, update status with instructions
       setTimeout(() => {

@@ -55,7 +55,7 @@ export function PayBackModal({
 }: PayBackModalProps) {
   const account = useActiveAccount();
   const address = account?.address;
-  const { chain, contract, contractAddress, tokens, tokenInfos } = useChain();
+  const { chain, tokens, tokenInfos } = useChain();
   const [selectedLoan, setSelectedLoan] = useState<ActiveLoan | null>(null);
   const [showOnrampModal, setShowOnrampModal] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -196,11 +196,8 @@ export function PayBackModal({
       // First approve the Minilend contract to spend tokens
       const erc20Contract = getContract({ client, chain, address: form.token });
 
-      const approveTx = prepareContractCall({
-        contract: erc20Contract,
-        method: "function approve(address spender, uint256 amount)",
-        params: [contractAddress, amountWei],
-      });
+      // TODO: Implement vault repay approval
+      throw new Error("Vault operations not yet implemented");
 
       const approveResult = await sendTransaction({
         account,
@@ -214,17 +211,8 @@ export function PayBackModal({
         });
       }
 
-      // Now execute the repay transaction
-      const repayTx = prepareContractCall({
-        contract,
-        method: "function repay(address token, uint256 amount)",
-        params: [form.token, amountWei],
-      });
-
-      // We'll report to Divvi after transaction is complete
-      // The tag will be added by Divvi's backend when processing the transaction
-
-      const result = await sendTransaction({ account, transaction: repayTx });
+      // TODO: Implement vault repay
+      throw new Error("Vault operations not yet implemented");
 
       if (result?.transactionHash) {
         await waitForReceipt({
@@ -363,7 +351,7 @@ export function PayBackModal({
                       return (
                         <LoanItem
                           key={tokenAddress}
-                          contract={contract}
+                          contract={null}
                           userAddress={address}
                           tokenAddress={tokenAddress}
                           tokenInfo={tokenInfo}
