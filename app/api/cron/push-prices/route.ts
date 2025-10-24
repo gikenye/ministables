@@ -35,11 +35,15 @@ const USD_FEED_BY_SYMBOL: Record<string, string> = {
   cJPY: '0xFDE35B45cBd2504FB5dC514F007bC2DE27034274',
 };
 
+function isValidAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
 function parseAddressesFromEnv(envKey: string): string[] {
   return (process.env[envKey] || '')
     .split(',')
     .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+    .filter((s) => s.length > 0 && isValidAddress(s));
 }
 
 export async function GET(request: NextRequest) {
@@ -55,8 +59,14 @@ export async function GET(request: NextRequest) {
     const oracleAddress = (process.env.BACKEND_ORACLE_ADDRESS || process.env.NEXT_PUBLIC_BACKEND_ORACLE_ADDRESS || '0x66b2Ed926b810ca5296407d0fE8F1dB73dFe5924').trim();
     const privateKey = (process.env.PRIVATE_KEY || '').trim();
 
-    if (!oracleAddress || !privateKey) {
-      return NextResponse.json({ error: 'Missing BACKEND_ORACLE_ADDRESS or PRIVATE_KEY' }, { status: 500 });
+    if (!privateKey) {
+      console.error('[CRON] Missing PRIVATE_KEY');
+      return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
+    }
+
+    if (!isValidAddress(oracleAddress)) {
+      console.error('[CRON] Invalid oracle address');
+      return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
     }
 
     const provider = new providers.JsonRpcProvider(rpcUrl);
@@ -73,6 +83,10 @@ export async function GET(request: NextRequest) {
 
     // Resolve SortedOracles address
     const sortedOraclesAddress = (process.env.SORTED_ORACLES_ADDRESS || '0xefB84935239dAcdecF7c5bA76d8dE40b077B7b33').trim();
+    if (!isValidAddress(sortedOraclesAddress)) {
+      console.error('[CRON] Invalid SortedOracles address');
+      return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
+    }
     const sortedOracles = new Contract(sortedOraclesAddress, SORTED_ORACLES_ABI, provider);
 
     // Discover CELO and cUSD via Mento and derive USD per CELO
@@ -95,11 +109,15 @@ export async function GET(request: NextRequest) {
     const prepared: Array<{ address: string; symbol: string; priceUSDPretty: string; route: string }>
       = [];
 
-    for (const tokenAddr of tokenAddresses) {
+    const pricePromises = tokenAddresses.map(async (tokenAddr) => {
+      if (!isValidAddress(tokenAddr)) return null;
+
       try {
         const erc20 = new Contract(tokenAddr, ERC20_ABI, provider);
-        const tokenDecimals: number = await erc20.decimals().catch(() => 18);
-        const tokenSymbol: string = await erc20.symbol().catch(() => '?');
+        const [tokenDecimals, tokenSymbol] = await Promise.all([
+          erc20.decimals().catch(() => 18),
+          erc20.symbol().catch(() => '?')
+        ]);
 
         let price1e18: BigNumber = constants.Zero;
         let route: string = '';
@@ -113,7 +131,9 @@ export async function GET(request: NextRequest) {
             price1e18 = usdPerCelo1e18.mul(scale).div(outTokens);
             route = 'CELO->TOKEN';
           }
-        } catch {}
+        } catch (err) {
+          console.warn(`[CRON] CELO->TOKEN failed for ${tokenAddr}:`, err instanceof Error ? err.message : 'Unknown error');
+        }
 
         // Try TOKEN -> CELO
         if (price1e18.isZero()) {
@@ -125,43 +145,69 @@ export async function GET(request: NextRequest) {
               price1e18 = usdPerCelo1e18.mul(outCelo).div(utils.parseUnits('1', 18));
               route = 'TOKEN->CELO';
             }
-          } catch {}
+          } catch (err) {
+            console.warn(`[CRON] TOKEN->CELO failed for ${tokenAddr}:`, err instanceof Error ? err.message : 'Unknown error');
+          }
         }
 
         // Fallback to SortedOracles direct USD feed
         if (price1e18.isZero()) {
           const feed = USD_FEED_BY_SYMBOL[tokenSymbol as keyof typeof USD_FEED_BY_SYMBOL];
-          if (feed) {
+          if (feed && isValidAddress(feed)) {
             try {
               const { numerator, denominator } = (await sortedOracles.medianRate(feed)) as { numerator: BigNumber; denominator: BigNumber };
               if (!denominator.isZero()) {
                 price1e18 = numerator.mul(utils.parseUnits('1', 18)).div(denominator);
                 route = 'SortedOracles';
               }
-            } catch {}
+            } catch (err) {
+              console.warn(`[CRON] SortedOracles failed for ${tokenSymbol}:`, err instanceof Error ? err.message : 'Unknown error');
+            }
           }
         }
 
-        if (price1e18.isZero()) continue;
+        if (price1e18.isZero()) {
+          console.warn(`[CRON] No price found for ${tokenSymbol} (${tokenAddr})`);
+          return null;
+        }
 
-        tokens.push(tokenAddr);
-        prices.push(price1e18.toString());
-        prepared.push({
+        return {
           address: tokenAddr,
           symbol: tokenSymbol,
+          price: price1e18.toString(),
           priceUSDPretty: utils.formatUnits(price1e18, 18),
           route: route || 'unknown',
+        };
+      } catch (err) {
+        console.error(`[CRON] Error processing token ${tokenAddr}:`, err instanceof Error ? err.message : 'Unknown error');
+        return null;
+      }
+    });
+
+    const results = await Promise.all(pricePromises);
+    for (const result of results) {
+      if (result) {
+        tokens.push(result.address);
+        prices.push(result.price);
+        prepared.push({
+          address: result.address,
+          symbol: result.symbol,
+          priceUSDPretty: result.priceUSDPretty,
+          route: result.route,
         });
-      } catch {}
+      }
     }
 
     if (tokens.length === 0) {
+      console.warn('[CRON] No prices to push');
       return NextResponse.json({ success: true, pushed: 0, message: 'No prices to push' }, { status: 200 });
     }
 
+    console.log(`[CRON] Pushing ${tokens.length} prices to oracle`);
     const tx = await oracle.setRatesBatch(tokens, prices);
     const receipt = await tx.wait();
 
+    console.log(`[CRON] Successfully pushed prices. TxHash: ${receipt.transactionHash}`);
     return NextResponse.json({
       success: true,
       pushed: tokens.length,
@@ -169,7 +215,8 @@ export async function GET(request: NextRequest) {
       entries: prepared,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Failed to push prices' }, { status: 500 });
+    console.error('[CRON] Fatal error:', error?.message || 'Unknown error', error?.stack);
+    return NextResponse.json({ error: 'Failed to push prices' }, { status: 500 });
   }
 }
 
