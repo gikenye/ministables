@@ -1,4 +1,3 @@
-import { ObjectId } from "mongodb";
 import { getCollection } from "../mongodb";
 import { User, UserUpdate, NewUser } from "../models/user";
 
@@ -31,19 +30,40 @@ export const UserService = {
     const collection = await getCollection(COLLECTION_NAME);
 
     // Ensure address is lowercase for consistency
-    const normalizedUserData = {
+    const normalizedUserData: User = {
       ...userData,
       address: userData.address.toLowerCase(),
       createdAt: new Date(),
       updatedAt: new Date(),
+      // Initialize default values for required fields
+      savingsStats: {
+        totalSaved: "0",
+        totalInterestEarned: "0",
+        totalGoals: 0,
+        activeGoals: 0,
+        completedGoals: 0,
+        averageGoalSize: "0",
+        savingsStreak: 0,
+        longestSavingsStreak: 0,
+        achievements: {
+          firstGoal: false,
+          firstDeposit: false,
+          goalCompleted: false,
+          savingsStreak30: false,
+          savingsStreak100: false,
+          interestMilestone: false,
+          groupGoalCreated: false,
+          referralMade: false,
+        },
+      },
+      friends: [],
+      lastActiveAt: new Date(),
+      loginCount: 1,
     };
 
-    const result = await collection.insertOne(normalizedUserData);
+    await collection.insertOne(normalizedUserData);
 
-    return {
-      _id: result.insertedId,
-      ...normalizedUserData,
-    };
+    return normalizedUserData;
   },
 
   /**
@@ -61,10 +81,10 @@ export const UserService = {
     const result = await collection.findOneAndUpdate(
       { address: address.toLowerCase() },
       { $set: updateData },
-      { returnDocument: "after" },
+      { returnDocument: "after" }
     );
 
-    return result as User;
+    return result as unknown as User;
   },
 
   /**
@@ -96,14 +116,14 @@ export const UserService = {
       {
         upsert: true,
         returnDocument: "after",
-      },
+      }
     );
 
     if (!result) {
       throw new Error(`Failed to upsert user with address ${address}`);
     }
 
-    return result as User;
+    return result as unknown as User;
   },
 
   /**
