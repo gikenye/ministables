@@ -109,6 +109,7 @@ class OnrampService {
       });
 
       const result = await response.json();
+      console.log ("culprit:",result);
 
       if (!response.ok) {
         throw new Error(result.error || `HTTP error! status: ${response.status}`);
