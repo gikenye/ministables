@@ -32,6 +32,9 @@ import {
   ExternalLink,
   Loader2,
   AlertCircle,
+  Trophy,
+  Banknote,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 // import FooterNavigation from "@/components/Footer"
@@ -197,7 +200,7 @@ const InfoCard = ({
 
   const variantClasses = {
     default: "bg-gray-800 border-gray-700 p-3",
-    stats: "bg-gray-800 border-gray-700 p-4",
+    stats: "bg-gray-800 border-gray-700 p-2",
     action:
       "bg-gray-800 border-gray-700 p-3 hover:bg-gray-750 transition-colors duration-200",
   };
@@ -319,24 +322,24 @@ const GoalCard = ({
   if (goal.category === "quick") {
     return (
       <div
-        className="bg-gradient-to-r from-teal-500 to-cyan-500 rounded-xl overflow-hidden relative cursor-pointer hover:scale-[1.02] transition-transform duration-200 border-0"
+        className="bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg overflow-hidden relative cursor-pointer hover:scale-[1.01] transition-transform duration-200 border-0"
         onClick={onCardClick}
       >
         {/* Header Section */}
-        <div className="p-4 relative">
-          <div className="flex items-center justify-between mb-3">
+        <div className="p-3 relative">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex-1">
-              <h3 className="text-xl font-bold text-white mb-1">
+              <h3 className="text-lg font-bold text-white mb-0.5">
                 {goal.title}
               </h3>
               <div className="text-xs text-white/70">Current Balance</div>
             </div>
-            <div className="text-4xl opacity-80">🐷</div>
+            <div className="text-2xl opacity-80">🐷</div>
           </div>
 
           {/* Balance Display */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-2xl font-bold text-white">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xl font-bold text-white">
               KES {formatAmount(goal.amount)}
             </div>
             {onToggleBalance && (
@@ -345,25 +348,25 @@ const GoalCard = ({
                   e.stopPropagation();
                   onToggleBalance();
                 }}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 min-w-[32px] min-h-[32px] flex items-center justify-center"
               >
                 {showBalance ? (
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3 h-3" />
                 ) : (
-                  <EyeOff className="w-4 h-4" />
+                  <EyeOff className="w-3 h-3" />
                 )}
               </button>
             )}
           </div>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onCardClick?.();
               }}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px] flex items-center justify-center"
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 min-h-[32px] flex items-center justify-center"
             >
               Save Now
             </button>
@@ -372,7 +375,7 @@ const GoalCard = ({
                 e.stopPropagation();
                 // Handle withdraw action
               }}
-              className="bg-transparent border border-white/40 text-white hover:bg-white/10 px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px] flex items-center justify-center"
+              className="bg-transparent border border-white/40 text-white hover:bg-white/10 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 min-h-[32px] flex items-center justify-center"
             >
               Withdraw
             </button>
@@ -381,7 +384,7 @@ const GoalCard = ({
 
         {/* Description Section */}
         {goal.description && (
-          <div className="bg-black/20 p-3 backdrop-blur-sm">
+          <div className="bg-black/20 p-2 backdrop-blur-sm">
             <p className="text-xs text-white/90 leading-relaxed">
               {goal.description}
             </p>
@@ -404,14 +407,14 @@ const GoalCard = ({
 
   return (
     <div
-      className={`rounded-xl overflow-hidden relative ${getCardBackground()}`}
+      className={`rounded-lg overflow-hidden relative ${getCardBackground()}`}
     >
       {/* Background pattern for personal goals */}
       {goal.category === "personal" && (
         <div className="absolute inset-0 opacity-20">
-          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-teal-500/30">
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-teal-500/30">
             {/* Chart-like dots pattern */}
-            <div className="flex items-end justify-center space-x-1 h-full p-4">
+            <div className="flex items-end justify-center space-x-1 h-full p-3">
               {Array.from({ length: 20 }).map((_, i) => (
                 <div
                   key={i}
@@ -427,56 +430,56 @@ const GoalCard = ({
       {/* Background for retirement goals */}
       {goal.category === "retirement" && (
         <div className="absolute inset-0 opacity-30">
-          <div className="absolute bottom-0 right-0 text-6xl p-4">☂️</div>
+          <div className="absolute bottom-0 right-0 text-4xl p-3">☂️</div>
         </div>
       )}
 
-      <div className="p-4 relative z-10">
+      <div className="p-3 relative z-10">
         {/* Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-3">
-            <h3 className="text-lg font-semibold text-white flex items-center space-x-2">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-base font-semibold text-white flex items-center space-x-2">
               <span>{goal.title}</span>
-              <div className="w-4 h-4 border border-gray-400 rounded-sm flex items-center justify-center">
-                <div className="w-2 h-2 bg-gray-400 rounded-sm"></div>
+              <div className="w-3 h-3 border border-gray-400 rounded-sm flex items-center justify-center">
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-sm"></div>
               </div>
             </h3>
           </div>
-          <span className="text-lg font-bold text-cyan-400">
+          <span className="text-sm font-bold text-cyan-400">
             {goal.progress.toFixed(1)}%
           </span>
         </div>
 
         {/* Amount Section */}
-        <InfoCard variant="stats" className="mb-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-300">Amount saved (KES)</div>
+        <InfoCard variant="stats" className="mb-0">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-gray-300">Amount saved (KES)</div>
             {onToggleBalance && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleBalance();
                 }}
-                className="text-gray-400 hover:text-white p-1 rounded transition-colors duration-200"
+                className="text-gray-400 hover:text-white p-0.5 rounded transition-colors duration-200"
               >
                 {showBalance ? (
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3 h-3" />
                 ) : (
-                  <EyeOff className="w-4 h-4" />
+                  <EyeOff className="w-3 h-3" />
                 )}
               </button>
             )}
           </div>
 
-          <div className="text-xl font-bold text-white mb-3">
+          <div className="text-lg font-bold text-white mb-2">
             {formatAmount(goal.amount)} of{" "}
             {formatTargetAmount(goal.targetAmount)}
           </div>
 
           {/* Progress bar */}
-          <div className="w-full bg-gray-600 rounded-full h-2">
+          <div className="w-full bg-gray-600 rounded-full h-1.5">
             <div
-              className="bg-cyan-400 h-2 rounded-full transition-all duration-300"
+              className="bg-cyan-400 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${Math.min(goal.progress, 100)}%` }}
             />
           </div>
@@ -498,41 +501,107 @@ const SaveOptionsModal = ({
 }) => {
   const saveOptions: SaveOption[] = [
     {
+      id: "52-week",
+      title: "52 Week Challenge",
+      icon: Calendar,
+      description: "Save incrementally over 52 weeks",
+    },
+    {
+      id: "superfans",
+      title: "Superfans Challenge",
+      icon: Trophy,
+      description: "Join the superfans saving challenge",
+    },
+    {
+      id: "vault",
+      title: "Akiba Vault",
+      icon: Shield,
+      description: "Secure long-term savings vault",
+    },
+    {
+      id: "mia-kwa-mia",
+      title: "Mia Kwa Mia Challenge",
+      icon: Banknote,
+      description: "Monthly progressive savings challenge",
+    },
+    {
+      id: "envelope",
+      title: "Envelope Challenge",
+      icon: Mail,
+      description: "Digital envelope saving method",
+    },
+    {
       id: "personal",
       title: "Personal Goal",
       icon: User,
-    },
-    {
-      id: "group",
-      title: "Group Goal",
-      icon: Users,
-    },
-    {
-      id: "quick",
-      title: "Quick Save",
-      icon: HelpCircle,
+      description: "Set your own custom savings target",
     },
   ];
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[80vh]">
-      <ModalHeader title="Create New Goal" onClose={onClose} />
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
+      <ModalHeader title="Goal Categories" onClose={onClose} />
 
       <div className="bg-black p-4 space-y-6">
         {/* Header Section */}
         <div className="text-center py-2">
-          <div className="text-4xl mb-3">🐷</div>
+          <div className="text-4xl mb-3">🏆</div>
           <h3 className="text-lg font-semibold text-white mb-2">
-            Where would you like to save?
+            Ready for a challenge?
           </h3>
           <p className="text-sm text-gray-400">
-            Choose the type of savings goal you want to create
+            Saving is no easy feat! Elevate your game with our challenges. Pick
+            a challenge and let the fun begin!
           </p>
         </div>
 
-        {/* Goal Options */}
+        {/* Challenge Options - Grid Layout */}
+        <div className="grid grid-cols-2 gap-3">
+          {saveOptions.slice(0, 4).map((option) => {
+            const IconComponent = option.icon;
+            return (
+              <InfoCard
+                key={option.id}
+                variant="action"
+                className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-4 min-h-[120px]"
+              >
+                <button
+                  onClick={() => onOptionSelect(option.id)}
+                  className="w-full h-full flex flex-col items-center justify-center space-y-2 text-center"
+                >
+                  {option.id === "52-week" && (
+                    <div className="w-16 h-16 bg-teal-500/20 rounded-full flex items-center justify-center mb-2">
+                      <div className="text-2xl font-bold text-teal-400">52</div>
+                    </div>
+                  )}
+                  {option.id === "superfans" && (
+                    <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mb-2">
+                      <Trophy className="w-8 h-8 text-cyan-400" />
+                    </div>
+                  )}
+                  {option.id === "vault" && (
+                    <div className="w-16 h-16 bg-gray-600/20 rounded-full flex items-center justify-center mb-2">
+                      <Shield className="w-8 h-8 text-gray-400" />
+                    </div>
+                  )}
+                  {option.id === "mia-kwa-mia" && (
+                    <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mb-2">
+                      <Banknote className="w-8 h-8 text-purple-400" />
+                    </div>
+                  )}
+
+                  <div className="text-sm font-semibold text-white">
+                    {option.title}
+                  </div>
+                </button>
+              </InfoCard>
+            );
+          })}
+        </div>
+
+        {/* Additional Challenges - Single Column */}
         <div className="space-y-3">
-          {saveOptions.map((option) => {
+          {saveOptions.slice(4).map((option) => {
             const IconComponent = option.icon;
             return (
               <InfoCard
@@ -545,7 +614,12 @@ const SaveOptionsModal = ({
                   className="w-full flex items-center space-x-4 p-2"
                 >
                   <div className="w-12 h-12 bg-cyan-400/20 rounded-full flex items-center justify-center">
-                    <IconComponent className="w-6 h-6 text-cyan-400" />
+                    {option.id === "envelope" && (
+                      <Mail className="w-6 h-6 text-cyan-400" />
+                    )}
+                    {option.id === "personal" && (
+                      <User className="w-6 h-6 text-cyan-400" />
+                    )}
                   </div>
 
                   <div className="flex-1 text-left">
@@ -553,10 +627,7 @@ const SaveOptionsModal = ({
                       {option.title}
                     </div>
                     <div className="text-sm text-gray-400">
-                      {option.id === "personal" &&
-                        "Set personal savings targets"}
-                      {option.id === "group" && "Save together with others"}
-                      {option.id === "quick" && "Save without a specific goal"}
+                      {option.description}
                     </div>
                   </div>
 
@@ -565,6 +636,44 @@ const SaveOptionsModal = ({
               </InfoCard>
             );
           })}
+        </div>
+
+        {/* Featured Goals Section */}
+        <div className="space-y-3">
+          <h4 className="text-white font-semibold">Featured goals</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <InfoCard
+              variant="action"
+              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-4 min-h-[100px]"
+            >
+              <button
+                onClick={() => onOptionSelect("emergency")}
+                className="w-full h-full flex flex-col items-center justify-center space-y-2 text-center"
+              >
+                <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center mb-2">
+                  <AlertCircle className="w-6 h-6 text-orange-400" />
+                </div>
+                <div className="text-sm font-semibold text-white">
+                  Emergency Fund
+                </div>
+              </button>
+            </InfoCard>
+
+            <InfoCard
+              variant="action"
+              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-4 min-h-[100px]"
+            >
+              <button
+                onClick={() => onOptionSelect("other")}
+                className="w-full h-full flex flex-col items-center justify-center space-y-2 text-center"
+              >
+                <div className="w-12 h-12 bg-gray-500/20 rounded-full flex items-center justify-center mb-2">
+                  <HelpCircle className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="text-sm font-semibold text-white">Other</div>
+              </button>
+            </InfoCard>
+          </div>
         </div>
 
         {/* Cancel Button */}
@@ -579,6 +688,104 @@ const SaveOptionsModal = ({
 
         {/* Bottom spacing for safe area */}
         <div className="h-4"></div>
+      </div>
+    </BottomSheet>
+  );
+};
+
+// Save Actions Modal - Quick save actions for main SAVE button
+const SaveActionsModal = ({
+  isOpen,
+  onClose,
+  onActionSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onActionSelect: (actionId: string) => void;
+}) => {
+  const saveActions = [
+    {
+      id: "personal",
+      title: "Personal Goal",
+      icon: User,
+      description: "Save to your own custom goal",
+    },
+    {
+      id: "group",
+      title: "Group Goal",
+      icon: Users,
+      description: "Save together with others",
+    },
+    {
+      id: "quick",
+      title: "Quick Save",
+      icon: HelpCircle,
+      description: "Save without a specific goal",
+    },
+  ];
+
+  return (
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[60vh]">
+      <ModalHeader title="Where to Save?" onClose={onClose} />
+
+      <div className="bg-black p-4 space-y-4">
+        {/* Header Section */}
+        <div className="text-center py-1">
+          <div className="text-3xl mb-2">🐷</div>
+          <h3 className="text-base font-semibold text-white mb-1">
+            Choose your save option
+          </h3>
+          <p className="text-xs text-gray-400">
+            Select where you'd like to save your money
+          </p>
+        </div>
+
+        {/* Save Action Options */}
+        <div className="space-y-2">
+          {saveActions.map((action) => {
+            const IconComponent = action.icon;
+            return (
+              <InfoCard
+                key={action.id}
+                variant="action"
+                className="cursor-pointer hover:border-cyan-400 transition-all duration-200"
+              >
+                <button
+                  onClick={() => onActionSelect(action.id)}
+                  className="w-full flex items-center space-x-3 p-1"
+                >
+                  <div className="w-8 h-8 bg-cyan-400/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <IconComponent className="w-4 h-4 text-cyan-400" />
+                  </div>
+
+                  <div className="flex-1 text-left">
+                    <div className="text-base font-medium text-white">
+                      {action.title}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {action.description}
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                </button>
+              </InfoCard>
+            );
+          })}
+        </div>
+
+        {/* Cancel Button */}
+        <ActionButton
+          onClick={onClose}
+          variant="outline"
+          size="md"
+          className="w-full"
+        >
+          Cancel
+        </ActionButton>
+
+        {/* Bottom spacing for safe area */}
+        <div className="h-2"></div>
       </div>
     </BottomSheet>
   );
@@ -681,27 +888,6 @@ const QuickSaveDetailsModal = ({
           </InfoCard>
         </div>
 
-        {/* Payment Details */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-white">Payment Info</h3>
-            <Share2 className="w-4 h-4 text-gray-400" />
-          </div>
-
-          <InfoCard>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Business No.</span>
-                <span className="text-cyan-400 font-medium">4072222</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Account No.</span>
-                <span className="text-cyan-400 font-medium">PTU5C5</span>
-              </div>
-            </div>
-          </InfoCard>
-        </div>
-
         {/* Timeline (Compact) */}
         <InfoCard>
           <div className="flex items-center justify-between text-sm">
@@ -784,6 +970,197 @@ const QuickSaveAmountModal = ({
             )
           )}
         </div>
+      </div>
+    </BottomSheet>
+  );
+};
+
+// Custom Goal Modal - Create user-defined goals
+const CustomGoalModal = ({
+  isOpen,
+  onClose,
+  onCreateGoal,
+  form,
+  setForm,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateGoal: () => void;
+  form: {
+    name: string;
+    amount: string;
+    timeline: string;
+    category: string;
+  };
+  setForm: (form: any) => void;
+}) => {
+  const handleInputChange = (field: string, value: string) => {
+    setForm((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const formatAmount = (value: string) => {
+    // Remove non-numeric characters except decimal point
+    const numericValue = value.replace(/[^0-9.]/g, "");
+    // Format with commas
+    const parts = numericValue.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+  };
+
+  const handleAmountChange = (value: string) => {
+    const formatted = formatAmount(value);
+    handleInputChange("amount", formatted);
+  };
+
+  const isFormValid = () => {
+    return (
+      form.name.trim() !== "" &&
+      form.amount.trim() !== "" &&
+      parseFloat(form.amount.replace(/,/g, "")) > 0
+    );
+  };
+
+  return (
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[95vh]">
+      <ModalHeader
+        title="Create Custom Goal"
+        onClose={onClose}
+        rightAction={{
+          label: "Create",
+          onClick: onCreateGoal,
+          variant: "primary",
+        }}
+      />
+
+      <div className="bg-black p-4 space-y-6">
+        {/* Header */}
+        <div className="text-center py-2">
+          <div className="text-4xl mb-3">🎯</div>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Set Your Goal
+          </h3>
+          <p className="text-sm text-gray-400">
+            Create a personalized savings goal with your own target and timeline
+          </p>
+        </div>
+
+        {/* Goal Name */}
+        <div className="space-y-2">
+          <label className="text-white font-medium text-sm">Goal Name</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => handleInputChange("name", e.target.value)}
+            placeholder="e.g., New Car, Vacation, Emergency Fund"
+            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+            maxLength={50}
+          />
+          <div className="text-xs text-gray-500 text-right">
+            {form.name.length}/50
+          </div>
+        </div>
+
+        {/* Target Amount */}
+        <div className="space-y-2">
+          <label className="text-white font-medium text-sm">
+            Target Amount (KES)
+          </label>
+          <input
+            type="text"
+            value={form.amount}
+            onChange={(e) => handleAmountChange(e.target.value)}
+            placeholder="0"
+            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-lg font-semibold"
+          />
+          <div className="text-xs text-gray-500">
+            Enter your target savings amount
+          </div>
+        </div>
+
+        {/* Timeline */}
+        <div className="space-y-2">
+          <label className="text-white font-medium text-sm">Timeline</label>
+          <select
+            value={form.timeline}
+            onChange={(e) => handleInputChange("timeline", e.target.value)}
+            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
+          >
+            <option value="3">3 months</option>
+            <option value="6">6 months</option>
+            <option value="12">1 year</option>
+            <option value="18">1.5 years</option>
+            <option value="24">2 years</option>
+            <option value="36">3 years</option>
+            <option value="60">5 years</option>
+          </select>
+          <div className="text-xs text-gray-500">
+            How long do you want to save for this goal?
+          </div>
+        </div>
+
+        {/* Goal Category */}
+        <div className="space-y-2">
+          <label className="text-white font-medium text-sm">Category</label>
+          <select
+            value={form.category}
+            onChange={(e) => handleInputChange("category", e.target.value)}
+            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
+          >
+            <option value="personal">Personal</option>
+            <option value="emergency">Emergency Fund</option>
+            <option value="travel">Travel</option>
+            <option value="education">Education</option>
+            <option value="business">Business</option>
+            <option value="health">Health</option>
+            <option value="home">Home & Family</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        {/* Goal Summary */}
+        {isFormValid() && (
+          <InfoCard variant="stats">
+            <div className="space-y-2">
+              <h4 className="text-white font-semibold">Goal Summary</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-gray-400">Monthly Target</div>
+                  <div className="text-cyan-400 font-semibold">
+                    KES{" "}
+                    {Math.ceil(
+                      parseFloat(form.amount.replace(/,/g, "")) /
+                        parseInt(form.timeline)
+                    ).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Weekly Target</div>
+                  <div className="text-cyan-400 font-semibold">
+                    KES{" "}
+                    {Math.ceil(
+                      parseFloat(form.amount.replace(/,/g, "")) /
+                        (parseInt(form.timeline) * 4.33)
+                    ).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </InfoCard>
+        )}
+
+        {/* Create Button */}
+        <ActionButton
+          onClick={onCreateGoal}
+          variant="primary"
+          size="lg"
+          className="w-full"
+          disabled={!isFormValid()}
+        >
+          Create Goal
+        </ActionButton>
+
+        {/* Bottom spacing */}
+        <div className="h-4"></div>
       </div>
     </BottomSheet>
   );
@@ -1176,17 +1553,6 @@ const ProfileScreen = ({
           </div>
         </button>
 
-        {/* Next of kin */}
-        <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Users className="w-5 h-5 text-gray-400" />
-              <span className="text-white">Next of kin</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </div>
-        </button>
-
         {/* Personal details */}
         <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
           <div className="flex items-center justify-between">
@@ -1329,6 +1695,7 @@ export default function AppPage() {
   // State for the new design
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [saveOptionsModalOpen, setSaveOptionsModalOpen] = useState(false);
+  const [saveActionsModalOpen, setSaveActionsModalOpen] = useState(false);
   const [showBalances, setShowBalances] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState<
@@ -1360,6 +1727,15 @@ export default function AppPage() {
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("");
   const [copied, setCopied] = useState(false);
   const [pendingDeposit, setPendingDeposit] = useState(false);
+
+  // Custom Goal modal states
+  const [customGoalModalOpen, setCustomGoalModalOpen] = useState(false);
+  const [customGoalForm, setCustomGoalForm] = useState({
+    name: "",
+    amount: "",
+    timeline: "12", // months
+    category: "personal",
+  });
 
   // Sample goals data - replace with real data from your backend
   const goals: Goal[] = useMemo(
@@ -1426,8 +1802,45 @@ export default function AppPage() {
     setSaveOptionsModalOpen(false);
     // Handle the different save options
     switch (optionId) {
-      case "personal":
+      case "52-week":
+        // Handle 52 Week Challenge
+        console.log("52 Week Challenge selected");
         setActiveModal("save");
+        break;
+      case "superfans":
+        // Handle Superfans Challenge
+        console.log("Superfans Challenge selected");
+        setActiveModal("save");
+        break;
+      case "vault":
+        // Handle The Chumz Vault
+        console.log("The Chumz Vault selected");
+        setActiveModal("save");
+        break;
+      case "mia-kwa-mia":
+        // Handle Mia Kwa Mia Challenge
+        console.log("Mia Kwa Mia Challenge selected");
+        setActiveModal("save");
+        break;
+      case "envelope":
+        // Handle Envelope Challenge
+        console.log("Envelope Challenge selected");
+        setActiveModal("save");
+        break;
+      case "personal":
+        // Handle Personal Goal
+        console.log("Personal Goal selected");
+        setCustomGoalModalOpen(true);
+        break;
+      case "emergency":
+        // Handle Emergency Fund
+        console.log("Emergency Fund selected");
+        setCustomGoalModalOpen(true);
+        break;
+      case "other":
+        // Handle Other
+        console.log("Other goal selected");
+        setCustomGoalModalOpen(true);
         break;
       case "group":
         // Handle group goal creation
@@ -1437,7 +1850,78 @@ export default function AppPage() {
         // Handle quick save
         setActiveModal("save");
         break;
+      default:
+        console.log("Unknown option selected:", optionId);
+        break;
     }
+  };
+
+  const handleSaveActionSelect = (actionId: string) => {
+    setSaveActionsModalOpen(false);
+    // Handle the different save actions from main SAVE button
+    switch (actionId) {
+      case "personal":
+        // Open custom goal creation
+        setCustomGoalModalOpen(true);
+        break;
+      case "group":
+        // Handle group goal creation
+        console.log("Group goal selected");
+        // You can add group goal functionality here
+        break;
+      case "quick":
+        // Handle quick save
+        setQuickSaveDetailsOpen(true);
+        break;
+      default:
+        console.log("Unknown save action selected:", actionId);
+        break;
+    }
+  };
+
+  const handleCreateCustomGoal = () => {
+    // Validate form
+    if (!customGoalForm.name.trim() || !customGoalForm.amount.trim()) {
+      console.error("Goal name and amount are required");
+      return;
+    }
+
+    const targetAmount = parseFloat(customGoalForm.amount.replace(/,/g, ""));
+    if (targetAmount <= 0) {
+      console.error("Target amount must be greater than 0");
+      return;
+    }
+
+    // Create goal object
+    const newGoal = {
+      id: `custom-${Date.now()}`,
+      title: customGoalForm.name,
+      amount: "0",
+      targetAmount: targetAmount.toString(),
+      progress: 0,
+      category: customGoalForm.category,
+      timeline: parseInt(customGoalForm.timeline),
+      createdAt: new Date(),
+    };
+
+    console.log("Creating custom goal:", newGoal);
+
+    // Here you would typically save to your backend/database
+    // For now, we'll just log it and close the modal
+
+    // Reset form
+    setCustomGoalForm({
+      name: "",
+      amount: "",
+      timeline: "12",
+      category: "personal",
+    });
+
+    // Close modal
+    setCustomGoalModalOpen(false);
+
+    // You might want to refresh the goals list or navigate to the new goal
+    // setActiveModal("save"); // or redirect to goal details
   };
 
   const toggleBalanceVisibility = () => {
@@ -1674,6 +2158,17 @@ export default function AppPage() {
     setDepositSuccess(null);
   };
 
+  const closeCustomGoalModal = () => {
+    setCustomGoalModalOpen(false);
+    // Reset form
+    setCustomGoalForm({
+      name: "",
+      amount: "",
+      timeline: "12",
+      category: "personal",
+    });
+  };
+
   // Show error if chain configuration is invalid
   if (!chainConfigValid) {
     return (
@@ -1902,7 +2397,7 @@ export default function AppPage() {
           {/* Save Now Button - Center FAB */}
           <div className="absolute left-1/2 transform -translate-x-1/2 -top-5">
             <ActionButton
-              onClick={() => setSaveOptionsModalOpen(true)}
+              onClick={() => setSaveActionsModalOpen(true)}
               variant="primary"
               size="lg"
               className="w-14 h-14 rounded-full text-xs font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-black"
@@ -1946,6 +2441,12 @@ export default function AppPage() {
         onOptionSelect={handleSaveOptionSelect}
       />
 
+      <SaveActionsModal
+        isOpen={saveActionsModalOpen}
+        onClose={() => setSaveActionsModalOpen(false)}
+        onActionSelect={handleSaveActionSelect}
+      />
+
       {/* Quick Save Modals */}
       <QuickSaveDetailsModal
         isOpen={quickSaveDetailsOpen}
@@ -1977,6 +2478,15 @@ export default function AppPage() {
         setCopied={setCopied}
         setSelectedTokenForOnramp={setSelectedTokenForOnramp}
         setShowOnrampModal={setShowOnrampModal}
+      />
+
+      {/* Custom Goal Modal */}
+      <CustomGoalModal
+        isOpen={customGoalModalOpen}
+        onClose={closeCustomGoalModal}
+        onCreateGoal={handleCreateCustomGoal}
+        form={customGoalForm}
+        setForm={setCustomGoalForm}
       />
 
       {/* Keep existing modals for functionality */}
