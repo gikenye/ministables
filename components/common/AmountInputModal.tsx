@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BottomSheet } from "../ui/BottomSheet";
 import { ModalHeader } from "../ui/ModalHeader";
 import { AmountDisplay } from "../ui/AmountDisplay";
@@ -25,6 +25,13 @@ export const AmountInputModal = ({
   icon = "🐷",
 }: AmountInputModalProps) => {
   const [amount, setAmount] = useState(initialAmount);
+
+  // Reset amount when modal opens or initialAmount changes
+  useEffect(() => {
+    if (isOpen) {
+      setAmount(initialAmount);
+    }
+  }, [isOpen, initialAmount]);
 
   const handleNumberPress = (num: string) => {
     if (num === "00") {

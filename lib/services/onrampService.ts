@@ -50,7 +50,7 @@ export const MOBILE_NETWORKS = [
   "Airtel",
   "MTN",
   "AirtelTigo",
-  "Telcel"
+  "Telcel",
 ] as const;
 
 // Supported countries and their currency codes
@@ -63,13 +63,13 @@ export const SUPPORTED_COUNTRIES = {
 // Supported assets by chain for onramp
 import { CHAINS, getVaultAddress as getVaultAddr } from "@/config/chainConfig";
 
-const celoChain = CHAINS.find(c => c.name?.toUpperCase() === "CELO");
+const celoChain = CHAINS.find((c) => c.name?.toUpperCase() === "CELO");
 const defaultChainName = celoChain?.name || "Celo";
 
-export const ONRAMP_SUPPORTED_ASSETS =  {
+export const ONRAMP_SUPPORTED_ASSETS = {
   [defaultChainName.toUpperCase()]: ["cUSD", "USDC", "USDT"],
   BASE: ["USDC"],
-  STELLAR: ["USDC"], 
+  STELLAR: ["USDC"],
 } as const;
 
 // Asset to chain mapping (default chains for each asset)
@@ -109,16 +109,29 @@ class OnrampService {
       });
 
       const result = await response.json();
-      console.log ("culprit:",result);
+
+      // Only log in development environment
+      if (process.env.NODE_ENV === "development") {
+        console.log("Onramp API response:", {
+          status: response.status,
+          ok: response.ok,
+          hasData: !!result,
+          responseKeys: result ? Object.keys(result) : [],
+        });
+      }
 
       if (!response.ok) {
-        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          result.error || `HTTP error! status: ${response.status}`
+        );
       }
 
       return result;
     } catch (error: any) {
       console.error("Onramp API error:", error);
-      throw new Error(error.message || "Failed to communicate with onramp service");
+      throw new Error(
+        error.message || "Failed to communicate with onramp service"
+      );
     }
   }
 
@@ -130,7 +143,10 @@ class OnrampService {
       });
 
       // Use quoted_rate from the API response structure
-      const rate = result.data?.data?.quoted_rate || result.data?.data?.selling_rate || result.data?.rate;
+      const rate =
+        result.data?.data?.quoted_rate ||
+        result.data?.data?.selling_rate ||
+        result.data?.rate;
 
       return {
         success: true,
@@ -158,7 +174,10 @@ class OnrampService {
 
       return {
         success: true,
-        name: result.data?.data?.public_name || result.data?.name || result.data?.account_name,
+        name:
+          result.data?.data?.public_name ||
+          result.data?.name ||
+          result.data?.account_name,
         message: "Validation successful",
       };
     } catch (error: any) {
@@ -184,8 +203,12 @@ class OnrampService {
 
       return {
         success: true,
-        transaction_code: result.data?.data?.transaction_code || result.data?.transaction_code,
-        message: result.data?.data?.message || result.data?.message || "Onramp transaction initiated successfully",
+        transaction_code:
+          result.data?.data?.transaction_code || result.data?.transaction_code,
+        message:
+          result.data?.data?.message ||
+          result.data?.message ||
+          "Onramp transaction initiated successfully",
       };
     } catch (error: any) {
       return {
@@ -213,39 +236,63 @@ class OnrampService {
   }
 
   // Helper method to determine if an asset is supported for onramp
-  isAssetSupportedForOnramp(asset: string, chain: string = defaultChainName.toUpperCase()): boolean {
-    console.log("[onrampService] isAssetSupportedForOnramp called:", {
-      asset,
-      chain,
-      ONRAMP_SUPPORTED_ASSETS,
-    })
-    const supportedAssets = ONRAMP_SUPPORTED_ASSETS[chain as keyof typeof ONRAMP_SUPPORTED_ASSETS];
-    console.log("[onrampService] Supported assets for chain:", supportedAssets)
+  isAssetSupportedForOnramp(
+    asset: string,
+    chain: string = defaultChainName.toUpperCase()
+  ): boolean {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[onrampService] isAssetSupportedForOnramp called:", {
+        asset,
+        chain,
+        ONRAMP_SUPPORTED_ASSETS,
+      });
+    }
+    const supportedAssets =
+      ONRAMP_SUPPORTED_ASSETS[chain as keyof typeof ONRAMP_SUPPORTED_ASSETS];
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        "[onrampService] Supported assets for chain:",
+        supportedAssets
+      );
+    }
     const isSupported = supportedAssets?.includes(asset as any) || false;
-    console.log("[onrampService] Asset supported?", isSupported)
+    if (process.env.NODE_ENV === "development") {
+      console.log("[onrampService] Asset supported?", isSupported);
+    }
     return isSupported;
   }
 
   // Helper method to get the appropriate chain for an asset
   getChainForAsset(asset: string): string {
-    console.log("[onrampService] getChainForAsset called:", {
-      asset,
-      ASSET_CHAIN_MAPPING,
-      defaultChainName,
-    })
-    const chain = ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] || defaultChainName.toUpperCase();
-    console.log("[onrampService] Resolved chain:", chain)
+    if (process.env.NODE_ENV === "development") {
+      console.log("[onrampService] getChainForAsset called:", {
+        asset,
+        ASSET_CHAIN_MAPPING,
+        defaultChainName,
+      });
+    }
+    const chain =
+      ASSET_CHAIN_MAPPING[asset as keyof typeof ASSET_CHAIN_MAPPING] ||
+      defaultChainName.toUpperCase();
+    if (process.env.NODE_ENV === "development") {
+      console.log("[onrampService] Resolved chain:", chain);
+    }
     return chain;
   }
 
   // Helper method to get country limits
   getCountryLimits(currencyCode: string) {
-    return COUNTRY_LIMITS[currencyCode as keyof typeof COUNTRY_LIMITS] || { min: 1, max: 1000000 };
+    return (
+      COUNTRY_LIMITS[currencyCode as keyof typeof COUNTRY_LIMITS] || {
+        min: 1,
+        max: 1000000,
+      }
+    );
   }
 
   // Helper method to get vault address
   getVaultAddress(chainId: number, tokenSymbol: string): string {
-    const { getVaultAddress } = require('@/config/chainConfig');
+    const { getVaultAddress } = require("@/config/chainConfig");
     return getVaultAddress(chainId, tokenSymbol);
   }
 }
@@ -254,10 +301,13 @@ class OnrampService {
 export const onrampService = new OnrampService();
 
 // Helper function to format phone number for API
-export function formatPhoneNumber(phone: string, countryCode: string = "KES"): string {
+export function formatPhoneNumber(
+  phone: string,
+  countryCode: string = "KES"
+): string {
   // Remove any non-digit characters
   let cleaned = phone.replace(/\D/g, "");
-  
+
   // Handle different country formats
   switch (countryCode) {
     case "KES":
@@ -283,21 +333,27 @@ export function formatPhoneNumber(phone: string, countryCode: string = "KES"): s
       }
       break;
   }
-  
+
   return cleaned;
 }
 
 // Helper function to detect country from phone number
 export function detectCountryFromPhone(phone: string): string {
   const cleaned = phone.replace(/\D/g, "");
-  
-  if (cleaned.startsWith("254") || (cleaned.startsWith("07") && cleaned.length === 9)) {
+
+  if (
+    cleaned.startsWith("254") ||
+    (cleaned.startsWith("07") && cleaned.length === 9)
+  ) {
     return "KES";
-  } else if (cleaned.startsWith("256") || (cleaned.startsWith("07") && cleaned.length === 9)) {
+  } else if (
+    cleaned.startsWith("256") ||
+    (cleaned.startsWith("07") && cleaned.length === 9)
+  ) {
     return "UGX";
   } else if (cleaned.startsWith("243")) {
     return "CDF";
   }
-  
+
   return "KES"; // Default to Kenya
 }

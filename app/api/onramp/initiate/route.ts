@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { getVaultAddress } from "@/config/chainConfig";
 import { parseUnits } from "viem";
+import { base, celo, scroll } from "thirdweb/chains";
 
 const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
@@ -30,6 +31,17 @@ const CHAIN_MAPPING: Record<string, string> = {
   BASE: "BASE",
   Stellar: "STELLAR",
   STELLAR: "STELLAR",
+};
+
+// Map chain names to numeric chain IDs (based on chainConfig.ts)
+const CHAIN_ID_MAPPING: Record<string, number> = {
+  "Celo Mainnet": celo.id,
+  Celo: celo.id,
+  CELO: celo.id,
+  Base: base.id,
+  BASE: base.id,
+  Scroll: scroll.id,
+  SCROLL: scroll.id,
 };
 
 export async function POST(request: NextRequest) {
@@ -74,8 +86,20 @@ export async function POST(request: NextRequest) {
       throw new Error("PRETIUM configuration missing");
     }
 
+    // Resolve chain name to numeric chain ID
+    const vaultChainId = CHAIN_ID_MAPPING[chain];
+    if (!vaultChainId) {
+      console.log("❌ Unsupported chain for vault lookup:", chain);
+      return NextResponse.json(
+        {
+          error: `Unsupported chain: ${chain}. Supported chains: ${Object.keys(CHAIN_ID_MAPPING).join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+
     const endpoint = `/v1/onramp/${currency_code}`;
-    const vaultAddr = vault_address || getVaultAddress(42220, asset);
+    const vaultAddr = vault_address || getVaultAddress(vaultChainId, asset);
 
     // Map chain name to Pretium API format
     const pretiumChain = CHAIN_MAPPING[chain];

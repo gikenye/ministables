@@ -104,7 +104,24 @@ export const AmountInput = ({
 }: AmountInputProps) => {
   const formatAmount = (inputValue: string) => {
     // Remove non-numeric characters except decimal point
-    const numericValue = inputValue.replace(/[^0-9.]/g, "");
+    let numericValue = inputValue.replace(/[^0-9.]/g, "");
+
+    // Handle multiple decimal points - keep only the first one
+    const firstDotIndex = numericValue.indexOf(".");
+    if (firstDotIndex !== -1) {
+      // Split at first decimal point and remove any remaining dots from the decimal part
+      const integerPart = numericValue.substring(0, firstDotIndex);
+      const decimalPart = numericValue
+        .substring(firstDotIndex + 1)
+        .replace(/\./g, "");
+      numericValue = integerPart + "." + decimalPart;
+    }
+
+    // Normalize if it starts with '.' (e.g., ".25" becomes "0.25")
+    if (numericValue.startsWith(".")) {
+      numericValue = "0" + numericValue;
+    }
+
     // Format with commas
     const parts = numericValue.split(".");
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");

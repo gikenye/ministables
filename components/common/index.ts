@@ -6,6 +6,13 @@ export { TabNavigation } from "./TabNavigation";
 export { ProfileSection } from "./ProfileSection";
 export { StatsCard } from "./StatsCard";
 
+// Profile Card Components
+export { ProfileHeaderCard } from "./ProfileHeaderCard";
+export { SavingsStatsCard } from "./SavingsStatsCard";
+export { InviteFriendsCard } from "./InviteFriendsCard";
+export { AccountSettingsCard } from "./AccountSettingsCard";
+export { SupportCard } from "./SupportCard";
+
 // Export commonly used types
 export interface Goal {
   id: string;

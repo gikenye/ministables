@@ -80,10 +80,54 @@ export async function POST(request: NextRequest) {
 
     // Prepare allocation payload
     const decimals = ASSET_DECIMALS[transaction.asset.toUpperCase()] || 18;
-    const amountInWei = parseUnits(
-      transaction.amountInUsd,
-      decimals
-    ).toString();
+
+    // Validate and normalize the amount for parseUnits
+    let amountValue: string;
+    if (
+      transaction.amountInUsd &&
+      (typeof transaction.amountInUsd === "string" ||
+        typeof transaction.amountInUsd === "number")
+    ) {
+      amountValue = transaction.amountInUsd.toString();
+    } else if (
+      transaction.amount &&
+      (typeof transaction.amount === "string" ||
+        typeof transaction.amount === "number")
+    ) {
+      console.log("⚠️ amountInUsd missing, falling back to transaction.amount");
+      amountValue = transaction.amount.toString();
+    } else {
+      console.log("❌ Both amountInUsd and amount are missing or invalid");
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Transaction amount is missing or invalid. Both amountInUsd and amount fields are unavailable.",
+        },
+        { status: 400 }
+      );
+    }
+
+    let amountInWei: string;
+    try {
+      amountInWei = parseUnits(amountValue, decimals).toString();
+    } catch (error) {
+      console.log(
+        "❌ Failed to parse amount:",
+        amountValue,
+        "with decimals:",
+        decimals,
+        "Error:",
+        error
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid amount format: ${amountValue}. Unable to process transaction.`,
+        },
+        { status: 400 }
+      );
+    }
 
     const allocatePayload = {
       asset: transaction.asset.toUpperCase(),

@@ -57,6 +57,11 @@ import {
   AmountInputModal,
   TabNavigation,
   ProfileSection,
+  ProfileHeaderCard,
+  SavingsStatsCard,
+  InviteFriendsCard,
+  AccountSettingsCard,
+  SupportCard,
   StatsCard,
   GoalCard,
   type SaveOption,
@@ -940,7 +945,7 @@ const QuickSaveConfirmationModal = ({
   );
 };
 
-// Profile Screen Component - Mobile-First
+// Profile Screen Component - Mobile-First with Separated Cards
 const ProfileScreen = ({
   showBalance,
   onToggleBalance,
@@ -950,12 +955,6 @@ const ProfileScreen = ({
 }) => {
   const account = useActiveAccount();
   const address = account?.address;
-  const { chain } = useChain();
-
-  const formatAmount = (amount: string) => {
-    if (!showBalance) return "****";
-    return new Intl.NumberFormat("en-KE").format(Number(amount));
-  };
 
   const getUserName = () => {
     if (address) {
@@ -988,208 +987,33 @@ const ProfileScreen = ({
     calculateSavingsStats();
 
   return (
-    <div className="space-y-0 min-h-screen bg-black/20">
-      {/* Profile Header */}
-      <div className="bg-gradient-to-r from-teal-500 to-cyan-500 p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold text-white">
-              {getUserName()}
-            </h1>
-            <p className="text-sm text-white/80">{getMemberSince()}</p>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-black/20 pb-20">
+      {/* Profile Header Card */}
+      <ProfileHeaderCard
+        username={getUserName()}
+        memberSince={getMemberSince()}
+      />
 
-      {/* Savings Statistics */}
-      <div className="bg-gray-800 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-medium text-white">Your Savings</h2>
-          <button
-            onClick={onToggleBalance}
-            className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-gray-700"
-          >
-            {showBalance ? (
-              <Eye className="w-5 h-5" />
-            ) : (
-              <EyeOff className="w-5 h-5" />
-            )}
-          </button>
-        </div>
+      {/* Savings Statistics Card */}
+      <SavingsStatsCard
+        allTimeSavings={allTimeSavings}
+        currentSavings={currentSavings}
+        groupSavings={groupSavings}
+        showBalance={showBalance}
+        onToggleBalance={onToggleBalance}
+      />
 
-        <div className="grid gap-3">
-          {/* All time savings */}
-          <div className="bg-gray-700 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold text-white">
-                  KES {formatAmount(allTimeSavings)}
-                </p>
-                <p className="text-sm text-gray-400">All time savings</p>
-              </div>
-            </div>
-          </div>
+      {/* Invite Friends Card */}
+      <InviteFriendsCard />
 
-          {/* Current and Group savings */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-700 rounded-lg p-3">
-              <p className="text-lg font-semibold text-white">
-                KES {formatAmount(currentSavings)}
-              </p>
-              <p className="text-sm text-gray-400">Current savings</p>
-            </div>
-            <div className="bg-gray-700 rounded-lg p-3">
-              <p className="text-lg font-semibold text-white">
-                KES {formatAmount(groupSavings)}
-              </p>
-              <p className="text-sm text-gray-400">All time group savings</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Account Settings Card */}
+      <AccountSettingsCard />
 
-      {/* Invite Friends */}
-      <div className="bg-gray-800 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 flex-1">
-            <Share2 className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-base font-medium text-white">
-                Invite friends
-              </h3>
-              <p className="text-sm text-gray-400">
-                Support your friends in growing and managing their savings.
-              </p>
-            </div>
-          </div>
-          <ActionButton
-            onClick={() => {
-              // Handle invite logic - could open a share modal or copy referral link
-              if (navigator.share) {
-                navigator.share({
-                  title: "Minilend - Start Saving Together",
-                  text: "Join me on Minilend and start building your savings goals!",
-                  url: window.location.origin,
-                });
-              } else {
-                // Fallback for browsers that don't support Web Share API
-                console.log("Invite friends clicked");
-              }
-            }}
-            variant="primary"
-            size="sm"
-            className="text-black px-4 flex-shrink-0"
-          >
-            Invite
-          </ActionButton>
-        </div>
-      </div>
-
-      {/* Account Section */}
-      <div className="space-y-0">
-        <div className="px-4 py-3 border-b border-gray-700 bg-gray-900">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            Account
-          </h3>
-        </div>
-
-        {/* Connect/Disconnect Wallet */}
-        <div className="px-4 py-3 border-b border-gray-700 bg-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Wallet className="w-5 h-5 text-gray-400" />
-              <span className="text-white">manage wallet</span>
-            </div>
-            <ConnectWallet />
-          </div>
-        </div>
-
-        {/* Settings */}
-        {/* <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Settings className="w-5 h-5 text-gray-400" />
-              <span className="text-white">Settings</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </div>
-        </button> */}
-
-        {/* Personal details */}
-        {/* <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <User className="w-5 h-5 text-gray-400" />
-              <span className="text-white">Personal details</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </div>
-        </button> */}
-
-        {/* Log out */}
-        <button
-          onClick={() => {
-            // Handle logout logic
-            console.log("Logout clicked");
-            // You can implement actual logout logic here
-          }}
-          className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors text-red-400 hover:text-red-300"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <LogOut className="w-5 h-5" />
-              <span>Log out</span>
-            </div>
-            <ChevronRight className="w-5 h-5" />
-          </div>
-        </button>
-      </div>
-
-      {/* Support Section */}
-      <div className="space-y-0">
-        <div className="px-4 py-3 border-b border-gray-700 bg-gray-900">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            Support
-          </h3>
-        </div>
-
-        {/* Get Help */}
-        <button
-          onClick={() => {
-            // Handle help - could open WhatsApp, email, or help center
-            window.open("https://wa.me/+25451201818", "_blank");
-          }}
-          className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <HelpCircle className="w-5 h-5 text-gray-400" />
-              <span className="text-white">Get Help</span>
-            </div>
-            <ExternalLink className="w-5 h-5 text-gray-400" />
-          </div>
-        </button>
-
-        {/* FAQ */}
-        {/* <button
-          onClick={() => {
-            // Handle FAQ navigation
-            console.log("FAQ clicked");
-          }}
-          className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-750 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Hash className="w-5 h-5 text-gray-400" />
-              <span className="text-white">Frequently Asked Questions</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </div>
-        </button> */}
-      </div>
+      {/* Support Card */}
+      <SupportCard />
 
       {/* Bottom spacing for footer */}
-      <div className="h-20"></div>
+      <div className="h-4"></div>
     </div>
   );
 };
@@ -1675,8 +1499,19 @@ export default function AppPage() {
       return;
     }
 
-    // Validate balance
-    const walletBalance = parseFloat(walletBalanceData?.displayValue || "0");
+    // Check if balance is still loading
+    if (isBalanceLoading) {
+      setDepositError("Loading wallet balance, please wait...");
+      return;
+    }
+
+    // Validate balance - only proceed if walletBalanceData is available
+    if (!walletBalanceData) {
+      setDepositError("Unable to verify wallet balance. Please try again.");
+      return;
+    }
+
+    const walletBalance = parseFloat(walletBalanceData.displayValue || "0");
     const inputAmount = parseFloat(quickSaveAmount);
 
     if (inputAmount > walletBalance) {
