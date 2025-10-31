@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { useMiniApp } from "@/hooks/useMiniApp";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Wallet,
   TrendingUp,
@@ -37,6 +38,31 @@ import {
   Mail,
   type LucideIcon,
 } from "lucide-react";
+
+// Import reusable components
+import {
+  ModalHeader,
+  InfoCard,
+  ActionButton,
+  BottomSheet,
+  NumberKeypad,
+  AmountDisplay,
+  ProgressBar,
+  FormField,
+  TextInput,
+  SelectInput,
+  AmountInput,
+} from "@/components/ui";
+import {
+  AmountInputModal,
+  TabNavigation,
+  ProfileSection,
+  StatsCard,
+  GoalCard,
+  type SaveOption,
+  type Goal,
+} from "@/components/common";
+
 // import FooterNavigation from "@/components/Footer"
 import {
   useActiveAccount,
@@ -94,400 +120,12 @@ import {
   getTokenInfo as getChainTokenInfo,
 } from "@/config/chainConfig";
 
-// Types
-interface Goal {
-  id: string;
-  title: string;
-  description?: string;
-  amount: string;
-  targetAmount: string;
-  progress: number;
-  icon?: string;
-  category: "personal" | "retirement" | "quick";
-}
-
-interface SaveOption {
-  id: string;
-  title: string;
-  icon: LucideIcon;
-  description?: string;
-}
+// Types - Using Goal interface from @/components/common
 
 interface TokenInfo {
   symbol: string;
   decimals: number;
 }
-
-// Design System Components
-interface ModalHeaderProps {
-  title: string;
-  onClose: () => void;
-  rightAction?: {
-    label: string;
-    onClick: () => void;
-    variant?: "primary" | "secondary";
-  };
-  showBackButton?: boolean;
-  onBack?: () => void;
-  backgroundColor?: string;
-}
-
-const ModalHeader = ({
-  title,
-  onClose,
-  rightAction,
-  showBackButton = false,
-  onBack,
-  backgroundColor = "bg-gradient-to-r from-teal-500 to-cyan-500",
-}: ModalHeaderProps) => {
-  return (
-    <div
-      className={`${backgroundColor} p-3 sm:p-4 flex items-center justify-between min-h-[56px]`}
-    >
-      {/* Left side - Close or Back button */}
-      <Button
-        onClick={showBackButton ? onBack : onClose}
-        variant="ghost"
-        size="sm"
-        className="text-white hover:bg-white/10 rounded-full p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
-      >
-        {showBackButton ? (
-          <ArrowLeft className="w-5 h-5" />
-        ) : (
-          <X className="w-5 h-5" />
-        )}
-      </Button>
-
-      {/* Center - Title */}
-      <h2 className="text-lg sm:text-xl font-semibold text-white text-center flex-1 px-2">
-        {title}
-      </h2>
-
-      {/* Right side - Action button or spacer */}
-      {rightAction ? (
-        <Button
-          onClick={rightAction.onClick}
-          className={`
-            ${
-              rightAction.variant === "primary"
-                ? "bg-white/20 text-white border border-white/30 hover:bg-white hover:text-black"
-                : "bg-transparent text-white border border-white/40 hover:bg-white/10"
-            } 
-            px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 min-w-[44px] min-h-[44px]
-          `}
-        >
-          {rightAction.label}
-        </Button>
-      ) : (
-        <div className="min-w-[44px]" />
-      )}
-    </div>
-  );
-};
-
-interface InfoCardProps {
-  children: React.ReactNode;
-  variant?: "default" | "stats" | "action";
-  className?: string;
-}
-
-const InfoCard = ({
-  children,
-  variant = "default",
-  className = "",
-}: InfoCardProps) => {
-  const baseClasses = "rounded-lg border";
-
-  const variantClasses = {
-    default: "bg-gray-800 border-gray-700 p-3",
-    stats: "bg-gray-800 border-gray-700 p-2",
-    action:
-      "bg-gray-800 border-gray-700 p-3 hover:bg-gray-750 transition-colors duration-200",
-  };
-
-  return (
-    <div className={`${baseClasses} ${variantClasses[variant]} ${className}`}>
-      {children}
-    </div>
-  );
-};
-
-interface ActionButtonProps {
-  children: React.ReactNode;
-  onClick: () => void;
-  variant?: "primary" | "secondary" | "outline";
-  size?: "sm" | "md" | "lg";
-  disabled?: boolean;
-  className?: string;
-}
-
-const ActionButton = ({
-  children,
-  onClick,
-  variant = "primary",
-  size = "md",
-  disabled = false,
-  className = "",
-}: ActionButtonProps) => {
-  const baseClasses =
-    "font-medium rounded-full transition-all duration-200 min-h-[44px] flex items-center justify-center";
-
-  const variantClasses = {
-    primary: "bg-cyan-400 hover:bg-cyan-500 text-black",
-    secondary: "bg-gray-700 hover:bg-gray-600 text-white",
-    outline:
-      "bg-transparent border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black",
-  };
-
-  const sizeClasses = {
-    sm: "px-3 py-2 text-sm",
-    md: "px-4 py-2.5 text-sm",
-    lg: "px-6 py-3 text-base font-semibold",
-  };
-
-  return (
-    <Button
-      onClick={onClick}
-      disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
-    >
-      {children}
-    </Button>
-  );
-};
-
-interface BottomSheetProps {
-  isOpen: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-  maxHeight?: string;
-}
-
-const BottomSheet = ({
-  isOpen,
-  onClose,
-  children,
-  maxHeight = "max-h-[90vh]",
-}: BottomSheetProps) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal Content */}
-      <div
-        className={`
-        relative w-full sm:w-auto sm:min-w-[400px] sm:max-w-lg
-        bg-black sm:bg-gray-900 
-        rounded-t-xl sm:rounded-xl 
-        ${maxHeight}
-        overflow-hidden
-        animate-in slide-in-from-bottom duration-300 sm:animate-in sm:fade-in sm:slide-in-from-bottom-4
-      `}
-      >
-        {children}
-      </div>
-    </div>
-  );
-};
-
-// Goal Card Component
-const GoalCard = ({
-  goal,
-  showBalance = true,
-  onToggleBalance,
-  onCardClick,
-}: {
-  goal: Goal;
-  showBalance?: boolean;
-  onToggleBalance?: () => void;
-  onCardClick?: () => void;
-}) => {
-  const formatAmount = (amount: string) => {
-    if (!showBalance) return "****";
-    return new Intl.NumberFormat("en-KE").format(Number(amount));
-  };
-
-  const formatTargetAmount = (amount: string) => {
-    if (!showBalance) return "****";
-    return new Intl.NumberFormat("en-KE").format(Number(amount));
-  };
-
-  // Special styling for Quick Save card - Mobile-First Design
-  if (goal.category === "quick") {
-    return (
-      <div
-        className="bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg overflow-hidden relative cursor-pointer hover:scale-[1.01] transition-transform duration-200 border-0"
-        onClick={onCardClick}
-      >
-        {/* Header Section */}
-        <div className="p-3 relative">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-white mb-0.5">
-                {goal.title}
-              </h3>
-              <div className="text-xs text-white/70">Current Balance</div>
-            </div>
-            <div className="text-2xl opacity-80">🐷</div>
-          </div>
-
-          {/* Balance Display */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xl font-bold text-white">
-              KES {formatAmount(goal.amount)}
-            </div>
-            {onToggleBalance && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleBalance();
-                }}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 min-w-[32px] min-h-[32px] flex items-center justify-center"
-              >
-                {showBalance ? (
-                  <Eye className="w-3 h-3" />
-                ) : (
-                  <EyeOff className="w-3 h-3" />
-                )}
-              </button>
-            )}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCardClick?.();
-              }}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 min-h-[32px] flex items-center justify-center"
-            >
-              Save Now
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                // Handle withdraw action
-              }}
-              className="bg-transparent border border-white/40 text-white hover:bg-white/10 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 min-h-[32px] flex items-center justify-center"
-            >
-              Withdraw
-            </button>
-          </div>
-        </div>
-
-        {/* Description Section */}
-        {goal.description && (
-          <div className="bg-black/20 p-2 backdrop-blur-sm">
-            <p className="text-xs text-white/90 leading-relaxed">
-              {goal.description}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Regular goal cards - Updated with new design system
-  const getCardBackground = () => {
-    if (goal.category === "personal") {
-      return "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700";
-    }
-    if (goal.category === "retirement") {
-      return "bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600";
-    }
-    return "bg-gray-800 border border-gray-700";
-  };
-
-  return (
-    <div
-      className={`rounded-lg overflow-hidden relative ${getCardBackground()}`}
-    >
-      {/* Background pattern for personal goals */}
-      {goal.category === "personal" && (
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-teal-500/30">
-            {/* Chart-like dots pattern */}
-            <div className="flex items-end justify-center space-x-1 h-full p-3">
-              {Array.from({ length: 20 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1 bg-teal-400 rounded-full"
-                  style={{ height: `${Math.random() * 60 + 20}%` }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Background for retirement goals */}
-      {goal.category === "retirement" && (
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute bottom-0 right-0 text-4xl p-3">☂️</div>
-        </div>
-      )}
-
-      <div className="p-3 relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-2">
-            <h3 className="text-base font-semibold text-white flex items-center space-x-2">
-              <span>{goal.title}</span>
-              <div className="w-3 h-3 border border-gray-400 rounded-sm flex items-center justify-center">
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-sm"></div>
-              </div>
-            </h3>
-          </div>
-          <span className="text-sm font-bold text-cyan-400">
-            {goal.progress.toFixed(1)}%
-          </span>
-        </div>
-
-        {/* Amount Section */}
-        <InfoCard variant="stats" className="mb-0">
-          <div className="flex items-center justify-between mb-1">
-            <div className="text-xs text-gray-300">Amount saved (KES)</div>
-            {onToggleBalance && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleBalance();
-                }}
-                className="text-gray-400 hover:text-white p-0.5 rounded transition-colors duration-200"
-              >
-                {showBalance ? (
-                  <Eye className="w-3 h-3" />
-                ) : (
-                  <EyeOff className="w-3 h-3" />
-                )}
-              </button>
-            )}
-          </div>
-
-          <div className="text-lg font-bold text-white mb-2">
-            {formatAmount(goal.amount)} of{" "}
-            {formatTargetAmount(goal.targetAmount)}
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full bg-gray-600 rounded-full h-1.5">
-            <div
-              className="bg-cyan-400 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(goal.progress, 100)}%` }}
-            />
-          </div>
-        </InfoCard>
-      </div>
-    </div>
-  );
-};
 
 // Save Options Modal Component - Mobile-First Redesign
 const SaveOptionsModal = ({
@@ -542,55 +180,54 @@ const SaveOptionsModal = ({
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
       <ModalHeader title="Goal Categories" onClose={onClose} />
 
-      <div className="bg-black p-4 space-y-6">
-        {/* Header Section */}
-        <div className="text-center py-2">
-          <div className="text-4xl mb-3">🏆</div>
-          <h3 className="text-lg font-semibold text-white mb-2">
+      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-4">
+        {/* Header Section - More compact */}
+        <div className="text-center py-1">
+          <div className="text-2xl mb-2">🏆</div>
+          <h3 className="text-base font-semibold text-white mb-1">
             Ready for a challenge?
           </h3>
-          <p className="text-sm text-gray-400">
-            Saving is no easy feat! Elevate your game with our challenges. Pick
-            a challenge and let the fun begin!
+          <p className="text-xs text-gray-400 leading-tight">
+            Pick a challenge and let the fun begin!
           </p>
         </div>
 
-        {/* Challenge Options - Grid Layout */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Challenge Options - Compact Grid Layout */}
+        <div className="grid grid-cols-2 gap-2">
           {saveOptions.slice(0, 4).map((option) => {
             const IconComponent = option.icon;
             return (
               <InfoCard
                 key={option.id}
                 variant="action"
-                className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-4 min-h-[120px]"
+                className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-2 min-h-[80px]"
               >
                 <button
                   onClick={() => onOptionSelect(option.id)}
-                  className="w-full h-full flex flex-col items-center justify-center space-y-2 text-center"
+                  className="w-full h-full flex flex-col items-center justify-center space-y-1 text-center"
                 >
                   {option.id === "52-week" && (
-                    <div className="w-16 h-16 bg-teal-500/20 rounded-full flex items-center justify-center mb-2">
-                      <div className="text-2xl font-bold text-teal-400">52</div>
+                    <div className="w-10 h-10 bg-teal-500/20 rounded-full flex items-center justify-center mb-1">
+                      <div className="text-lg font-bold text-teal-400">52</div>
                     </div>
                   )}
                   {option.id === "superfans" && (
-                    <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mb-2">
-                      <Trophy className="w-8 h-8 text-cyan-400" />
+                    <div className="w-10 h-10 bg-cyan-500/20 rounded-full flex items-center justify-center mb-1">
+                      <Trophy className="w-5 h-5 text-cyan-400" />
                     </div>
                   )}
                   {option.id === "vault" && (
-                    <div className="w-16 h-16 bg-gray-600/20 rounded-full flex items-center justify-center mb-2">
-                      <Shield className="w-8 h-8 text-gray-400" />
+                    <div className="w-10 h-10 bg-gray-600/20 rounded-full flex items-center justify-center mb-1">
+                      <Shield className="w-5 h-5 text-gray-400" />
                     </div>
                   )}
                   {option.id === "mia-kwa-mia" && (
-                    <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mb-2">
-                      <Banknote className="w-8 h-8 text-purple-400" />
+                    <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center mb-1">
+                      <Banknote className="w-5 h-5 text-purple-400" />
                     </div>
                   )}
 
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-xs font-medium text-white leading-tight">
                     {option.title}
                   </div>
                 </button>
@@ -599,8 +236,8 @@ const SaveOptionsModal = ({
           })}
         </div>
 
-        {/* Additional Challenges - Single Column */}
-        <div className="space-y-3">
+        {/* Additional Challenges - Compact Single Column */}
+        <div className="space-y-2">
           {saveOptions.slice(4).map((option) => {
             const IconComponent = option.icon;
             return (
@@ -611,49 +248,49 @@ const SaveOptionsModal = ({
               >
                 <button
                   onClick={() => onOptionSelect(option.id)}
-                  className="w-full flex items-center space-x-4 p-2"
+                  className="w-full flex items-center space-x-3 p-2"
                 >
-                  <div className="w-12 h-12 bg-cyan-400/20 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-cyan-400/20 rounded-full flex items-center justify-center">
                     {option.id === "envelope" && (
-                      <Mail className="w-6 h-6 text-cyan-400" />
+                      <Mail className="w-4 h-4 text-cyan-400" />
                     )}
                     {option.id === "personal" && (
-                      <User className="w-6 h-6 text-cyan-400" />
+                      <User className="w-4 h-4 text-cyan-400" />
                     )}
                   </div>
 
                   <div className="flex-1 text-left">
-                    <div className="text-lg font-semibold text-white">
+                    <div className="text-sm font-medium text-white">
                       {option.title}
                     </div>
-                    <div className="text-sm text-gray-400">
+                    <div className="text-xs text-gray-400">
                       {option.description}
                     </div>
                   </div>
 
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                  <ChevronRight className="w-4 h-4 text-gray-400" />
                 </button>
               </InfoCard>
             );
           })}
         </div>
 
-        {/* Featured Goals Section */}
-        <div className="space-y-3">
-          <h4 className="text-white font-semibold">Featured goals</h4>
-          <div className="grid grid-cols-2 gap-3">
+        {/* Featured Goals Section - More compact */}
+        <div className="space-y-2">
+          <h4 className="text-white font-medium text-sm">Featured goals</h4>
+          <div className="grid grid-cols-2 gap-2">
             <InfoCard
               variant="action"
-              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-4 min-h-[100px]"
+              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-2 min-h-[70px]"
             >
               <button
                 onClick={() => onOptionSelect("emergency")}
-                className="w-full h-full flex flex-col items-center justify-center space-y-2 text-center"
+                className="w-full h-full flex flex-col items-center justify-center space-y-1 text-center"
               >
-                <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center mb-2">
-                  <AlertCircle className="w-6 h-6 text-orange-400" />
+                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center mb-1">
+                  <AlertCircle className="w-4 h-4 text-orange-400" />
                 </div>
-                <div className="text-sm font-semibold text-white">
+                <div className="text-xs font-medium text-white">
                   Emergency Fund
                 </div>
               </button>
@@ -661,16 +298,16 @@ const SaveOptionsModal = ({
 
             <InfoCard
               variant="action"
-              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-4 min-h-[100px]"
+              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-2 min-h-[70px]"
             >
               <button
                 onClick={() => onOptionSelect("other")}
-                className="w-full h-full flex flex-col items-center justify-center space-y-2 text-center"
+                className="w-full h-full flex flex-col items-center justify-center space-y-1 text-center"
               >
-                <div className="w-12 h-12 bg-gray-500/20 rounded-full flex items-center justify-center mb-2">
-                  <HelpCircle className="w-6 h-6 text-gray-400" />
+                <div className="w-8 h-8 bg-gray-500/20 rounded-full flex items-center justify-center mb-1">
+                  <HelpCircle className="w-4 h-4 text-gray-400" />
                 </div>
-                <div className="text-sm font-semibold text-white">Other</div>
+                <div className="text-xs font-medium text-white">Other</div>
               </button>
             </InfoCard>
           </div>
@@ -680,14 +317,11 @@ const SaveOptionsModal = ({
         <ActionButton
           onClick={onClose}
           variant="outline"
-          size="lg"
+          size="sm"
           className="w-full"
         >
           Cancel
         </ActionButton>
-
-        {/* Bottom spacing for safe area */}
-        <div className="h-4"></div>
       </div>
     </BottomSheet>
   );
@@ -728,7 +362,7 @@ const SaveActionsModal = ({
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[60vh]">
       <ModalHeader title="Where to Save?" onClose={onClose} />
 
-      <div className="bg-black p-4 space-y-4">
+      <div className="bg-black/90 backdrop-blur-sm p-4 space-y-4">
         {/* Header Section */}
         <div className="text-center py-1">
           <div className="text-3xl mb-2">🐷</div>
@@ -823,7 +457,7 @@ const QuickSaveDetailsModal = ({
       </div>
 
       {/* Content */}
-      <div className="bg-black p-3 space-y-3 overflow-y-auto">
+      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-3 overflow-y-auto">
         {/* Balance Overview */}
         <InfoCard variant="stats">
           <div className="grid grid-cols-2 gap-4">
@@ -906,75 +540,6 @@ const QuickSaveDetailsModal = ({
   );
 };
 
-// Quick Save Amount Input Modal - Mobile-First
-const QuickSaveAmountModal = ({
-  isOpen,
-  onClose,
-  onContinue,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onContinue: (amount: string) => void;
-}) => {
-  const [amount, setAmount] = useState("100");
-
-  const handleNumberPress = (num: string) => {
-    if (num === "00") {
-      setAmount((prev) => prev + "00");
-    } else if (num === "⌫") {
-      setAmount((prev) => prev.slice(0, -1) || "0");
-    } else {
-      setAmount((prev) => (prev === "0" ? num : prev + num));
-    }
-  };
-
-  const handleContinue = () => {
-    onContinue(amount);
-  };
-
-  return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[95vh]">
-      <ModalHeader title="How much do you want to save?" onClose={onClose} />
-
-      <div className="bg-black p-4 space-y-6">
-        {/* Amount Display */}
-        <div className="text-center py-6">
-          <div className="text-6xl mb-6">🐷</div>
-          <div className="text-4xl font-bold text-white">
-            <span className="text-cyan-400">KES </span>
-            {amount}
-          </div>
-        </div>
-
-        {/* Continue Button */}
-        <ActionButton
-          onClick={handleContinue}
-          variant="primary"
-          size="lg"
-          className="w-full"
-        >
-          CONTINUE
-        </ActionButton>
-
-        {/* Number Keypad */}
-        <div className="grid grid-cols-3 gap-4 max-w-xs mx-auto pb-6">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "⌫"].map(
-            (key) => (
-              <button
-                key={key}
-                onClick={() => handleNumberPress(key)}
-                className="w-14 h-14 text-white text-xl font-medium hover:bg-gray-800 rounded-full transition-colors duration-200 flex items-center justify-center border border-gray-700 hover:border-cyan-400"
-              >
-                {key === "⌫" ? "⌫" : key}
-              </button>
-            )
-          )}
-        </div>
-      </div>
-    </BottomSheet>
-  );
-};
-
 // Custom Goal Modal - Create user-defined goals
 const CustomGoalModal = ({
   isOpen,
@@ -1032,11 +597,11 @@ const CustomGoalModal = ({
         }}
       />
 
-      <div className="bg-black p-4 space-y-6">
+      <div className="bg-black/90 backdrop-blur-sm p-4 space-y-4">
         {/* Header */}
-        <div className="text-center py-2">
-          <div className="text-4xl mb-3">🎯</div>
-          <h3 className="text-lg font-semibold text-white mb-2">
+        <div className="text-center py-1">
+          <div className="text-3xl mb-2">🎯</div>
+          <h3 className="text-lg font-semibold text-white mb-1">
             Set Your Goal
           </h3>
           <p className="text-sm text-gray-400">
@@ -1045,14 +610,14 @@ const CustomGoalModal = ({
         </div>
 
         {/* Goal Name */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <label className="text-white font-medium text-sm">Goal Name</label>
           <input
             type="text"
             value={form.name}
             onChange={(e) => handleInputChange("name", e.target.value)}
             placeholder="e.g., New Car, Vacation, Emergency Fund"
-            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
             maxLength={50}
           />
           <div className="text-xs text-gray-500 text-right">
@@ -1061,7 +626,7 @@ const CustomGoalModal = ({
         </div>
 
         {/* Target Amount */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <label className="text-white font-medium text-sm">
             Target Amount (KES)
           </label>
@@ -1070,7 +635,7 @@ const CustomGoalModal = ({
             value={form.amount}
             onChange={(e) => handleAmountChange(e.target.value)}
             placeholder="0"
-            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-lg font-semibold"
+            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-lg font-semibold"
           />
           <div className="text-xs text-gray-500">
             Enter your target savings amount
@@ -1078,12 +643,12 @@ const CustomGoalModal = ({
         </div>
 
         {/* Timeline */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <label className="text-white font-medium text-sm">Timeline</label>
           <select
             value={form.timeline}
             onChange={(e) => handleInputChange("timeline", e.target.value)}
-            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
+            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
           >
             <option value="3">3 months</option>
             <option value="6">6 months</option>
@@ -1099,12 +664,12 @@ const CustomGoalModal = ({
         </div>
 
         {/* Goal Category */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <label className="text-white font-medium text-sm">Category</label>
           <select
             value={form.category}
             onChange={(e) => handleInputChange("category", e.target.value)}
-            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
+            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
           >
             <option value="personal">Personal</option>
             <option value="emergency">Emergency Fund</option>
@@ -1120,11 +685,11 @@ const CustomGoalModal = ({
         {/* Goal Summary */}
         {isFormValid() && (
           <InfoCard variant="stats">
-            <div className="space-y-2">
-              <h4 className="text-white font-semibold">Goal Summary</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="space-y-1">
+              <h4 className="text-white font-semibold text-sm">Goal Summary</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <div className="text-gray-400">Monthly Target</div>
+                  <div className="text-gray-400 text-xs">Monthly Target</div>
                   <div className="text-cyan-400 font-semibold">
                     KES{" "}
                     {Math.ceil(
@@ -1134,7 +699,7 @@ const CustomGoalModal = ({
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-400">Weekly Target</div>
+                  <div className="text-gray-400 text-xs">Weekly Target</div>
                   <div className="text-cyan-400 font-semibold">
                     KES{" "}
                     {Math.ceil(
@@ -1158,9 +723,6 @@ const CustomGoalModal = ({
         >
           Create Goal
         </ActionButton>
-
-        {/* Bottom spacing */}
-        <div className="h-4"></div>
       </div>
     </BottomSheet>
   );
@@ -1210,7 +772,7 @@ const QuickSaveConfirmationModal = ({
       <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
         <ModalHeader title="Deposit Successful!" onClose={onClose} />
 
-        <div className="bg-black p-4 space-y-6">
+        <div className="bg-black/90 backdrop-blur-sm p-4 space-y-6">
           <div className="text-center py-4">
             <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">✓</span>
@@ -1248,7 +810,7 @@ const QuickSaveConfirmationModal = ({
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
       <ModalHeader title="Confirm Deposit" onClose={onClose} />
 
-      <div className="bg-black p-4 space-y-6">
+      <div className="bg-black/90 backdrop-blur-sm p-4 space-y-6">
         {/* Error Display */}
         {error && (
           <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm">
@@ -1426,7 +988,7 @@ const ProfileScreen = ({
     calculateSavingsStats();
 
   return (
-    <div className="space-y-0 min-h-screen bg-black">
+    <div className="space-y-0 min-h-screen bg-black/20">
       {/* Profile Header */}
       <div className="bg-gradient-to-r from-teal-500 to-cyan-500 p-4">
         <div className="flex items-start justify-between">
@@ -1536,14 +1098,14 @@ const ProfileScreen = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Wallet className="w-5 h-5 text-gray-400" />
-              <span className="text-white">Wallet Connection</span>
+              <span className="text-white">manage wallet</span>
             </div>
             <ConnectWallet />
           </div>
         </div>
 
         {/* Settings */}
-        <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
+        {/* <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Settings className="w-5 h-5 text-gray-400" />
@@ -1551,10 +1113,10 @@ const ProfileScreen = ({
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </div>
-        </button>
+        </button> */}
 
         {/* Personal details */}
-        <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
+        {/* <button className="w-full px-4 py-3 border-b border-gray-700 bg-gray-800 hover:bg-gray-750 transition-colors">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <User className="w-5 h-5 text-gray-400" />
@@ -1562,7 +1124,7 @@ const ProfileScreen = ({
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </div>
-        </button>
+        </button> */}
 
         {/* Log out */}
         <button
@@ -1609,7 +1171,7 @@ const ProfileScreen = ({
         </button>
 
         {/* FAQ */}
-        <button
+        {/* <button
           onClick={() => {
             // Handle FAQ navigation
             console.log("FAQ clicked");
@@ -1623,7 +1185,7 @@ const ProfileScreen = ({
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </div>
-        </button>
+        </button> */}
       </div>
 
       {/* Bottom spacing for footer */}
@@ -1702,6 +1264,46 @@ export default function AppPage() {
     "goals" | "groups" | "leaderboard" | "profile"
   >("goals");
 
+  // Save options data
+  const saveOptions: SaveOption[] = [
+    {
+      id: "52-week",
+      title: "52 Week Challenge",
+      icon: Calendar,
+      description: "Save incrementally over 52 weeks",
+    },
+    {
+      id: "superfans",
+      title: "Superfans Challenge",
+      icon: Trophy,
+      description: "Join the superfans saving challenge",
+    },
+    {
+      id: "vault",
+      title: "Akiba Vault",
+      icon: Shield,
+      description: "Secure long-term savings vault",
+    },
+    {
+      id: "mia-kwa-mia",
+      title: "Mia Kwa Mia Challenge",
+      icon: Banknote,
+      description: "Monthly progressive savings challenge",
+    },
+    {
+      id: "envelope",
+      title: "Envelope Challenge",
+      icon: Mail,
+      description: "Digital envelope saving method",
+    },
+    {
+      id: "personal",
+      title: "Personal Goal",
+      icon: User,
+      description: "Set your own custom savings target",
+    },
+  ];
+
   // Footer is always visible
 
   // Quick Save modal states
@@ -1737,7 +1339,7 @@ export default function AppPage() {
     category: "personal",
   });
 
-  // Sample goals data - replace with real data from your backend
+  // Goals data - this would typically come from your backend/database
   const goals: Goal[] = useMemo(
     () => [
       {
@@ -2190,7 +1792,15 @@ export default function AppPage() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-black">
+    <div
+      className="min-h-screen relative overflow-hidden bg-cover bg-center bg-no-repeat"
+      style={{
+        backgroundImage: "url('/african-safari-scene-2005.jpg')",
+      }}
+    >
+      {/* Background overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
+
       {/* AutoConnect for silent wallet connection */}
       <AutoConnect
         client={client}
@@ -2206,305 +1816,386 @@ export default function AppPage() {
         timeout={10000}
       />
 
-      {/* Header */}
-      <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-4 py-4 sticky top-0 z-40 relative">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          {/* Dynamic Header based on active tab */}
-          <div>
-            <h1 className="text-xl font-bold text-cyan-400">
-              {activeTab === "goals" && "Goals"}
-              {activeTab === "groups" && "Groups"}
-              {activeTab === "leaderboard" && "LeaderBoard"}
-              {activeTab === "profile" && "Profile"}
-            </h1>
-            <p className="text-sm text-gray-400">
-              {activeTab === "goals" && "Home"}
-              {activeTab === "groups" && "Save with friends"}
-              {activeTab === "leaderboard" && "Community rankings"}
-              {activeTab === "profile" && "Account & Settings"}
-            </p>
+      {/* Desktop Sidebar Navigation - Hidden on mobile */}
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-72 lg:overflow-y-auto lg:bg-black/60 lg:backdrop-blur-md lg:border-r lg:border-white/10">
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="flex items-center justify-center h-16 px-6 border-b border-white/10">
+            <div className="flex items-center space-x-3">
+              <Image
+                src="/minilend-pwa.png"
+                alt="Minilend"
+                width={32}
+                height={32}
+                className="rounded-lg"
+              />
+              <div className="text-xl font-bold text-cyan-400">Minilend</div>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            {/* Show different buttons based on active tab */}
-            {activeTab === "goals" && (
-              <>
-                {/* New Goal Button */}
+          {/* Navigation */}
+          <nav className="flex-1 px-6 py-8">
+            <div className="space-y-2">
+              {[
+                {
+                  id: "goals",
+                  label: "Goals",
+                  icon: "🎯",
+                  description: "Manage your savings goals",
+                },
+                {
+                  id: "groups",
+                  label: "Groups",
+                  icon: "👥",
+                  description: "Save with friends",
+                },
+                {
+                  id: "leaderboard",
+                  label: "Leaderboard",
+                  icon: "🏆",
+                  description: "Community rankings",
+                },
+                {
+                  id: "profile",
+                  label: "Profile",
+                  icon: "👤",
+                  description: "Account & settings",
+                },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() =>
+                    setActiveTab(
+                      item.id as "goals" | "groups" | "leaderboard" | "profile"
+                    )
+                  }
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-all duration-200 ${
+                    activeTab === item.id
+                      ? "bg-cyan-400/20 text-cyan-400 border border-cyan-400/30"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <span className="text-xl">{item.icon}</span>
+                  <div>
+                    <div className="font-medium">{item.label}</div>
+                    <div className="text-xs opacity-75">{item.description}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="mt-8 pt-8 border-t border-white/10">
+              <div className="space-y-3">
+                <ActionButton
+                  onClick={() => setSaveActionsModalOpen(true)}
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                >
+                  🎯 Quick Save
+                </ActionButton>
                 <ActionButton
                   onClick={() => setSaveOptionsModalOpen(true)}
                   variant="outline"
-                  size="sm"
+                  size="lg"
+                  className="w-full"
                 >
-                  New goal
+                  ➕ New Goal
                 </ActionButton>
+              </div>
+            </div>
+          </nav>
+        </div>
+      </aside>
 
-                {/* Notifications */}
+      {/* Main Content Container - Adjusted for sidebar on desktop */}
+      <div className="lg:pl-72 relative z-10">
+        {/* Header */}
+        <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4 sticky top-0 z-40 relative">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            {/* Dynamic Header based on active tab */}
+            <div className="flex items-center space-x-3">
+              {/* Logo for mobile */}
+              <div className="lg:hidden">
+                <Image
+                  src="/minilend-pwa.png"
+                  alt="Minilend"
+                  width={24}
+                  height={24}
+                  className="rounded"
+                />
+              </div>
+              <div>
+                <h1 className="text-xl lg:text-2xl font-bold text-cyan-400">
+                  {activeTab === "goals" && "Goals"}
+                  {activeTab === "groups" && "Groups"}
+                  {activeTab === "leaderboard" && "LeaderBoard"}
+                  {activeTab === "profile" && "Profile"}
+                </h1>
+                <p className="text-sm lg:text-base text-gray-400">
+                  {activeTab === "goals" && "Home"}
+                  {activeTab === "groups" && "Save with friends"}
+                  {activeTab === "leaderboard" && "Community rankings"}
+                  {activeTab === "profile" && "Account & Settings"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 lg:space-x-4">
+              {/* Show different buttons based on active tab */}
+              {activeTab === "goals" && (
+                <>
+                  {/* New Goal Button */}
+                  <ActionButton
+                    onClick={() => setSaveOptionsModalOpen(true)}
+                    variant="outline"
+                    size="sm"
+                    className="hidden sm:flex"
+                  >
+                    New goal
+                  </ActionButton>
+
+                  {/* Mobile New Goal Button */}
+                  <ActionButton
+                    onClick={() => setSaveOptionsModalOpen(true)}
+                    variant="outline"
+                    size="sm"
+                    className="sm:hidden"
+                  >
+                    +
+                  </ActionButton>
+
+                  {/* Notifications */}
+                  <button className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                    <Bell className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+
+              {(activeTab === "groups" || activeTab === "leaderboard") && (
                 <button className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center">
                   <Bell className="w-5 h-5" />
                 </button>
-              </>
-            )}
-
-            {(activeTab === "groups" || activeTab === "leaderboard") && (
-              <button className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center">
-                <Bell className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto relative z-10">
-        {!isOnline && (
-          <div className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm mx-4">
-            <WifiOff className="w-4 h-4 mr-2" />
-            <p>You are currently offline. Some features may be limited.</p>
-          </div>
-        )}
-
-        {/* Conditional Content based on active tab */}
-        {activeTab === "goals" && (
-          <div className="px-4 py-6">
-            {/* Quick Save Section */}
-            <div className="mb-6">
-              <GoalCard
-                goal={goals.find((g) => g.category === "quick")!}
-                showBalance={showBalances}
-                onToggleBalance={toggleBalanceVisibility}
-                onCardClick={handleQuickSaveCardClick}
-              />
+              )}
             </div>
+          </div>
+        </header>
 
-            {/* Personal Goals Section */}
-            <div className="mb-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <User className="w-5 h-5 text-gray-400" />
-                <h2 className="text-lg font-semibold text-white">
-                  Personal goals
-                </h2>
+        {/* Main Content */}
+        <main className="max-w-7xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8">
+          {!isOnline && (
+            <div className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm">
+              <WifiOff className="w-4 h-4 mr-2" />
+              <p>You are currently offline. Some features may be limited.</p>
+            </div>
+          )}
+
+          {/* Conditional Content based on active tab */}
+          {activeTab === "goals" && (
+            <div className="py-6">
+              {/* Quick Save Section */}
+              <div className="mb-8">
+                <GoalCard
+                  goal={goals.find((g) => g.category === "quick")!}
+                  showBalance={showBalances}
+                  onToggleBalance={toggleBalanceVisibility}
+                  onCardClick={handleQuickSaveCardClick}
+                />
               </div>
 
-              <div className="space-y-4">
-                {goals
-                  .filter((g) => g.category === "personal")
-                  .map((goal) => (
-                    <GoalCard
-                      key={goal.id}
-                      goal={goal}
-                      showBalance={showBalances}
-                    />
-                  ))}
+              {/* Personal Goals Section */}
+              <div className="mb-8">
+                <div className="flex items-center space-x-2 mb-6">
+                  <User className="w-5 h-5 text-gray-400" />
+                  <h2 className="text-lg font-semibold text-white">
+                    Personal goals
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                  {goals
+                    .filter((g) => g.category === "personal")
+                    .map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        showBalance={showBalances}
+                      />
+                    ))}
+                </div>
+              </div>
+
+              {/* Retirement Section */}
+              <div className="mb-32 pb-4">
+                <div className="flex items-center space-x-2 mb-6">
+                  <Shield className="w-5 h-5 text-gray-400" />
+                  <h2 className="text-lg font-semibold text-white">
+                    Retirement
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                  {goals
+                    .filter((g) => g.category === "retirement")
+                    .map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        showBalance={showBalances}
+                      />
+                    ))}
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Retirement Section */}
-            <div className="mb-32 pb-4">
-              <div className="flex items-center space-x-2 mb-4">
-                <Shield className="w-5 h-5 text-gray-400" />
-                <h2 className="text-lg font-semibold text-white">Retirement</h2>
-              </div>
-
-              <div className="space-y-4">
-                {goals
-                  .filter((g) => g.category === "retirement")
-                  .map((goal) => (
-                    <GoalCard
-                      key={goal.id}
-                      goal={goal}
-                      showBalance={showBalances}
-                    />
-                  ))}
+          {activeTab === "groups" && (
+            <div className="px-4 py-6">
+              <div className="text-center py-20">
+                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-white mb-2">
+                  Groups coming soon
+                </h3>
+                <p className="text-gray-400">
+                  Save together with friends and family
+                </p>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === "groups" && (
-          <div className="px-4 py-6">
-            <div className="text-center py-20">
-              <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">
-                Groups coming soon
-              </h3>
-              <p className="text-gray-400">
-                Save together with friends and family
-              </p>
+          {activeTab === "leaderboard" && (
+            <div className="px-4 py-6">
+              <div className="text-center py-20">
+                <BarChart3 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-white mb-2">
+                  LeaderBoard coming soon
+                </h3>
+                <p className="text-gray-400">
+                  See how you rank among other savers
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === "leaderboard" && (
-          <div className="px-4 py-6">
-            <div className="text-center py-20">
-              <BarChart3 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">
-                LeaderBoard coming soon
-              </h3>
-              <p className="text-gray-400">
-                See how you rank among other savers
-              </p>
-            </div>
-          </div>
-        )}
+          {activeTab === "profile" && (
+            <ProfileScreen
+              showBalance={showBalances}
+              onToggleBalance={toggleBalanceVisibility}
+            />
+          )}
+        </main>
 
-        {activeTab === "profile" && (
-          <ProfileScreen
-            showBalance={showBalances}
-            onToggleBalance={toggleBalanceVisibility}
+        {/* Bottom Navigation Bar - Mobile Only */}
+        <div className="lg:hidden">
+          <TabNavigation
+            activeTab={activeTab}
+            onTabChange={(tab) =>
+              setActiveTab(
+                tab as "goals" | "groups" | "leaderboard" | "profile"
+              )
+            }
+            tabs={[
+              {
+                id: "goals",
+                label: "Goals",
+                icon: ({ className }) => (
+                  <div
+                    className={`w-5 h-5 flex items-center justify-center ${className}`}
+                  >
+                    <div className="w-3 h-3 border-2 border-current rounded-full flex items-center justify-center">
+                      <div className="w-1 h-1 bg-current rounded-full"></div>
+                    </div>
+                  </div>
+                ),
+              },
+              { id: "groups", label: "Groups", icon: Users },
+              { id: "leaderboard", label: "Board", icon: BarChart3 },
+              { id: "profile", label: "Profile", icon: User },
+            ]}
+            centerAction={{
+              label: "SAVE",
+              onClick: () => setSaveActionsModalOpen(true),
+            }}
           />
-        )}
-      </main>
-
-      {/* Bottom Navigation Bar - Always Visible */}
-      <footer
-        className="
-          fixed bottom-0 left-0 right-0 z-50
-          bg-black/95 backdrop-blur-md border-t border-gray-700
-        "
-      >
-        <div className="flex items-center justify-between px-4 py-1.5 relative">
-          {/* Goals Tab */}
-          <button
-            onClick={() => setActiveTab("goals")}
-            className={`flex flex-col items-center space-y-0.5 px-2 py-1 min-w-[44px] rounded-lg transition-all duration-200 ${
-              activeTab === "goals"
-                ? "bg-cyan-400/15 text-cyan-400"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            <div className="w-5 h-5 flex items-center justify-center">
-              <div className="w-3 h-3 border-2 border-current rounded-full flex items-center justify-center">
-                <div className="w-1 h-1 bg-current rounded-full"></div>
-              </div>
-            </div>
-            <span className="text-xs font-medium">Goals</span>
-          </button>
-
-          {/* Groups Tab */}
-          <button
-            onClick={() => setActiveTab("groups")}
-            className={`flex flex-col items-center space-y-0.5 px-2 py-1 min-w-[44px] transition-all duration-200 ${
-              activeTab === "groups"
-                ? "bg-cyan-400/15 text-cyan-400"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            <Users className="w-5 h-5" />
-            <span className="text-xs">Groups</span>
-          </button>
-
-          {/* Save Now Button - Center FAB */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 -top-5">
-            <ActionButton
-              onClick={() => setSaveActionsModalOpen(true)}
-              variant="primary"
-              size="lg"
-              className="w-14 h-14 rounded-full text-xs font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-black"
-            >
-              <span className="text-xs font-bold">SAVE</span>
-            </ActionButton>
-          </div>
-
-          {/* Leaderboard Tab */}
-          <button
-            onClick={() => setActiveTab("leaderboard")}
-            className={`flex flex-col items-center space-y-0.5 px-2 py-1 min-w-[44px] transition-all duration-200 ${
-              activeTab === "leaderboard"
-                ? "bg-cyan-400/15 text-cyan-400"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            <BarChart3 className="w-5 h-5" />
-            <span className="text-xs">Board</span>
-          </button>
-
-          {/* Profile Tab */}
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`flex flex-col items-center space-y-0.5 px-2 py-1 min-w-[44px] transition-all duration-200 ${
-              activeTab === "profile"
-                ? "bg-cyan-400/15 text-cyan-400"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            <User className="w-5 h-5" />
-            <span className="text-xs">Profile</span>
-          </button>
         </div>
-      </footer>
 
-      {/* Modals */}
-      <SaveOptionsModal
-        isOpen={saveOptionsModalOpen}
-        onClose={() => setSaveOptionsModalOpen(false)}
-        onOptionSelect={handleSaveOptionSelect}
-      />
+        {/* Modals */}
+        <SaveOptionsModal
+          isOpen={saveOptionsModalOpen}
+          onClose={() => setSaveOptionsModalOpen(false)}
+          onOptionSelect={handleSaveOptionSelect}
+        />
 
-      <SaveActionsModal
-        isOpen={saveActionsModalOpen}
-        onClose={() => setSaveActionsModalOpen(false)}
-        onActionSelect={handleSaveActionSelect}
-      />
+        <SaveActionsModal
+          isOpen={saveActionsModalOpen}
+          onClose={() => setSaveActionsModalOpen(false)}
+          onActionSelect={handleSaveActionSelect}
+        />
 
-      {/* Quick Save Modals */}
-      <QuickSaveDetailsModal
-        isOpen={quickSaveDetailsOpen}
-        onClose={closeAllQuickSaveModals}
-        onSaveNow={handleQuickSaveSaveNow}
-      />
+        {/* Quick Save Modals */}
+        <QuickSaveDetailsModal
+          isOpen={quickSaveDetailsOpen}
+          onClose={closeAllQuickSaveModals}
+          onSaveNow={handleQuickSaveSaveNow}
+        />
 
-      <QuickSaveAmountModal
-        isOpen={quickSaveAmountOpen}
-        onClose={closeAllQuickSaveModals}
-        onContinue={handleQuickSaveAmountContinue}
-      />
+        <AmountInputModal
+          isOpen={quickSaveAmountOpen}
+          onClose={closeAllQuickSaveModals}
+          onContinue={handleQuickSaveAmountContinue}
+          title="How much do you want to save?"
+          initialAmount="100"
+          currency="KES"
+          icon="🐷"
+        />
 
-      <QuickSaveConfirmationModal
-        isOpen={quickSaveConfirmationOpen}
-        onClose={closeAllQuickSaveModals}
-        amount={quickSaveAmount}
-        onDeposit={handleQuickSaveDeposit}
-        isLoading={isDepositLoading}
-        error={depositError}
-        transactionStatus={transactionStatus}
-        tokenSymbol={defaultToken?.symbol || "USDC"}
-        depositSuccess={depositSuccess}
-        account={account}
-        tokens={tokens}
-        tokenInfos={tokenInfos}
-        supportedStablecoins={supportedStablecoins}
-        copied={copied}
-        setCopied={setCopied}
-        setSelectedTokenForOnramp={setSelectedTokenForOnramp}
-        setShowOnrampModal={setShowOnrampModal}
-      />
+        <QuickSaveConfirmationModal
+          isOpen={quickSaveConfirmationOpen}
+          onClose={closeAllQuickSaveModals}
+          amount={quickSaveAmount}
+          onDeposit={handleQuickSaveDeposit}
+          isLoading={isDepositLoading}
+          error={depositError}
+          transactionStatus={transactionStatus}
+          tokenSymbol={defaultToken?.symbol || "USDC"}
+          depositSuccess={depositSuccess}
+          account={account}
+          tokens={tokens}
+          tokenInfos={tokenInfos}
+          supportedStablecoins={supportedStablecoins}
+          copied={copied}
+          setCopied={setCopied}
+          setSelectedTokenForOnramp={setSelectedTokenForOnramp}
+          setShowOnrampModal={setShowOnrampModal}
+        />
 
-      {/* Custom Goal Modal */}
-      <CustomGoalModal
-        isOpen={customGoalModalOpen}
-        onClose={closeCustomGoalModal}
-        onCreateGoal={handleCreateCustomGoal}
-        form={customGoalForm}
-        setForm={setCustomGoalForm}
-      />
+        {/* Custom Goal Modal */}
+        <CustomGoalModal
+          isOpen={customGoalModalOpen}
+          onClose={closeCustomGoalModal}
+          onCreateGoal={handleCreateCustomGoal}
+          form={customGoalForm}
+          setForm={setCustomGoalForm}
+        />
 
-      {/* Keep existing modals for functionality */}
-      <SaveMoneyModal
-        isOpen={activeModal === "save"}
-        onClose={() => setActiveModal(null)}
-        loading={false}
-        requiresAuth={!isConnected}
-      />
+        {/* Keep existing modals for functionality */}
+        <SaveMoneyModal
+          isOpen={activeModal === "save"}
+          onClose={() => setActiveModal(null)}
+          loading={false}
+          requiresAuth={!isConnected}
+        />
 
-      {/* Onramp Modal for Mobile Money Deposits */}
-      <OnrampDepositModal
-        isOpen={showOnrampModal}
-        onClose={() => setShowOnrampModal(false)}
-        selectedAsset={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
-        assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
-        onSuccess={handleOnrampSuccess}
-      />
+        {/* Onramp Modal for Mobile Money Deposits */}
+        <OnrampDepositModal
+          isOpen={showOnrampModal}
+          onClose={() => setShowOnrampModal(false)}
+          selectedAsset={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
+          assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
+          onSuccess={handleOnrampSuccess}
+        />
+      </div>
     </div>
   );
 }
