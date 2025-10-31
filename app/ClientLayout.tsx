@@ -15,6 +15,7 @@ import { Inter } from "next/font/google";
 import { MiniAppProvider } from '@neynar/react';
 import { ChainProvider } from "@/components/ChainProvider";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { Analytics } from "@vercel/analytics/next"
 
 const queryClient = new QueryClient();
 
