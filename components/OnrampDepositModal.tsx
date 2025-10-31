@@ -182,6 +182,20 @@ interface OnrampDepositModalProps {
   onSuccess?: (transactionCode: string, amount: number) => void;
 }
 
+/**
+ * Render a four-step bottom-sheet modal that guides the user through depositing an asset via mobile money.
+ *
+ * The modal handles country/network selection, phone validation, amount entry with live exchange-rate feedback,
+ * deposit initiation (STK push), and final payment status with polling until completion or failure.
+ *
+ * @param isOpen - Whether the modal is visible
+ * @param onClose - Callback invoked when the modal is closed
+ * @param selectedAsset - Asset identifier used for the onramp request
+ * @param assetSymbol - Human-readable symbol shown in the UI (e.g., "CELO")
+ * @param onSuccess - Optional callback invoked when a payment completes; receives `(transactionCode, amountInUsd)`
+ *
+ * @returns The bottom-sheet modal UI for the onramp deposit flow
+ */
 export function OnrampDepositModal({
   isOpen,
   onClose,

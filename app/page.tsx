@@ -1632,6 +1632,16 @@ const ProfileScreen = ({
   );
 };
 
+/**
+ * Renders the main savings dashboard and manages UI state, wallet interactions, and deposit workflows.
+ *
+ * This component provides the app's header, tabbed content (Goals, Groups, Leaderboard, Profile), goal cards,
+ * persistent bottom navigation with a central SAVE action, and a suite of BottomSheet modals for creating goals,
+ * quick saves, and onramp deposits. It orchestrates token selection, balance checks, vault deposit preparation,
+ * approvals, transaction submission, receipt handling, and post-deposit reporting.
+ *
+ * @returns The React element representing the full App page UI.
+ */
 export default function AppPage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();

@@ -48,7 +48,10 @@ export const COMMON_ERROR_MESSAGES: Record<string, string> = {
 };
 
 /**
- * Maps contract error codes and common errors to user-friendly messages
+ * Convert a raw error object or message into a user-friendly error string.
+ *
+ * @param error - The error object or message to map
+ * @returns A human-readable message describing the error
  */
 export function mapErrorMessage(error: any): string {
   if (!error) return "Unknown error occurred";
@@ -98,7 +101,12 @@ export function mapErrorMessage(error: any): string {
 }
 
 /**
- * Extracts and maps error from transaction error
+ * Normalize a transaction error into a user-friendly message.
+ *
+ * Checks nested error structures (for example `cause.message` or `data.message`) and uses their content when present. If the derived message contains "gas estimation failed" or "execution reverted", returns "Insufficient token balance or invalid transaction parameters." Otherwise returns a mapped, user-friendly message based on the provided error.
+ *
+ * @param error - The error object thrown during a transaction; may include nested `cause` or `data` fields with their own messages.
+ * @returns A user-friendly message describing the transaction error.
  */
 export function extractTransactionError(error: any): string {
   // Handle nested error structures
@@ -144,7 +152,10 @@ export const PRETIUM_ERROR_MAPPINGS: Record<string, string> = {
 };
 
 /**
- * Maps Pretium API failure messages to user-friendly messages
+ * Convert a Pretium API error message into a user-friendly message.
+ *
+ * @param errorMessage - The raw error message returned by the Pretium API
+ * @returns A user-facing explanation for the error; returns a mapped friendly message for known Pretium errors or a cleaned-up version of the original message with "Please try again." appended
  */
 export function mapPretiumError(errorMessage: string): string {
   if (!errorMessage) return "Transaction failed. Please try again.";

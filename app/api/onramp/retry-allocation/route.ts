@@ -13,6 +13,14 @@ const ASSET_DECIMALS: Record<string, number> = {
   CKES: 18,
 };
 
+/**
+ * Retry asset allocation for a completed onramp transaction identified by `transactionCode`.
+ *
+ * Validates input and configuration, retrieves the transaction, invokes the external allocation service,
+ * persists the allocation response and metadata to the database, and returns the allocation result or an error.
+ *
+ * @returns A NextResponse containing JSON: on success `{ success: true, allocation: <allocationResult> }`; on failure an error object with an appropriate HTTP status and details.
+ */
 export async function POST(request: NextRequest) {
   try {
     console.log("🔄 Retrying allocation - API route called");
