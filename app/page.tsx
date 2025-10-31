@@ -65,8 +65,14 @@ import {
   StatsCard,
   GoalCard,
   type SaveOption,
-  type Goal,
+  type FrontendGoal,
 } from "@/components/common";
+
+// Import custom hooks for API integration
+import { useGoals } from "@/hooks/useGoals";
+import { useUser } from "@/hooks/useUser";
+import { useCreateGoal } from "@/hooks/useCreateGoal";
+import { useInitializeUserGoals } from "@/hooks/useInitializeUserGoals";
 
 // import FooterNavigation from "@/components/Footer"
 import {
@@ -552,6 +558,8 @@ const CustomGoalModal = ({
   onCreateGoal,
   form,
   setForm,
+  isLoading = false,
+  error = null,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -563,6 +571,8 @@ const CustomGoalModal = ({
     category: string;
   };
   setForm: (form: any) => void;
+  isLoading?: boolean;
+  error?: string | null;
 }) => {
   const handleInputChange = (field: string, value: string) => {
     setForm((prev: any) => ({ ...prev, [field]: value }));
@@ -718,15 +728,22 @@ const CustomGoalModal = ({
           </InfoCard>
         )}
 
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+
         {/* Create Button */}
         <ActionButton
           onClick={onCreateGoal}
           variant="primary"
           size="lg"
           className="w-full"
-          disabled={!isFormValid()}
+          disabled={!isFormValid() || isLoading}
         >
-          Create Goal
+          {isLoading ? "Creating Goal..." : "Create Goal"}
         </ActionButton>
       </div>
     </BottomSheet>
@@ -949,37 +966,54 @@ const QuickSaveConfirmationModal = ({
 const ProfileScreen = ({
   showBalance,
   onToggleBalance,
+  user,
+  goalStats,
 }: {
   showBalance: boolean;
   onToggleBalance: () => void;
+  user: any; // User from API
+  goalStats: any; // Goal stats from API
 }) => {
   const account = useActiveAccount();
   const address = account?.address;
 
   const getUserName = () => {
+    if (user?.username) {
+      return user.username;
+    }
     if (address) {
-      // You can replace this with actual user data from your backend
-      return "Batman";
+      // Fallback to shortened address
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
     }
     return "Guest User";
   };
 
   const getMemberSince = () => {
-    // You can replace this with actual registration date from your backend
-    return "Member since December, 2023";
+    if (user?.createdAt) {
+      const date = new Date(user.createdAt);
+      return `Member since ${date.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      })}`;
+    }
+    return "New Member";
   };
 
   // Calculate dynamic savings data based on goals
   const calculateSavingsStats = () => {
-    // In a real app, these would come from your backend
-    const allTimeSavings = "100";
-    const currentSavings = "0";
-    const groupSavings = "10";
+    if (goalStats) {
+      return {
+        allTimeSavings: goalStats.totalSaved || "0",
+        currentSavings: goalStats.totalSaved || "0", // Same as total for now
+        groupSavings: "0", // TODO: Implement group savings when available
+      };
+    }
 
+    // Fallback values
     return {
-      allTimeSavings,
-      currentSavings,
-      groupSavings,
+      allTimeSavings: "0",
+      currentSavings: "0",
+      groupSavings: "0",
     };
   };
 
@@ -1078,6 +1112,29 @@ export default function AppPage() {
       tokenAddress: defaultToken?.address,
     });
 
+  // API hooks for data fetching
+  const {
+    goals,
+    stats: goalStats,
+    loading: goalsLoading,
+    error: goalsError,
+    refetch: refetchGoals,
+  } = useGoals();
+  const {
+    user,
+    loading: userLoading,
+    error: userError,
+    refetch: refetchUser,
+  } = useUser();
+  const {
+    createGoal,
+    loading: createGoalLoading,
+    error: createGoalError,
+  } = useCreateGoal();
+
+  // Initialize user goals (create Quick Save goal for new users)
+  useInitializeUserGoals(defaultToken, chain);
+
   // State for the new design
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [saveOptionsModalOpen, setSaveOptionsModalOpen] = useState(false);
@@ -1163,40 +1220,7 @@ export default function AppPage() {
     category: "personal",
   });
 
-  // Goals data - this would typically come from your backend/database
-  const goals: Goal[] = useMemo(
-    () => [
-      {
-        id: "quick-save",
-        title: "Quick Save",
-        amount: "0",
-        targetAmount: "0",
-        progress: 0,
-        category: "quick",
-        description:
-          "*Quick save enables you to save when you don't have a goal in mind. Money saved on quick save is transferrable to any goal*",
-      },
-      {
-        id: "soma-plan",
-        title: "Soma plan",
-        amount: "0",
-        targetAmount: "10000000",
-        progress: 0,
-        category: "personal",
-        icon: "📊",
-      },
-      {
-        id: "insure",
-        title: "Insure",
-        amount: "20",
-        targetAmount: "20",
-        progress: 100,
-        category: "retirement",
-        icon: "☂️",
-      },
-    ],
-    []
-  );
+  // Goals data is now fetched from API via useGoals hook above
 
   // Validate chain configuration
   const chainConfigValid = useMemo(() => {
@@ -1305,7 +1329,7 @@ export default function AppPage() {
     }
   };
 
-  const handleCreateCustomGoal = () => {
+  const handleCreateCustomGoal = async () => {
     // Validate form
     if (!customGoalForm.name.trim() || !customGoalForm.amount.trim()) {
       console.error("Goal name and amount are required");
@@ -1318,36 +1342,60 @@ export default function AppPage() {
       return;
     }
 
-    // Create goal object
-    const newGoal = {
-      id: `custom-${Date.now()}`,
+    // Ensure we have default token info for the goal
+    if (!defaultToken || !chain) {
+      console.error("Chain or token information not available");
+      return;
+    }
+
+    // Create goal using API
+    const newGoalData = {
       title: customGoalForm.name,
-      amount: "0",
+      description: `Custom goal for ${customGoalForm.name}`,
+      category: customGoalForm.category as "personal" | "retirement" | "quick",
+      status: "active" as const,
+      currentAmount: "0",
       targetAmount: targetAmount.toString(),
-      progress: 0,
-      category: customGoalForm.category,
-      timeline: parseInt(customGoalForm.timeline),
-      createdAt: new Date(),
+      tokenAddress: defaultToken.address,
+      tokenSymbol: defaultToken.symbol,
+      tokenDecimals: defaultToken.decimals,
+      interestRate: 5.0, // Default 5% interest
+      isPublic: false,
+      allowContributions: false,
+      isQuickSave: false,
+      // Add timeline as targetDate if provided
+      targetDate: customGoalForm.timeline
+        ? new Date(
+            Date.now() +
+              parseInt(customGoalForm.timeline) * 30 * 24 * 60 * 60 * 1000
+          )
+        : undefined,
     };
 
-    console.log("Creating custom goal:", newGoal);
+    try {
+      const createdGoal = await createGoal(newGoalData);
 
-    // Here you would typically save to your backend/database
-    // For now, we'll just log it and close the modal
+      if (createdGoal) {
+        console.log("Goal created successfully:", createdGoal);
 
-    // Reset form
-    setCustomGoalForm({
-      name: "",
-      amount: "",
-      timeline: "12",
-      category: "personal",
-    });
+        // Refresh goals list
+        await refetchGoals();
 
-    // Close modal
-    setCustomGoalModalOpen(false);
+        // Reset form
+        setCustomGoalForm({
+          name: "",
+          amount: "",
+          timeline: "12",
+          category: "personal",
+        });
 
-    // You might want to refresh the goals list or navigate to the new goal
-    // setActiveModal("save"); // or redirect to goal details
+        // Close modal
+        setCustomGoalModalOpen(false);
+      }
+    } catch (error) {
+      console.error("Failed to create goal:", error);
+      // You might want to show an error message to the user here
+    }
   };
 
   const toggleBalanceVisibility = () => {
@@ -1467,6 +1515,13 @@ export default function AppPage() {
       amount: quickSaveAmount,
       transactionHash: receipt.transactionHash,
     });
+
+    // Refresh goals to show updated balances
+    try {
+      await refetchGoals();
+    } catch (error) {
+      console.error("Failed to refresh goals after deposit:", error);
+    }
 
     // Keep confirmation modal open to show success, reset after delay
     setTimeout(() => {
@@ -1829,59 +1884,133 @@ export default function AppPage() {
           {/* Conditional Content based on active tab */}
           {activeTab === "goals" && (
             <div className="py-6">
-              {/* Quick Save Section */}
-              <div className="mb-8">
-                <GoalCard
-                  goal={goals.find((g) => g.category === "quick")!}
-                  showBalance={showBalances}
-                  onToggleBalance={toggleBalanceVisibility}
-                  onCardClick={handleQuickSaveCardClick}
-                />
-              </div>
-
-              {/* Personal Goals Section */}
-              <div className="mb-8">
-                <div className="flex items-center space-x-2 mb-6">
-                  <User className="w-5 h-5 text-gray-400" />
-                  <h2 className="text-lg font-semibold text-white">
-                    Personal goals
-                  </h2>
+              {/* Loading State */}
+              {goalsLoading && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+                    <p className="text-gray-400">Loading your goals...</p>
+                  </div>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                  {goals
-                    .filter((g) => g.category === "personal")
-                    .map((goal) => (
+              {/* Error State */}
+              {goalsError && !goalsLoading && (
+                <div className="text-center py-12">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
+                    <p className="text-red-400 mb-2">Failed to load goals</p>
+                    <p className="text-gray-400 text-sm">{goalsError}</p>
+                  </div>
+                  <ActionButton
+                    onClick={refetchGoals}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Try Again
+                  </ActionButton>
+                </div>
+              )}
+
+              {/* Goals Content */}
+              {!goalsLoading && !goalsError && (
+                <>
+                  {/* Quick Save Section */}
+                  {goals.find((g) => g.category === "quick") && (
+                    <div className="mb-8">
                       <GoalCard
-                        key={goal.id}
-                        goal={goal}
+                        goal={goals.find((g) => g.category === "quick")!}
                         showBalance={showBalances}
+                        onToggleBalance={toggleBalanceVisibility}
+                        onCardClick={handleQuickSaveCardClick}
                       />
-                    ))}
-                </div>
-              </div>
+                    </div>
+                  )}
 
-              {/* Retirement Section */}
-              <div className="mb-32 pb-4">
-                <div className="flex items-center space-x-2 mb-6">
-                  <Shield className="w-5 h-5 text-gray-400" />
-                  <h2 className="text-lg font-semibold text-white">
-                    Retirement
-                  </h2>
-                </div>
+                  {/* Personal Goals Section */}
+                  <div className="mb-8">
+                    <div className="flex items-center space-x-2 mb-6">
+                      <User className="w-5 h-5 text-gray-400" />
+                      <h2 className="text-lg font-semibold text-white">
+                        Personal goals
+                      </h2>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                  {goals
-                    .filter((g) => g.category === "retirement")
-                    .map((goal) => (
-                      <GoalCard
-                        key={goal.id}
-                        goal={goal}
-                        showBalance={showBalances}
-                      />
-                    ))}
-                </div>
-              </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                      {goals
+                        .filter((g) => g.category === "personal")
+                        .map((goal) => (
+                          <GoalCard
+                            key={goal.id}
+                            goal={goal}
+                            showBalance={showBalances}
+                          />
+                        ))}
+
+                      {/* Show empty state for personal goals if none exist */}
+                      {goals.filter((g) => g.category === "personal").length ===
+                        0 && (
+                        <div className="col-span-full text-center py-8">
+                          <p className="text-gray-400 mb-4">
+                            No personal goals yet
+                          </p>
+                          <ActionButton
+                            onClick={() => setCustomGoalModalOpen(true)}
+                            variant="primary"
+                            size="sm"
+                          >
+                            Create Your First Goal
+                          </ActionButton>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Retirement Section */}
+                  <div className="mb-32 pb-4">
+                    <div className="flex items-center space-x-2 mb-6">
+                      <Shield className="w-5 h-5 text-gray-400" />
+                      <h2 className="text-lg font-semibold text-white">
+                        Retirement
+                      </h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                      {goals
+                        .filter((g) => g.category === "retirement")
+                        .map((goal) => (
+                          <GoalCard
+                            key={goal.id}
+                            goal={goal}
+                            showBalance={showBalances}
+                          />
+                        ))}
+
+                      {/* Show empty state for retirement goals if none exist */}
+                      {goals.filter((g) => g.category === "retirement")
+                        .length === 0 && (
+                        <div className="col-span-full text-center py-8">
+                          <p className="text-gray-400 mb-4">
+                            No retirement goals yet
+                          </p>
+                          <ActionButton
+                            onClick={() => {
+                              setCustomGoalForm((prev) => ({
+                                ...prev,
+                                category: "retirement",
+                              }));
+                              setCustomGoalModalOpen(true);
+                            }}
+                            variant="primary"
+                            size="sm"
+                          >
+                            Plan for Retirement
+                          </ActionButton>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1917,6 +2046,8 @@ export default function AppPage() {
             <ProfileScreen
               showBalance={showBalances}
               onToggleBalance={toggleBalanceVisibility}
+              user={user}
+              goalStats={goalStats}
             />
           )}
         </main>
@@ -2012,6 +2143,8 @@ export default function AppPage() {
           onCreateGoal={handleCreateCustomGoal}
           form={customGoalForm}
           setForm={setCustomGoalForm}
+          isLoading={createGoalLoading}
+          error={createGoalError}
         />
 
         {/* Keep existing modals for functionality */}
