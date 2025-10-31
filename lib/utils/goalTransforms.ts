@@ -31,8 +31,11 @@ export interface FrontendGoal {
  * Convert API Goal to Frontend Goal
  */
 export function apiGoalToFrontend(apiGoal: ApiGoal): FrontendGoal {
+  if (!apiGoal._id) {
+    throw new Error(`Goal missing _id: ${apiGoal.title || 'Unknown'}`);
+  }
   return {
-    id: apiGoal._id?.toString() || "",
+    id: apiGoal._id.toString(),
     title: apiGoal.title,
     description: apiGoal.description,
     currentAmount: apiGoal.currentAmount,

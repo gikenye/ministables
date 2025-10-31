@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useSession } from "next-auth/react";
 import { NewGoal, Goal } from "@/lib/models/goal";
@@ -20,7 +20,7 @@ export function useCreateGoal(): UseCreateGoalResult {
 
   const userId = account?.address || session?.user?.address;
 
-  const createGoal = async (
+  const createGoal = useCallback(async (
     goalData: Omit<NewGoal, "userId">
   ): Promise<Goal | null> => {
     if (!userId) {
@@ -59,7 +59,7 @@ export function useCreateGoal(): UseCreateGoalResult {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, setLoading, setError]);
 
   return {
     createGoal,

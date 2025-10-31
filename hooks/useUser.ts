@@ -32,7 +32,7 @@ export function useUser(): UseUserResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch("/api/users");
+      const response = await fetch(`/api/users?userId=${userId}`);
 
       if (!response.ok) {
         if (response.status === 404) {

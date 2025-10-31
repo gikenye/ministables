@@ -54,5 +54,5 @@ export function useInitializeUserGoals(defaultToken: any, chain: any) {
     };
 
     initializeQuickSaveGoal();
-  }, [userId, defaultToken, chain, goals, goalsLoading, createGoal]);
+  }, [userId, defaultToken, chain, goals, goalsLoading]);
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useActiveAccount } from "thirdweb/react";
+import { formatUnits } from "viem";
 import { Goal, GoalStats } from "@/lib/models/goal";
 import { FrontendGoal, apiGoalsToFrontend } from "@/lib/utils/goalTransforms";
 
@@ -65,13 +66,15 @@ export function useGoals(category?: string): UseGoalsResult {
 
         const totalSaved = apiGoals
           .reduce((sum: number, goal: Goal) => {
-            return sum + parseFloat(goal.currentAmount || "0");
+            const formatted = formatUnits(BigInt(goal.currentAmount || "0"), goal.tokenDecimals);
+            return sum + parseFloat(formatted);
           }, 0)
           .toString();
 
         const totalInterestEarned = apiGoals
           .reduce((sum: number, goal: Goal) => {
-            return sum + parseFloat(goal.totalInterestEarned || "0");
+            const formatted = formatUnits(BigInt(goal.totalInterestEarned || "0"), goal.tokenDecimals);
+            return sum + parseFloat(formatted);
           }, 0)
           .toString();
 
