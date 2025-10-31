@@ -2,11 +2,6 @@ import { base, celo, scroll } from "thirdweb/chains";
 
 export const CHAINS = [celo, scroll, base];
 
-// export const CONTRACTS = { // bruh, these are depreciated. Use VAULT_CONTRACTS instead
-//   [celo.id]: "0x4e1B2f1b9F5d871301D41D7CeE901be2Bd97693c",
-//   [scroll.id]: "0x31443910a7a6ff042067df8A34328E16a3994f72",
-// };
-
 // Vault contracts for Aave integration
 export const VAULT_CONTRACTS = {
   [celo.id]: {
@@ -78,7 +73,7 @@ export const TOKENS = {
   [scroll.id]: [
     {
       address: "0xd62fBDd984241BcFdEe96915b43101912a9fcE69",
-      symbol: "BKES",
+      symbol: "bKES",
       decimals: 18,
       icon: "/bpesa.jpg",
     },
