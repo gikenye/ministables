@@ -13,14 +13,6 @@ export { InviteFriendsCard } from "./InviteFriendsCard";
 export { AccountSettingsCard } from "./AccountSettingsCard";
 export { SupportCard } from "./SupportCard";
 
-// Export commonly used types
-export interface Goal {
-  id: string;
-  title: string;
-  description?: string;
-  amount: string;
-  targetAmount: string;
-  progress: number;
-  icon?: string;
-  category: "personal" | "retirement" | "quick";
-}
+// Export commonly used types - re-export from the main Goal model
+export type { Goal, GoalCategory, GoalStatus } from "@/lib/models/goal";
+export type { FrontendGoal } from "@/lib/utils/goalTransforms";

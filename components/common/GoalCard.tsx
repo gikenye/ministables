@@ -2,20 +2,10 @@ import React from "react";
 import { Eye, EyeOff, ChevronRight } from "lucide-react";
 import { InfoCard } from "../ui/InfoCard";
 import { ProgressBar } from "../ui/ProgressBar";
-
-interface Goal {
-  id: string;
-  title: string;
-  description?: string;
-  amount: string;
-  targetAmount: string;
-  progress: number;
-  icon?: string;
-  category: "personal" | "retirement" | "quick";
-}
+import { FrontendGoal } from "@/lib/utils/goalTransforms";
 
 interface GoalCardProps {
-  goal: Goal;
+  goal: FrontendGoal;
   showBalance?: boolean;
   onToggleBalance?: () => void;
   onCardClick?: () => void;
@@ -59,7 +49,7 @@ export const GoalCard = ({
           {/* Balance Display */}
           <div className="flex items-center justify-between mb-2">
             <div className="text-xl font-bold text-white">
-              KES {formatAmount(goal.amount)}
+              KES {formatAmount(goal.currentAmount)}
             </div>
             {onToggleBalance && (
               <button
@@ -191,7 +181,7 @@ export const GoalCard = ({
           </div>
 
           <div className="text-lg font-bold text-white mb-2">
-            {formatAmount(goal.amount)} of{" "}
+            {formatAmount(goal.currentAmount)} of{" "}
             {formatTargetAmount(goal.targetAmount)}
           </div>
 
