@@ -32,6 +32,12 @@ const CHAIN_MAPPING: Record<string, string> = {
   STELLAR: "STELLAR",
 };
 
+/**
+ * Handle an onramp initiation request: validate input, call the Pretium onramp API, persist a pending deposit, and begin background polling and allocation.
+ *
+ * @param request - Incoming NextRequest whose JSON body must include `shortcode`, `amount`, `mobile_network`, `chain`, `asset`, and `address`. Optional fields: `fee`, `callback_url`, `currency_code` (defaults to `"KES"`), and `vault_address`.
+ * @returns A NextResponse with `{ success: true, data }` when the onramp is initiated, or a JSON error payload with an appropriate HTTP status on failure.
+ */
 export async function POST(request: NextRequest) {
   try {
     console.log("💳 Initiating onramp - API route called");
@@ -168,6 +174,20 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Periodically polls Pretium for the onramp status of a transaction, updates the corresponding
+ * database record when the transaction completes or fails, and optionally triggers an allocation
+ * request to the configured allocation service.
+ *
+ * Polling runs up to a fixed number of attempts with a delay between attempts; on completion the
+ * record is marked "COMPLETED" and allocation is attempted if ALLOCATE_API_URL is configured.
+ *
+ * @param transactionCode - Pretium transaction identifier to query
+ * @param currencyCode - Currency code used with Pretium (e.g., "KES")
+ * @param userAddress - User's blockchain address to be used for allocation
+ * @param vaultAddress - Vault address receiving the onramp funds
+ * @param asset - Asset symbol (e.g., "USDC") used to determine decimals and allocation payload
+ */
 async function pollAndAllocate(
   transactionCode: string,
   currencyCode: string,
