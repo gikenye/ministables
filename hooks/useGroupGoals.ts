@@ -80,6 +80,10 @@ export function useGroupGoals(
     if (type === "public" || userId) {
       fetchGroupGoals();
     } else {
+      // Clear state when no user
+      setGroupGoals([]);
+      setStats(null);
+      setError(null);
       setLoading(false);
     }
   }, [userId, type]);
@@ -112,6 +116,9 @@ export function useGroupSavingsAmount(): {
 
   const fetchAmount = async () => {
     if (!userId) {
+      // Initialize default values
+      setAmount("0");
+      setError(null);
       setLoading(false);
       return;
     }

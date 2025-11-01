@@ -20,6 +20,11 @@ import {
   TransactionStatus,
 } from "../models/savingsTransaction";
 import { GoalCategory, GoalStatus } from "../models/goal";
+import {
+  GroupGoalNotFoundError,
+  GroupGoalBusinessError,
+  GroupGoalPermissionError,
+} from "../errors/GroupGoalErrors";
 
 const GROUP_GOALS_COLLECTION = "groupGoals";
 const GROUP_TRANSACTIONS_COLLECTION = "groupSavingsTransactions";
@@ -169,17 +174,19 @@ export const GroupGoalService = {
     const groupGoal = await this.getGroupGoalById(groupGoalId);
 
     if (!groupGoal) {
-      throw new Error("Group goal not found");
+      throw new GroupGoalNotFoundError();
     }
 
     if (groupGoal.status !== "active") {
-      throw new Error("Cannot join inactive group goal");
+      throw new GroupGoalBusinessError("Cannot join inactive group goal");
     }
 
     // Check if user is already a member
     const existingMember = groupGoal.members.find((m) => m.userId === userId);
     if (existingMember) {
-      throw new Error("User is already a member of this group goal");
+      throw new GroupGoalBusinessError(
+        "User is already a member of this group goal"
+      );
     }
 
     // Check member limit
@@ -187,7 +194,9 @@ export const GroupGoalService = {
       groupGoal.maxMembers &&
       groupGoal.members.length >= groupGoal.maxMembers
     ) {
-      throw new Error("Group goal has reached maximum member limit");
+      throw new GroupGoalBusinessError(
+        "Group goal has reached maximum member limit"
+      );
     }
 
     const newMember: GroupGoalMember = {
@@ -235,24 +244,35 @@ export const GroupGoalService = {
     const groupGoal = await this.getGroupGoalById(groupGoalId);
 
     if (!groupGoal) {
-      throw new Error("Group goal not found");
+      throw new GroupGoalNotFoundError();
     }
 
     const member = groupGoal.members.find((m) => m.userId === userId);
     if (!member) {
-      throw new Error("User is not a member of this group goal");
+      throw new GroupGoalBusinessError(
+        "User is not a member of this group goal"
+      );
     }
 
     if (member.role === "owner") {
-      throw new Error(
+      throw new GroupGoalPermissionError(
         "Owner cannot leave group goal. Transfer ownership first."
       );
     }
 
     const collection = await getCollection(GROUP_GOALS_COLLECTION);
 
-    const result = await collection.findOneAndUpdate(
-      { _id: new ObjectId(groupGoalId) },
+    // First attempt: Try to update an active member and decrement activeMembers
+    let result = await collection.findOneAndUpdate(
+      {
+        _id: new ObjectId(groupGoalId),
+        members: {
+          $elemMatch: {
+            userId: userId,
+            status: "active",
+          },
+        },
+      },
       {
         $set: {
           "members.$[elem].status": "left",
@@ -262,10 +282,28 @@ export const GroupGoalService = {
         $inc: { activeMembers: -1 },
       },
       {
-        arrayFilters: [{ "elem.userId": userId }],
+        arrayFilters: [{ "elem.userId": userId, "elem.status": "active" }],
         returnDocument: "after",
       }
     );
+
+    // If no active member was found, try to update any member with that userId
+    if (!result || !result.value) {
+      result = await collection.findOneAndUpdate(
+        { _id: new ObjectId(groupGoalId) },
+        {
+          $set: {
+            "members.$[elem].status": "left",
+            "members.$[elem].leftAt": new Date(),
+            updatedAt: new Date(),
+          },
+        },
+        {
+          arrayFilters: [{ "elem.userId": userId }],
+          returnDocument: "after",
+        }
+      );
+    }
 
     return result?.value as GroupGoal | null;
   },
@@ -282,16 +320,20 @@ export const GroupGoalService = {
     const groupGoal = await this.getGroupGoalById(groupGoalId);
 
     if (!groupGoal) {
-      throw new Error("Group goal not found");
+      throw new GroupGoalNotFoundError();
     }
 
     if (groupGoal.status !== "active") {
-      throw new Error("Cannot contribute to inactive group goal");
+      throw new GroupGoalBusinessError(
+        "Cannot contribute to inactive group goal"
+      );
     }
 
     const member = groupGoal.members.find((m) => m.userId === userId);
     if (!member || member.status !== "active") {
-      throw new Error("User is not an active member of this group goal");
+      throw new GroupGoalBusinessError(
+        "User is not an active member of this group goal"
+      );
     }
 
     // Create transaction record
@@ -517,7 +559,7 @@ export const GroupGoalService = {
     const groupGoal = await this.getGroupGoalById(groupGoalId);
 
     if (!groupGoal) {
-      throw new Error("Group goal not found");
+      throw new GroupGoalNotFoundError();
     }
 
     const activeMembers = groupGoal.members
@@ -549,6 +591,33 @@ export const GroupGoalService = {
   ): Promise<GroupGoalSummary[]> {
     const collection = await getCollection(GROUP_GOALS_COLLECTION);
 
+    const QUERY_LIMIT = 100;
+
+    // Handle empty or invalid queries
+    if (!query || typeof query !== "string") {
+      const filter: any = {
+        $or: [{ visibility: "public" }, { "members.userId": userId }],
+      };
+
+      if (category) {
+        filter.category = category;
+      }
+
+      const groupGoals = (await collection
+        .find(filter)
+        .limit(limit)
+        .toArray()) as GroupGoal[];
+
+      return groupGoals.map(this.toGroupGoalSummary);
+    }
+
+    // Limit query length
+    const processedQuery =
+      query.length > QUERY_LIMIT ? query.substring(0, QUERY_LIMIT) : query;
+
+    // Process search pattern
+    const searchPattern = processedQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
     const filter: any = {
       $and: [
         {
@@ -556,9 +625,9 @@ export const GroupGoalService = {
         },
         {
           $or: [
-            { title: { $regex: query, $options: "i" } },
-            { description: { $regex: query, $options: "i" } },
-            { tags: { $in: [new RegExp(query, "i")] } },
+            { title: { $regex: searchPattern, $options: "i" } },
+            { description: { $regex: searchPattern, $options: "i" } },
+            { tags: { $in: [new RegExp(searchPattern, "i")] } },
           ],
         },
       ],

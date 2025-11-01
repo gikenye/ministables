@@ -1824,8 +1824,9 @@ export default function AppPage() {
 
         // Wait for transaction to be confirmed
         await waitForReceipt({
-          ...result,
+          client,
           chain,
+          transactionHash: result.transactionHash,
         });
 
         // Record the withdrawal in the backend

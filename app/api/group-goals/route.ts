@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GroupGoalService } from "@/lib/services/groupGoalService";
 import { NewGroupGoal } from "@/lib/models/groupGoal";
+import {
+  isClientError,
+  GroupGoalValidationError,
+} from "@/lib/errors/GroupGoalErrors";
 
 /**
  * GET /api/group-goals
@@ -73,10 +77,7 @@ export async function POST(request: NextRequest) {
     const { userId, ...groupGoalData } = body;
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "User ID is required" },
-        { status: 400 }
-      );
+      throw new GroupGoalValidationError("User ID is required");
     }
 
     // Validate required fields
@@ -89,10 +90,7 @@ export async function POST(request: NextRequest) {
     ];
     for (const field of requiredFields) {
       if (!groupGoalData[field]) {
-        return NextResponse.json(
-          { error: `${field} is required` },
-          { status: 400 }
-        );
+        throw new GroupGoalValidationError(`${field} is required`);
       }
     }
 
@@ -126,12 +124,24 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating group goal:", error);
 
-    if (error instanceof Error) {
+    // Check error type
+    if (error instanceof Error && isClientError(error)) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    // Log error details
+    if (error instanceof Error) {
+      console.error("Error creating group goal:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+    } else {
+      console.error("Unknown error creating group goal:", error);
+    }
+
     return NextResponse.json(
-      { error: "Failed to create group goal" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
