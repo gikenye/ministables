@@ -362,24 +362,24 @@ export const GroupGoalService = {
     });
 
     // Update group goal and member contribution
-    const newCurrentAmount = (
-      parseFloat(groupGoal.currentAmount) + parseFloat(amount)
-    ).toString();
-    const newMemberContribution = (
-      parseFloat(member.currentContribution) + parseFloat(amount)
-    ).toString();
+    const newCurrentAmount = new Decimal(groupGoal.currentAmount)
+      .plus(new Decimal(amount))
+      .toString();
+    const newMemberContribution = new Decimal(member.currentContribution)
+      .plus(new Decimal(amount))
+      .toString();
 
     const collection = await getCollection(GROUP_GOALS_COLLECTION);
 
     // Calculate new progress
     const newProgress =
       groupGoal.targetAmount !== "0"
-        ? Math.min(
-            (parseFloat(newCurrentAmount) /
-              parseFloat(groupGoal.targetAmount)) *
-              100,
-            100
-          )
+        ? Decimal.min(
+            new Decimal(newCurrentAmount)
+              .dividedBy(new Decimal(groupGoal.targetAmount))
+              .times(100),
+            new Decimal(100)
+          ).toNumber()
         : 0;
 
     // Update member contribution and recalculate percentages
@@ -395,13 +395,15 @@ export const GroupGoalService = {
     });
 
     // Recalculate contribution percentages
-    const totalContributions = parseFloat(newCurrentAmount);
-    updatedMembers.forEach((m) => {
-      if (totalContributions > 0) {
-        m.contributionPercentage =
-          (parseFloat(m.currentContribution) / totalContributions) * 100;
-      }
-    });
+    const totalContributions = new Decimal(newCurrentAmount);
+    if (totalContributions.greaterThan(0)) {
+      updatedMembers.forEach((m) => {
+        m.contributionPercentage = new Decimal(m.currentContribution)
+          .dividedBy(totalContributions)
+          .times(100)
+          .toNumber();
+      });
+    }
 
     const updatedGroupGoal = await collection.findOneAndUpdate(
       { _id: new ObjectId(groupGoalId) },
