@@ -80,8 +80,12 @@ import { useCreateGoal } from "@/hooks/useCreateGoal";
 import { useInitializeUserGoals } from "@/hooks/useInitializeUserGoals";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { useGroupSavingsAmount } from "@/hooks/useGroupGoals";
-
-// import FooterNavigation from "@/components/Footer"
+import { useInterestRates } from "@/hooks/useInterestRates";
+import {
+  reportError,
+  reportWarning,
+  reportInfo,
+} from "@/lib/services/errorReportingService";
 import {
   useActiveAccount,
   useSendTransaction,
@@ -114,7 +118,6 @@ import { reportTransactionToDivvi } from "@/lib/services/divviService";
 import { vaultService } from "@/lib/services/vaultService";
 import { getReferralTag } from "@divvi/referral-sdk";
 
-// Define the vault contract ABI for deposit function
 const vaultABI = [
   {
     inputs: [
@@ -660,7 +663,6 @@ const QuickSaveConfirmationModal = ({
                   </button>
                   <button
                     onClick={() => {
-                      // Find USDC token for onramp (default to first supported token)
                       const usdcToken = tokens.find(
                         (t) =>
                           tokenInfos[t.address]?.symbol?.toUpperCase() ===
@@ -864,7 +866,7 @@ const ExpandableQuickSaveCard = ({
   defaultToken,
   chain,
   tokenInfo,
-  exchangeRate = 131.5,
+  exchangeRate,
   onGoalsRefetch,
 }: ExpandableQuickSaveCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -884,23 +886,34 @@ const ExpandableQuickSaveCard = ({
   const tokenDecimals = defaultToken?.decimals || 6;
 
   // For main card display - use total savings
-  const totalLocalAmount = totalSavingsNum * exchangeRate;
+  const hasValidExchangeRate = exchangeRate && exchangeRate > 0;
+  const totalLocalAmount = hasValidExchangeRate
+    ? totalSavingsNum * exchangeRate
+    : 0;
 
   // For expanded Quick Save display - use Quick Save amount
-  const quickSaveLocalAmount = quickSaveAmountNum * exchangeRate;
+  const quickSaveLocalAmount = hasValidExchangeRate
+    ? quickSaveAmountNum * exchangeRate
+    : 0;
 
   // Determine primary and secondary amounts based on currency mode for TOTAL SAVINGS
   const primaryAmount =
-    currencyMode === "LOCAL"
+    currencyMode === "LOCAL" && hasValidExchangeRate
       ? `Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
       : `$${totalSavingsNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const secondaryAmount =
-    currencyMode === "LOCAL"
+    currencyMode === "LOCAL" && hasValidExchangeRate
       ? `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`
-      : `≈ Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+      : hasValidExchangeRate
+        ? `≈ Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+        : `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`;
 
   const handleCurrencyToggle = () => {
+    // Only allow toggle to LOCAL if we have a valid exchange rate
+    if (currencyMode === "USD" && !hasValidExchangeRate) {
+      return; // Don't toggle to LOCAL if no valid rate
+    }
     setCurrencyMode((curr) => (curr === "LOCAL" ? "USD" : "LOCAL"));
   };
 
@@ -928,14 +941,22 @@ const ExpandableQuickSaveCard = ({
   };
 
   const handleTransferFunds = async (targetGoalId: string) => {
-    if (!user?.id || !goal?.id) {
-      console.error("Missing user ID or Quick Save goal ID");
+    if (!user?.address || !goal?.id) {
+      reportError("Missing user ID or Quick Save goal ID", {
+        component: "ExpandableQuickSaveCard",
+        operation: "handleTransferFunds",
+        userId: user?.address,
+      });
       return;
     }
 
     const quickSaveAmount = parseFloat(goal?.currentAmount || "0");
     if (quickSaveAmount <= 0) {
-      console.error("No funds available in Quick Save to transfer");
+      reportWarning("No funds available in Quick Save to transfer", {
+        component: "ExpandableQuickSaveCard",
+        operation: "handleTransferFunds",
+        userId: user?.address,
+      });
       return;
     }
 
@@ -950,7 +971,7 @@ const ExpandableQuickSaveCard = ({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId: user.id,
+          userId: user.address,
           fromGoalId: goal.id,
           toGoalId: targetGoalId,
           amount: transferAmount,
@@ -963,7 +984,7 @@ const ExpandableQuickSaveCard = ({
       }
 
       const result = await response.json();
-      console.log("Transfer successful:", result);
+      // Transfer successful - refresh goals data
 
       // Refresh goals data to reflect the transfer
       if (onGoalsRefetch) {
@@ -973,7 +994,12 @@ const ExpandableQuickSaveCard = ({
       // Optionally show success feedback
       // You could add a toast notification here
     } catch (error) {
-      console.error("Failed to transfer funds:", error);
+      reportError("Failed to transfer funds", {
+        component: "ExpandableQuickSaveCard",
+        operation: "handleTransferFunds",
+        userId: user?.address,
+        additional: { error },
+      });
       // You could show an error toast here
     }
   };
@@ -984,17 +1010,13 @@ const ExpandableQuickSaveCard = ({
     }
   };
 
-  // Get token logo URL - check multiple sources
   const getTokenLogoUrl = () => {
-    // First check if defaultToken has direct logo URLs
     if (defaultToken?.logoUrl) return defaultToken.logoUrl;
     if (defaultToken?.image) return defaultToken.image;
     if (defaultToken?.icon) return defaultToken.icon;
 
-    // Check tokenInfo from chainConfig
     if (tokenInfo?.icon) return tokenInfo.icon;
 
-    // If chain and defaultToken are available, get from chainConfig
     if (chain?.id && defaultToken?.address) {
       try {
         const chainTokenInfo = getChainTokenInfo(
@@ -1007,7 +1029,6 @@ const ExpandableQuickSaveCard = ({
       }
     }
 
-    // Fallback to a generic token icon
     return "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png";
   };
 
@@ -1258,36 +1279,29 @@ export default function AppPage() {
   const { isSDKLoaded, context } = useMiniApp();
   const { chain, tokens, tokenInfos } = useChain();
 
-  // Get default token for Quick Save (prioritize USDC, then first available token)
   const defaultToken = useMemo(() => {
     if (!tokens || tokens.length === 0) return null;
 
-    // Try to find USDC first
     const usdc = tokens.find((t) => t.symbol.toUpperCase() === "USDC");
     if (usdc) return usdc;
 
-    // Try other stablecoins
     const stablecoins = tokens.filter((t) =>
       ["USDT", "CUSD", "DAI"].includes(t.symbol.toUpperCase())
     );
     if (stablecoins.length > 0) return stablecoins[0];
 
-    // Fallback to first token
     return tokens[0];
   }, [tokens]);
 
-  // Only show deposit-appropriate tokens per chain
   const supportedStablecoins = useMemo(() => {
     if (!tokens) return [];
 
     if (chain?.id === 42220) {
-      // Celo
       const allowedSymbols = ["USDC", "USDT", "CUSD"];
       return tokens
         .filter((t) => allowedSymbols.includes(t.symbol.toUpperCase()))
         .map((t) => t.address);
     } else if (chain?.id === 534352) {
-      // Scroll
       const allowedSymbols = ["USDC", "WETH"];
       return tokens
         .filter((t) => allowedSymbols.includes(t.symbol.toUpperCase()))
@@ -1296,7 +1310,6 @@ export default function AppPage() {
     return tokens.map((t) => t.address);
   }, [tokens, chain?.id]);
 
-  // Use wallet balance hook for the default token
   const { data: walletBalanceData, isLoading: isBalanceLoading } =
     useWalletBalance({
       client,
@@ -1334,6 +1347,9 @@ export default function AppPage() {
   // Group savings hook
   const { amount: groupSavingsAmount, loading: groupSavingsLoading } =
     useGroupSavingsAmount();
+
+  // Interest rates hook
+  const { getTokenRate, loading: interestRatesLoading } = useInterestRates();
 
   // State for the new design
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -1459,7 +1475,7 @@ export default function AppPage() {
         setQuickSaveDetailsOpen(true);
         break;
       default:
-        console.log("Unknown save action selected:", actionId);
+        // Unknown save action selected
         break;
     }
   };
@@ -1467,19 +1483,37 @@ export default function AppPage() {
   const handleCreateCustomGoal = async () => {
     // Validate form
     if (!customGoalForm.name.trim() || !customGoalForm.amount.trim()) {
-      console.error("Goal name and amount are required");
+      reportWarning("Goal name and amount are required", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
       return;
     }
 
     const targetAmount = parseFloat(customGoalForm.amount.replace(/,/g, ""));
     if (targetAmount <= 0) {
-      console.error("Target amount must be greater than 0");
+      reportWarning("Target amount must be greater than 0", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
       return;
     }
 
-    // Ensure we have default token info for the goal
     if (!defaultToken || !chain) {
-      console.error("Chain or token information not available");
+      reportError("Chain or token information not available", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+        chainId: chain?.id,
+      });
+      return;
+    }
+
+    // Don't proceed if interest rates are still loading (for better UX)
+    if (interestRatesLoading) {
+      reportWarning("Interest rates are still loading, please wait", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
       return;
     }
 
@@ -1494,7 +1528,7 @@ export default function AppPage() {
       tokenAddress: defaultToken.address,
       tokenSymbol: defaultToken.symbol,
       tokenDecimals: defaultToken.decimals,
-      interestRate: 5.0, // Default 5% interest
+      interestRate: getTokenRate(defaultToken.symbol),
       isPublic: false,
       allowContributions: false,
       isQuickSave: false,
@@ -1511,7 +1545,7 @@ export default function AppPage() {
       const createdGoal = await createGoal(newGoalData);
 
       if (createdGoal) {
-        console.log("Goal created successfully:", createdGoal);
+        // Goal created successfully - update UI
 
         // Refresh goals list
         await refetchGoals();
@@ -1528,7 +1562,11 @@ export default function AppPage() {
         setCustomGoalModalOpen(false);
       }
     } catch (error) {
-      console.error("Failed to create goal:", error);
+      reportError("Failed to create goal", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+        additional: { error, goalData: customGoalForm },
+      });
       // You might want to show an error message to the user here
     }
   };
@@ -1573,13 +1611,6 @@ export default function AppPage() {
     try {
       const vaultAddress = getVaultAddress(chainId, tokenSymbol);
 
-      if (process.env.NODE_ENV === "development") {
-        console.log("[QuickSave] Using Aave vault:", {
-          token: tokenSymbol,
-          vault: vaultAddress?.substring(0, 10) + "...",
-        });
-      }
-
       const vaultContract = getContract({
         client,
         chain: chain,
@@ -1590,7 +1621,6 @@ export default function AppPage() {
       // Use no lock period for Quick Save (lockTierId = 0)
       const lockTierId = 0;
 
-      // Create the deposit transaction for vault (amount, lockTierId)
       const depositTx = prepareContractCall({
         contract: vaultContract,
         method: "deposit",
@@ -1603,20 +1633,19 @@ export default function AppPage() {
 
       return depositTx;
     } catch (error) {
-      console.error("[QuickSave] Error preparing vault transaction:", error);
+      reportError("[QuickSave] Error preparing vault transaction", {
+        component: "AppPage",
+        operation: "prepareQuickSaveDepositTransaction",
+        chainId: chain?.id,
+        tokenSymbol: defaultToken?.symbol,
+        additional: { error },
+      });
       throw error;
     }
   };
 
   // Handle transaction errors with user-friendly messages
   const handleDepositError = (error: Error) => {
-    if (process.env.NODE_ENV === "development") {
-      console.error(
-        "[QuickSave] Transaction error:",
-        error?.message || "Unknown error"
-      );
-    }
-
     let userMessage = "Transaction failed. Please try again.";
 
     if (
@@ -1638,12 +1667,15 @@ export default function AppPage() {
 
   // Handle successful transaction
   const handleDepositSuccess = async (receipt: any) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        "[QuickSave] Transaction successful:",
-        receipt?.transactionHash || "unknown"
-      );
-    }
+    // Report successful transaction for monitoring
+    reportInfo("Quick Save deposit successful", {
+      component: "AppPage",
+      operation: "handleDepositSuccess",
+      transactionHash: receipt?.transactionHash,
+      amount: quickSaveAmount,
+      tokenSymbol: defaultToken?.symbol,
+      chainId: chain?.id,
+    });
 
     // Set the success state
     setDepositSuccess({
@@ -1655,7 +1687,12 @@ export default function AppPage() {
     try {
       await refetchGoals();
     } catch (error) {
-      console.error("Failed to refresh goals after deposit:", error);
+      reportError("Failed to refresh goals after deposit", {
+        component: "AppPage",
+        operation: "handleDepositSuccess",
+        transactionHash: receipt?.transactionHash,
+        additional: { error },
+      });
     }
 
     // Keep confirmation modal open to show success, reset after delay
@@ -1721,6 +1758,16 @@ export default function AppPage() {
     setDepositError(null);
     setTransactionStatus("Setting up your deposit...");
 
+    // Report transaction start for monitoring
+    reportInfo("Quick Save deposit started", {
+      component: "AppPage",
+      operation: "handleQuickSaveDeposit",
+      amount: quickSaveAmount,
+      tokenSymbol: defaultToken?.symbol,
+      chainId: chain?.id,
+      userId: user?.address,
+    });
+
     try {
       const depositTx =
         await prepareQuickSaveDepositTransaction(quickSaveAmount);
@@ -1763,7 +1810,7 @@ export default function AppPage() {
         try {
           reportTransactionToDivvi(depositResult.transactionHash, chain.id);
         } catch (error) {
-          console.log("[QuickSave] Divvi reporting skipped:", error);
+          // Divvi reporting failed - transaction still succeeded
         }
       }
     } catch (err: any) {
@@ -1774,7 +1821,6 @@ export default function AppPage() {
     }
   };
 
-  // Handle vault withdrawals from FundsWithdrawalModal
   const handleVaultWithdrawal = async (
     tokenSymbol: string,
     depositIds: number[]
@@ -1783,7 +1829,6 @@ export default function AppPage() {
       throw new Error("Missing required data for withdrawal");
     }
 
-    // Define the vault withdraw method ABI inline
     const withdrawMethodABI = {
       inputs: [{ internalType: "uint256", name: "depositId", type: "uint256" }],
       name: "withdraw",
@@ -1794,7 +1839,6 @@ export default function AppPage() {
       type: "function",
     } as const;
 
-    // Get vault address for the token
     const vaultAddress = getVaultAddress(chain.id, tokenSymbol);
     if (!vaultAddress) {
       throw new Error(
@@ -1805,7 +1849,6 @@ export default function AppPage() {
     try {
       // Process each deposit withdrawal
       for (const depositId of depositIds) {
-        // Create vault contract instance
         const vaultContract = getContract({
           client,
           chain,
@@ -1850,12 +1893,17 @@ export default function AppPage() {
       // Refresh goals after successful withdrawal
       await refetchGoals();
     } catch (error) {
-      console.error("Vault withdrawal failed:", error);
+      reportError("Vault withdrawal failed", {
+        component: "AppPage",
+        operation: "handleVaultWithdrawal",
+        chainId: chain?.id,
+        tokenSymbol,
+        additional: { error, depositIds },
+      });
       throw error;
     }
   };
 
-  // Fetch vault positions for the withdrawal modal
   const fetchVaultPositions = async () => {
     if (!account?.address || !chain || !tokens) {
       return;
@@ -1863,10 +1911,8 @@ export default function AppPage() {
 
     setVaultPositionsLoading(true);
     try {
-      // Get all token symbols for the current chain
       const tokenSymbols = tokens.map((token) => token.symbol);
 
-      // Fetch vault positions from the vault service
       const positions = await vaultService.getAllVaultPositions(
         chain,
         account.address,
@@ -1875,7 +1921,12 @@ export default function AppPage() {
 
       setVaultPositions(positions);
     } catch (error) {
-      console.error("Failed to fetch vault positions:", error);
+      reportError("Failed to fetch vault positions", {
+        component: "AppPage",
+        operation: "fetchVaultPositions",
+        chainId: chain?.id,
+        additional: { error },
+      });
       setVaultPositions([]);
     } finally {
       setVaultPositionsLoading(false);
@@ -2202,7 +2253,7 @@ export default function AppPage() {
                         defaultToken={defaultToken}
                         chain={chain}
                         tokenInfo={tokenInfos}
-                        exchangeRate={getKESRate() || 131.5}
+                        exchangeRate={getKESRate() || undefined}
                         onGoalsRefetch={refetchGoals}
                       />
                     </div>
@@ -2375,7 +2426,7 @@ export default function AppPage() {
           onCreateGoal={handleCreateCustomGoal}
           form={customGoalForm}
           setForm={setCustomGoalForm}
-          isLoading={createGoalLoading}
+          isLoading={createGoalLoading || interestRatesLoading}
           error={createGoalError}
         />
 
