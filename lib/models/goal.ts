@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 
-// Goal categories
-export type GoalCategory = "personal" | "retirement" | "quick";
+// Goal categories - now supports user-defined categories
+export type GoalCategory = "quick" | string;
 
 // Goal status
 export type GoalStatus = "active" | "completed" | "paused" | "cancelled";
