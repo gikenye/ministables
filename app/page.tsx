@@ -10,6 +10,10 @@ import {
   TrendingUp,
   ArrowDownLeft,
   ArrowUpRight,
+  ArrowDown,
+  ArrowUp,
+  ChevronUp,
+  ChevronDown,
   WifiOff,
   Shield,
   BarChart3,
@@ -66,6 +70,7 @@ import {
   GoalCard,
   type SaveOption,
   type FrontendGoal,
+  type GoalCategory,
 } from "@/components/common";
 
 // Import custom hooks for API integration
@@ -73,8 +78,14 @@ import { useGoals } from "@/hooks/useGoals";
 import { useUser } from "@/hooks/useUser";
 import { useCreateGoal } from "@/hooks/useCreateGoal";
 import { useInitializeUserGoals } from "@/hooks/useInitializeUserGoals";
-
-// import FooterNavigation from "@/components/Footer"
+import { useExchangeRates } from "@/hooks/useExchangeRates";
+import { useGroupSavingsAmount } from "@/hooks/useGroupGoals";
+import { useInterestRates } from "@/hooks/useInterestRates";
+import {
+  reportError,
+  reportWarning,
+  reportInfo,
+} from "@/lib/services/errorReportingService";
 import {
   useActiveAccount,
   useSendTransaction,
@@ -104,9 +115,9 @@ import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 // Import chain configuration utilities
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
+import { vaultService } from "@/lib/services/vaultService";
 import { getReferralTag } from "@divvi/referral-sdk";
 
-// Define the vault contract ABI for deposit function
 const vaultABI = [
   {
     inputs: [
@@ -138,206 +149,6 @@ interface TokenInfo {
   decimals: number;
 }
 
-// Save Options Modal Component - Mobile-First Redesign
-const SaveOptionsModal = ({
-  isOpen,
-  onClose,
-  onOptionSelect,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onOptionSelect: (optionId: string) => void;
-}) => {
-  const saveOptions: SaveOption[] = [
-    {
-      id: "52-week",
-      title: "52 Week Challenge",
-      icon: Calendar,
-      description: "Save incrementally over 52 weeks",
-    },
-    {
-      id: "superfans",
-      title: "Superfans Challenge",
-      icon: Trophy,
-      description: "Join the superfans saving challenge",
-    },
-    {
-      id: "vault",
-      title: "Akiba Vault",
-      icon: Shield,
-      description: "Secure long-term savings vault",
-    },
-    {
-      id: "mia-kwa-mia",
-      title: "Mia Kwa Mia Challenge",
-      icon: Banknote,
-      description: "Monthly progressive savings challenge",
-    },
-    {
-      id: "envelope",
-      title: "Envelope Challenge",
-      icon: Mail,
-      description: "Digital envelope saving method",
-    },
-    {
-      id: "personal",
-      title: "Personal Goal",
-      icon: User,
-      description: "Set your own custom savings target",
-    },
-  ];
-
-  return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
-      <ModalHeader title="Goal Categories" onClose={onClose} />
-
-      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-4">
-        {/* Header Section - More compact */}
-        <div className="text-center py-1">
-          <div className="text-2xl mb-2">🏆</div>
-          <h3 className="text-base font-semibold text-white mb-1">
-            Ready for a challenge?
-          </h3>
-          <p className="text-xs text-gray-400 leading-tight">
-            Pick a challenge and let the fun begin!
-          </p>
-        </div>
-
-        {/* Challenge Options - Compact Grid Layout */}
-        <div className="grid grid-cols-2 gap-2">
-          {saveOptions.slice(0, 4).map((option) => {
-            const IconComponent = option.icon;
-            return (
-              <InfoCard
-                key={option.id}
-                variant="action"
-                className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-2 min-h-[80px]"
-              >
-                <button
-                  onClick={() => onOptionSelect(option.id)}
-                  className="w-full h-full flex flex-col items-center justify-center space-y-1 text-center"
-                >
-                  {option.id === "52-week" && (
-                    <div className="w-10 h-10 bg-teal-500/20 rounded-full flex items-center justify-center mb-1">
-                      <div className="text-lg font-bold text-teal-400">52</div>
-                    </div>
-                  )}
-                  {option.id === "superfans" && (
-                    <div className="w-10 h-10 bg-cyan-500/20 rounded-full flex items-center justify-center mb-1">
-                      <Trophy className="w-5 h-5 text-cyan-400" />
-                    </div>
-                  )}
-                  {option.id === "vault" && (
-                    <div className="w-10 h-10 bg-gray-600/20 rounded-full flex items-center justify-center mb-1">
-                      <Shield className="w-5 h-5 text-gray-400" />
-                    </div>
-                  )}
-                  {option.id === "mia-kwa-mia" && (
-                    <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center mb-1">
-                      <Banknote className="w-5 h-5 text-purple-400" />
-                    </div>
-                  )}
-
-                  <div className="text-xs font-medium text-white leading-tight">
-                    {option.title}
-                  </div>
-                </button>
-              </InfoCard>
-            );
-          })}
-        </div>
-
-        {/* Additional Challenges - Compact Single Column */}
-        <div className="space-y-2">
-          {saveOptions.slice(4).map((option) => {
-            const IconComponent = option.icon;
-            return (
-              <InfoCard
-                key={option.id}
-                variant="action"
-                className="cursor-pointer hover:border-cyan-400 transition-all duration-200"
-              >
-                <button
-                  onClick={() => onOptionSelect(option.id)}
-                  className="w-full flex items-center space-x-3 p-2"
-                >
-                  <div className="w-8 h-8 bg-cyan-400/20 rounded-full flex items-center justify-center">
-                    {option.id === "envelope" && (
-                      <Mail className="w-4 h-4 text-cyan-400" />
-                    )}
-                    {option.id === "personal" && (
-                      <User className="w-4 h-4 text-cyan-400" />
-                    )}
-                  </div>
-
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-white">
-                      {option.title}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {option.description}
-                    </div>
-                  </div>
-
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
-                </button>
-              </InfoCard>
-            );
-          })}
-        </div>
-
-        {/* Featured Goals Section - More compact */}
-        <div className="space-y-2">
-          <h4 className="text-white font-medium text-sm">Featured goals</h4>
-          <div className="grid grid-cols-2 gap-2">
-            <InfoCard
-              variant="action"
-              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-2 min-h-[70px]"
-            >
-              <button
-                onClick={() => onOptionSelect("emergency")}
-                className="w-full h-full flex flex-col items-center justify-center space-y-1 text-center"
-              >
-                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center mb-1">
-                  <AlertCircle className="w-4 h-4 text-orange-400" />
-                </div>
-                <div className="text-xs font-medium text-white">
-                  Emergency Fund
-                </div>
-              </button>
-            </InfoCard>
-
-            <InfoCard
-              variant="action"
-              className="cursor-pointer hover:border-cyan-400 transition-all duration-200 p-2 min-h-[70px]"
-            >
-              <button
-                onClick={() => onOptionSelect("other")}
-                className="w-full h-full flex flex-col items-center justify-center space-y-1 text-center"
-              >
-                <div className="w-8 h-8 bg-gray-500/20 rounded-full flex items-center justify-center mb-1">
-                  <HelpCircle className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="text-xs font-medium text-white">Other</div>
-              </button>
-            </InfoCard>
-          </div>
-        </div>
-
-        {/* Cancel Button */}
-        <ActionButton
-          onClick={onClose}
-          variant="outline"
-          size="sm"
-          className="w-full"
-        >
-          Cancel
-        </ActionButton>
-      </div>
-    </BottomSheet>
-  );
-};
-
 // Save Actions Modal - Quick save actions for main SAVE button
 const SaveActionsModal = ({
   isOpen,
@@ -350,34 +161,22 @@ const SaveActionsModal = ({
 }) => {
   const saveActions = [
     {
-      id: "personal",
-      title: "Personal Goal",
-      icon: User,
-      description: "Save to your own custom goal",
-    },
-    {
-      id: "group",
-      title: "Group Goal",
-      icon: Users,
-      description: "Save together with others",
-    },
-    {
       id: "quick",
       title: "Quick Save",
-      icon: HelpCircle,
+      icon: Wallet,
       description: "Save without a specific goal",
     },
   ];
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[60vh]">
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[50vh]">
       <ModalHeader title="Where to Save?" onClose={onClose} />
 
-      <div className="bg-black/90 backdrop-blur-sm p-4 space-y-4">
+      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-3">
         {/* Header Section */}
-        <div className="text-center py-1">
-          <div className="text-3xl mb-2">🐷</div>
-          <h3 className="text-base font-semibold text-white mb-1">
+        <div className="text-center py-0.5">
+          <div className="text-2xl mb-1.5">🐷</div>
+          <h3 className="text-sm font-semibold text-white mb-0.5">
             Choose your save option
           </h3>
           <p className="text-xs text-gray-400">
@@ -386,7 +185,7 @@ const SaveActionsModal = ({
         </div>
 
         {/* Save Action Options */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {saveActions.map((action) => {
             const IconComponent = action.icon;
             return (
@@ -397,14 +196,14 @@ const SaveActionsModal = ({
               >
                 <button
                   onClick={() => onActionSelect(action.id)}
-                  className="w-full flex items-center space-x-3 p-1"
+                  className="w-full flex items-center space-x-2 p-1"
                 >
-                  <div className="w-8 h-8 bg-cyan-400/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <IconComponent className="w-4 h-4 text-cyan-400" />
+                  <div className="w-6 h-6 bg-cyan-400/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <IconComponent className="w-3.5 h-3.5 text-cyan-400" />
                   </div>
 
                   <div className="flex-1 text-left">
-                    <div className="text-base font-medium text-white">
+                    <div className="text-sm font-medium text-white">
                       {action.title}
                     </div>
                     <div className="text-xs text-gray-400">
@@ -412,7 +211,7 @@ const SaveActionsModal = ({
                     </div>
                   </div>
 
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                 </button>
               </InfoCard>
             );
@@ -423,14 +222,14 @@ const SaveActionsModal = ({
         <ActionButton
           onClick={onClose}
           variant="outline"
-          size="md"
+          size="sm"
           className="w-full"
         >
           Cancel
         </ActionButton>
 
         {/* Bottom spacing for safe area */}
-        <div className="h-2"></div>
+        <div className="h-1"></div>
       </div>
     </BottomSheet>
   );
@@ -459,37 +258,37 @@ const QuickSaveDetailsModal = ({
       />
 
       {/* Quick Save Card Header */}
-      <div className="bg-gradient-to-r from-teal-500 to-cyan-500 p-3 flex items-center justify-between">
+      <div className="bg-gradient-to-r from-teal-500 to-cyan-500 p-2 flex items-center justify-between">
         <div className="flex-1">
-          <div className="text-sm text-white/80">Current Balance</div>
-          <div className="text-2xl font-bold text-white">KES 0</div>
+          <div className="text-xs text-white/80">Current Balance</div>
+          <div className="text-xl font-bold text-white">KES 0</div>
         </div>
-        <div className="text-4xl opacity-80">🐷</div>
+        <div className="text-3xl opacity-80">🐷</div>
       </div>
 
       {/* Content */}
-      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-3 overflow-y-auto">
+      <div className="bg-black/90 backdrop-blur-sm p-2 space-y-2 overflow-y-auto">
         {/* Balance Overview */}
         <InfoCard variant="stats">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="text-center">
-              <div className="text-xs text-gray-400 mb-1">Savings</div>
-              <div className="text-lg font-semibold text-white">0</div>
+              <div className="text-xs text-gray-400 mb-0.5">Savings</div>
+              <div className="text-base font-semibold text-white">0</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-gray-400 mb-1">Target</div>
-              <div className="text-sm text-cyan-400">No pressure</div>
+              <div className="text-xs text-gray-400 mb-0.5">Target</div>
+              <div className="text-xs text-cyan-400">No pressure</div>
             </div>
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full bg-gray-600 rounded-full h-1 mt-3">
+          <div className="w-full bg-gray-600 rounded-full h-1 mt-2">
             <div className="bg-cyan-400 h-1 rounded-full w-0"></div>
           </div>
         </InfoCard>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           <ActionButton onClick={onSaveNow} variant="primary" size="sm">
             Save Money
           </ActionButton>
@@ -499,43 +298,43 @@ const QuickSaveDetailsModal = ({
         </div>
 
         {/* Key Information */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-white">Key Info</h3>
+        <div className="space-y-1.5">
+          <h3 className="text-xs font-medium text-white">Key Info</h3>
 
           <InfoCard variant="action">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <BarChart3 className="w-4 h-4 text-cyan-400" />
+              <div className="flex items-center space-x-1.5">
+                <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
                 <div>
-                  <div className="text-sm font-medium text-white">
+                  <div className="text-xs font-medium text-white">
                     Interest (5%)
                   </div>
                   <div className="text-xs text-gray-400">Earned: KES 0</div>
                 </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </div>
           </InfoCard>
 
           <InfoCard variant="action">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 text-cyan-400">📊</div>
+              <div className="flex items-center space-x-1.5">
+                <div className="w-3.5 h-3.5 text-cyan-400">📊</div>
                 <div>
-                  <div className="text-sm font-medium text-white">
+                  <div className="text-xs font-medium text-white">
                     Transactions
                   </div>
                   <div className="text-xs text-gray-400">View history</div>
                 </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </div>
           </InfoCard>
         </div>
 
         {/* Timeline (Compact) */}
         <InfoCard>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-xs">
             <div>
               <div className="text-white font-medium">Started</div>
               <div className="text-xs text-gray-400">2 years ago</div>
@@ -545,7 +344,7 @@ const QuickSaveDetailsModal = ({
         </InfoCard>
 
         {/* Bottom spacing for safe area */}
-        <div className="h-4"></div>
+        <div className="h-2"></div>
       </div>
     </BottomSheet>
   );
@@ -612,27 +411,27 @@ const CustomGoalModal = ({
         }}
       />
 
-      <div className="bg-black/90 backdrop-blur-sm p-4 space-y-4">
+      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-3">
         {/* Header */}
-        <div className="text-center py-1">
-          <div className="text-3xl mb-2">🎯</div>
-          <h3 className="text-lg font-semibold text-white mb-1">
+        <div className="text-center py-0.5">
+          <div className="text-2xl mb-1.5">🎯</div>
+          <h3 className="text-base font-semibold text-white mb-0.5">
             Set Your Goal
           </h3>
-          <p className="text-sm text-gray-400">
+          <p className="text-xs text-gray-400">
             Create a personalized savings goal with your own target and timeline
           </p>
         </div>
 
         {/* Goal Name */}
-        <div className="space-y-1">
-          <label className="text-white font-medium text-sm">Goal Name</label>
+        <div className="space-y-0.5">
+          <label className="text-white font-medium text-xs">Goal Name</label>
           <input
             type="text"
             value={form.name}
             onChange={(e) => handleInputChange("name", e.target.value)}
             placeholder="e.g., New Car, Vacation, Emergency Fund"
-            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-sm"
             maxLength={50}
           />
           <div className="text-xs text-gray-500 text-right">
@@ -641,8 +440,8 @@ const CustomGoalModal = ({
         </div>
 
         {/* Target Amount */}
-        <div className="space-y-1">
-          <label className="text-white font-medium text-sm">
+        <div className="space-y-0.5">
+          <label className="text-white font-medium text-xs">
             Target Amount (KES)
           </label>
           <input
@@ -650,7 +449,7 @@ const CustomGoalModal = ({
             value={form.amount}
             onChange={(e) => handleAmountChange(e.target.value)}
             placeholder="0"
-            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-lg font-semibold"
+            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-base font-semibold"
           />
           <div className="text-xs text-gray-500">
             Enter your target savings amount
@@ -658,12 +457,12 @@ const CustomGoalModal = ({
         </div>
 
         {/* Timeline */}
-        <div className="space-y-1">
-          <label className="text-white font-medium text-sm">Timeline</label>
+        <div className="space-y-0.5">
+          <label className="text-white font-medium text-xs">Timeline</label>
           <select
             value={form.timeline}
             onChange={(e) => handleInputChange("timeline", e.target.value)}
-            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
+            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
           >
             <option value="3">3 months</option>
             <option value="6">6 months</option>
@@ -679,12 +478,12 @@ const CustomGoalModal = ({
         </div>
 
         {/* Goal Category */}
-        <div className="space-y-1">
-          <label className="text-white font-medium text-sm">Category</label>
+        <div className="space-y-0.5">
+          <label className="text-white font-medium text-xs">Category</label>
           <select
             value={form.category}
             onChange={(e) => handleInputChange("category", e.target.value)}
-            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400"
+            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
           >
             <option value="personal">Personal</option>
             <option value="emergency">Emergency Fund</option>
@@ -700,9 +499,9 @@ const CustomGoalModal = ({
         {/* Goal Summary */}
         {isFormValid() && (
           <InfoCard variant="stats">
-            <div className="space-y-1">
-              <h4 className="text-white font-semibold text-sm">Goal Summary</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="space-y-0.5">
+              <h4 className="text-white font-semibold text-xs">Goal Summary</h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <div className="text-gray-400 text-xs">Monthly Target</div>
                   <div className="text-cyan-400 font-semibold">
@@ -730,8 +529,8 @@ const CustomGoalModal = ({
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-            <p className="text-red-400 text-sm">{error}</p>
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2">
+            <p className="text-red-400 text-xs">{error}</p>
           </div>
         )}
 
@@ -739,7 +538,7 @@ const CustomGoalModal = ({
         <ActionButton
           onClick={onCreateGoal}
           variant="primary"
-          size="lg"
+          size="md"
           className="w-full"
           disabled={!isFormValid() || isLoading}
         >
@@ -794,15 +593,15 @@ const QuickSaveConfirmationModal = ({
       <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
         <ModalHeader title="Deposit Successful!" onClose={onClose} />
 
-        <div className="bg-black/90 backdrop-blur-sm p-4 space-y-6">
-          <div className="text-center py-4">
-            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">✓</span>
+        <div className="bg-black/90 backdrop-blur-sm p-3 space-y-4">
+          <div className="text-center py-3">
+            <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-xl">✓</span>
             </div>
-            <h3 className="text-white text-lg font-medium mb-2">
+            <h3 className="text-white text-base font-medium mb-1.5">
               Deposit Successful!
             </h3>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="text-gray-400 text-xs mb-3">
               Your KES {depositSuccess.amount} has been deposited to your Quick
               Save goal.
             </p>
@@ -817,8 +616,8 @@ const QuickSaveConfirmationModal = ({
 
           <InfoCard>
             <div className="text-center">
-              <div className="text-3xl mb-3">🎉</div>
-              <p className="text-gray-300 text-sm">
+              <div className="text-2xl mb-2">🎉</div>
+              <p className="text-gray-300 text-xs">
                 Your funds are now earning yield in the vault!
               </p>
             </div>
@@ -864,7 +663,6 @@ const QuickSaveConfirmationModal = ({
                   </button>
                   <button
                     onClick={() => {
-                      // Find USDC token for onramp (default to first supported token)
                       const usdcToken = tokens.find(
                         (t) =>
                           tokenInfos[t.address]?.symbol?.toUpperCase() ===
@@ -903,20 +701,20 @@ const QuickSaveConfirmationModal = ({
         {!error?.includes("You have KES 0") && (
           <>
             {/* Confirmation Details */}
-            <div className="text-center py-4">
-              <div className="text-xs text-white mb-2">
+            <div className="text-center py-3">
+              <div className="text-xs text-white mb-1.5">
                 Is the following correct?
               </div>
-              <div className="text-xs text-cyan-400 mb-4">
+              <div className="text-xs text-cyan-400 mb-3">
                 You wish to deposit to Quick Save
               </div>
 
-              <div className="text-3xl font-bold text-cyan-400 mb-2">
+              <div className="text-2xl font-bold text-cyan-400 mb-1.5">
                 KES {amount}
               </div>
 
-              <div className="text-gray-400 mb-2 text-xs">to your</div>
-              <div className="text-lg font-bold text-cyan-400">
+              <div className="text-gray-400 mb-1.5 text-xs">to your</div>
+              <div className="text-base font-bold text-cyan-400">
                 Quick Save Goal
               </div>
             </div>
@@ -924,11 +722,11 @@ const QuickSaveConfirmationModal = ({
             {/* Remember Info Card */}
             <InfoCard>
               <div className="text-center">
-                <div className="text-3xl mb-3">🐷</div>
-                <h4 className="text-white text-lg font-semibold mb-3">
+                <div className="text-2xl mb-2">🐷</div>
+                <h4 className="text-white text-base font-semibold mb-2">
                   Remember
                 </h4>
-                <p className="text-gray-300 text-sm leading-relaxed">
+                <p className="text-gray-300 text-xs leading-relaxed">
                   Your funds will be safely deposited and start earning yield
                   immediately.
                 </p>
@@ -939,13 +737,13 @@ const QuickSaveConfirmationModal = ({
             <ActionButton
               onClick={onDeposit}
               variant="primary"
-              size="lg"
+              size="md"
               className="w-full"
               disabled={isLoading}
             >
               {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                <div className="flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Processing...
                 </div>
               ) : (
@@ -956,7 +754,7 @@ const QuickSaveConfirmationModal = ({
         )}
 
         {/* Bottom spacing */}
-        <div className="h-4"></div>
+        <div className="h-2"></div>
       </div>
     </BottomSheet>
   );
@@ -968,11 +766,13 @@ const ProfileScreen = ({
   onToggleBalance,
   user,
   goalStats,
+  groupSavings,
 }: {
   showBalance: boolean;
   onToggleBalance: () => void;
   user: any; // User from API
   goalStats: any; // Goal stats from API
+  groupSavings: string; // Group savings amount
 }) => {
   const account = useActiveAccount();
   const address = account?.address;
@@ -999,26 +799,9 @@ const ProfileScreen = ({
     return "New Member";
   };
 
-  // Calculate dynamic savings data based on goals
-  const calculateSavingsStats = () => {
-    if (goalStats) {
-      return {
-        allTimeSavings: goalStats.totalSaved || "0",
-        currentSavings: goalStats.totalSaved || "0", // Same as total for now
-        groupSavings: "0", // TODO: Implement group savings when available
-      };
-    }
-
-    // Fallback values
-    return {
-      allTimeSavings: "0",
-      currentSavings: "0",
-      groupSavings: "0",
-    };
-  };
-
-  const { allTimeSavings, currentSavings, groupSavings } =
-    calculateSavingsStats();
+  // Calculate savings data for display
+  const allTimeSavings = goalStats?.totalSaved || "0";
+  const currentSavings = goalStats?.totalSaved || "0";
 
   return (
     <div className="min-h-screen bg-black/20 pb-20">
@@ -1047,7 +830,438 @@ const ProfileScreen = ({
       <SupportCard />
 
       {/* Bottom spacing for footer */}
-      <div className="h-4"></div>
+      <div className="h-2"></div>
+    </div>
+  );
+};
+
+// Expandable Quick Save Card Component
+interface ExpandableQuickSaveCardProps {
+  goal: any; // Quick Save goal object
+  goals: any[]; // All user goals for total calculation
+  account?: any;
+  user?: any; // User object with ID
+  isLoading?: boolean;
+  showBalance?: boolean;
+  onToggleBalance?: () => void;
+  onDeposit?: () => void;
+  onWithdraw?: () => void;
+  defaultToken?: any;
+  chain?: any;
+  tokenInfo?: any;
+  exchangeRate?: number;
+  onGoalsRefetch?: () => void; // Function to refresh goals after transfer
+}
+
+const ExpandableQuickSaveCard = ({
+  goal,
+  goals,
+  account,
+  user,
+  isLoading = false,
+  showBalance = true,
+  onToggleBalance,
+  onDeposit,
+  onWithdraw,
+  defaultToken,
+  chain,
+  tokenInfo,
+  exchangeRate,
+  onGoalsRefetch,
+}: ExpandableQuickSaveCardProps) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [currencyMode, setCurrencyMode] = useState<"LOCAL" | "USD">("USD");
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTimeout, setDragTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  // Calculate total savings across all goals
+  const totalSavingsNum = goals.reduce((total, goalItem) => {
+    return total + parseFloat(goalItem?.currentAmount || "0");
+  }, 0);
+
+  // Parse Quick Save goal amounts (for the expanded view)
+  const quickSaveAmountNum = parseFloat(goal?.currentAmount || "0");
+  const tokenSymbol = defaultToken?.symbol || "USDC";
+  const tokenDecimals = defaultToken?.decimals || 6;
+
+  // For main card display - use total savings
+  const hasValidExchangeRate = exchangeRate && exchangeRate > 0;
+  const totalLocalAmount = hasValidExchangeRate
+    ? totalSavingsNum * exchangeRate
+    : 0;
+
+  // For expanded Quick Save display - use Quick Save amount
+  const quickSaveLocalAmount = hasValidExchangeRate
+    ? quickSaveAmountNum * exchangeRate
+    : 0;
+
+  // Determine primary and secondary amounts based on currency mode for TOTAL SAVINGS
+  const primaryAmount =
+    currencyMode === "LOCAL" && hasValidExchangeRate
+      ? `Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+      : `$${totalSavingsNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const secondaryAmount =
+    currencyMode === "LOCAL" && hasValidExchangeRate
+      ? `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`
+      : hasValidExchangeRate
+        ? `≈ Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+        : `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`;
+
+  const handleCurrencyToggle = () => {
+    // Only allow toggle to LOCAL if we have a valid exchange rate
+    if (currencyMode === "USD" && !hasValidExchangeRate) {
+      return; // Don't toggle to LOCAL if no valid rate
+    }
+    setCurrencyMode((curr) => (curr === "LOCAL" ? "USD" : "LOCAL"));
+  };
+
+  // Drag and drop handlers
+  const handleTouchStart = () => {
+    const timeout = setTimeout(() => {
+      setIsDragging(true);
+    }, 500); // 500ms hold to start dragging
+    setDragTimeout(timeout);
+  };
+
+  const handleTouchEnd = () => {
+    if (dragTimeout) {
+      clearTimeout(dragTimeout);
+      setDragTimeout(null);
+    }
+
+    // If dropping on a target goal
+    if (isDragging && dropTargetId) {
+      handleTransferFunds(dropTargetId);
+    }
+
+    setIsDragging(false);
+    setDropTargetId(null);
+  };
+
+  const handleTransferFunds = async (targetGoalId: string) => {
+    if (!user?.address || !goal?.id) {
+      reportError("Missing user ID or Quick Save goal ID", {
+        component: "ExpandableQuickSaveCard",
+        operation: "handleTransferFunds",
+        userId: user?.address,
+      });
+      return;
+    }
+
+    const quickSaveAmount = parseFloat(goal?.currentAmount || "0");
+    if (quickSaveAmount <= 0) {
+      reportWarning("No funds available in Quick Save to transfer", {
+        component: "ExpandableQuickSaveCard",
+        operation: "handleTransferFunds",
+        userId: user?.address,
+      });
+      return;
+    }
+
+    try {
+      // For now, transfer all available Quick Save funds
+      // In a full implementation, you might want to show a modal to let user choose amount
+      const transferAmount = quickSaveAmount.toString();
+
+      const response = await fetch("/api/goals/transfer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.address,
+          fromGoalId: goal.id,
+          toGoalId: targetGoalId,
+          amount: transferAmount,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Transfer failed");
+      }
+
+      const result = await response.json();
+      // Transfer successful - refresh goals data
+
+      // Refresh goals data to reflect the transfer
+      if (onGoalsRefetch) {
+        onGoalsRefetch();
+      }
+
+      // Optionally show success feedback
+      // You could add a toast notification here
+    } catch (error) {
+      reportError("Failed to transfer funds", {
+        component: "ExpandableQuickSaveCard",
+        operation: "handleTransferFunds",
+        userId: user?.address,
+        additional: { error },
+      });
+      // You could show an error toast here
+    }
+  };
+
+  const handleDropTarget = (goalId: string, isOver: boolean) => {
+    if (isDragging) {
+      setDropTargetId(isOver ? goalId : null);
+    }
+  };
+
+  const getTokenLogoUrl = () => {
+    if (defaultToken?.logoUrl) return defaultToken.logoUrl;
+    if (defaultToken?.image) return defaultToken.image;
+    if (defaultToken?.icon) return defaultToken.icon;
+
+    if (tokenInfo?.icon) return tokenInfo.icon;
+
+    if (chain?.id && defaultToken?.address) {
+      try {
+        const chainTokenInfo = getChainTokenInfo(
+          chain.id,
+          defaultToken.address
+        );
+        if (chainTokenInfo?.icon) return chainTokenInfo.icon;
+      } catch (error) {
+        console.warn("Could not get token info from chainConfig:", error);
+      }
+    }
+
+    return "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png";
+  };
+
+  return (
+    <div className="relative">
+      <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-3 text-white shadow-lg">
+        {/* Header Section */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-white/80 text-xs font-medium">Total Savings</p>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-xl font-bold">
+                {!account
+                  ? "0"
+                  : isLoading
+                    ? "Loading..."
+                    : showBalance
+                      ? primaryAmount
+                      : "••••"}
+              </span>
+            </div>
+            {/* Show secondary amount */}
+            {account && !isLoading && showBalance && (
+              <div className="text-white/70 text-xs mt-0.5">
+                {secondaryAmount}
+              </div>
+            )}
+          </div>
+
+          {/* Currency Toggle */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-white/80">USD</span>
+            <div
+              className="relative w-8 h-4 bg-white/20 rounded-full cursor-pointer transition-all"
+              onClick={handleCurrencyToggle}
+            >
+              <div
+                className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${
+                  currencyMode === "LOCAL" ? "translate-x-4" : "translate-x-0.5"
+                }`}
+              />
+            </div>
+            <span className="text-xs text-white font-medium">KES</span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-1.5 mb-3">
+          <button
+            onClick={onDeposit}
+            className="flex-1 bg-white/20 hover:bg-white/30 border border-white/30 text-white font-medium py-1.5 rounded-full transition-all duration-200 flex items-center justify-center gap-1 text-sm"
+          >
+            <ArrowDown className="w-3 h-3" />
+            Deposit
+          </button>
+          <button
+            onClick={onWithdraw}
+            className="flex-1 bg-white/20 hover:bg-white/30 border border-white/30 text-white font-medium py-1.5 rounded-full transition-all duration-200 flex items-center justify-center gap-1 text-sm"
+          >
+            <ArrowUp className="w-3 h-3" />
+            Withdraw
+          </button>
+        </div>
+
+        {/* Goals Cards - Only show when expanded */}
+        {isExpanded && (
+          <div className="mb-2">
+            {/* Grid aligned with deposit/withdraw buttons - increased spacing */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Quick Save Card - Draggable */}
+              <div
+                className={`bg-white rounded-lg p-2 shadow-sm transition-all duration-200 relative overflow-hidden ${
+                  isDragging ? "scale-105 shadow-lg ring-2 ring-cyan-400" : ""
+                }`}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleTouchStart}
+                onMouseUp={handleTouchEnd}
+              >
+                {/* Colored left section with icon - smaller */}
+                <div className="absolute top-0 left-0 w-8 h-full bg-gradient-to-br from-green-400 to-green-500 rounded-l-lg flex items-center justify-center">
+                  <div className="w-4 h-4 bg-white/30 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">$</span>
+                  </div>
+                </div>
+
+                {/* Main content area - compact */}
+                <div className="ml-10 py-1.5">
+                  <div className="text-gray-900 text-sm font-bold leading-tight">
+                    {isLoading
+                      ? "..."
+                      : quickSaveAmountNum < 0.01
+                        ? "<0.01"
+                        : quickSaveAmountNum.toFixed(2)}
+                  </div>
+                  <div className="text-gray-600 text-xs font-medium">
+                    {isDragging ? "Dragging..." : "Quick Save"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Other User Goals - Drop Targets */}
+              {goals
+                .filter((g) => g.category !== "quick")
+                .slice(0, 5) // Limit to fit nicely in grid
+                .map((userGoal, index) => {
+                  const goalAmount = parseFloat(userGoal?.currentAmount || "0");
+                  const isDropTarget =
+                    isDragging && dropTargetId === userGoal.id;
+
+                  // Cycle through colors for different goals
+                  const colors = [
+                    { from: "blue-400", to: "blue-500" },
+                    { from: "purple-400", to: "purple-500" },
+                    { from: "indigo-400", to: "indigo-500" },
+                    { from: "pink-400", to: "pink-500" },
+                    { from: "orange-400", to: "orange-500" },
+                  ];
+                  const colorSet = colors[index % colors.length];
+
+                  return (
+                    <div
+                      key={userGoal.id}
+                      className={`bg-white rounded-lg p-2 shadow-sm transition-all duration-200 relative overflow-hidden ${
+                        isDragging
+                          ? isDropTarget
+                            ? "border-2 border-green-400 bg-green-50 shadow-lg scale-105"
+                            : "border-2 border-dashed border-cyan-300 bg-cyan-50"
+                          : ""
+                      }`}
+                      onTouchMove={(e) => {
+                        if (isDragging) {
+                          const touch = e.touches[0];
+                          const element = document.elementFromPoint(
+                            touch.clientX,
+                            touch.clientY
+                          );
+                          const goalCard = element?.closest(
+                            `[data-goal-id="${userGoal.id}"]`
+                          );
+                          handleDropTarget(userGoal.id, !!goalCard);
+                        }
+                      }}
+                      data-goal-id={userGoal.id}
+                    >
+                      {/* Colored left section with icon - smaller */}
+                      <div
+                        className={`absolute top-0 left-0 w-8 h-full bg-gradient-to-br from-${colorSet.from} to-${colorSet.to} rounded-l-lg flex items-center justify-center`}
+                      >
+                        <div className="w-4 h-4 bg-white/30 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">🎯</span>
+                        </div>
+                      </div>
+
+                      {/* Main content area - compact */}
+                      <div className="ml-10 py-1.5">
+                        <div className="text-gray-900 text-sm font-bold leading-tight">
+                          {goalAmount < 0.01 ? "<0.01" : goalAmount.toFixed(2)}
+                        </div>
+                        <div className="text-gray-600 text-xs font-medium truncate">
+                          {isDropTarget ? "Drop here!" : userGoal.title}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* Add Goal Card - if user has less than 6 goals */}
+              {goals.length < 6 && (
+                <div className="bg-gray-50 rounded-lg p-2 shadow-sm border-2 border-dashed border-gray-300 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-1">
+                      <span className="text-gray-400 text-sm">+</span>
+                    </div>
+                    <p className="text-gray-500 text-xs font-medium">
+                      Add Goal
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Drag instruction */}
+            {isDragging && (
+              <div className="text-center py-2">
+                <p className="text-cyan-400 text-sm font-medium">
+                  Drop Quick Save on any goal to transfer funds
+                </p>
+              </div>
+            )}
+
+            {/* Show message if no additional goals */}
+            {goals.filter((g) => g.category !== "quick").length === 0 && (
+              <div className="mt-3 bg-gray-50 rounded-lg p-3 text-center">
+                <p className="text-gray-500 text-sm">No additional goals yet</p>
+                <p className="text-gray-400 text-xs mt-1">
+                  Create goals to organize your savings
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Balance visibility toggle */}
+        {account && (
+          <div className="flex justify-end">
+            <button
+              onClick={onToggleBalance}
+              className="text-white/60 hover:text-white/80 transition-colors p-0.5"
+            >
+              {showBalance ? (
+                <EyeOff className="w-3 h-3" />
+              ) : (
+                <Eye className="w-3 h-3" />
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Expand/Collapse Button */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="bg-gray-600 hover:bg-gray-700 text-white rounded-full p-1 shadow-lg transition-all mt-1.5"
+        >
+          {isExpanded ? (
+            <ChevronUp className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" />
+          )}
+        </button>
+      </div>
     </div>
   );
 };
@@ -1065,36 +1279,29 @@ export default function AppPage() {
   const { isSDKLoaded, context } = useMiniApp();
   const { chain, tokens, tokenInfos } = useChain();
 
-  // Get default token for Quick Save (prioritize USDC, then first available token)
   const defaultToken = useMemo(() => {
     if (!tokens || tokens.length === 0) return null;
 
-    // Try to find USDC first
     const usdc = tokens.find((t) => t.symbol.toUpperCase() === "USDC");
     if (usdc) return usdc;
 
-    // Try other stablecoins
     const stablecoins = tokens.filter((t) =>
       ["USDT", "CUSD", "DAI"].includes(t.symbol.toUpperCase())
     );
     if (stablecoins.length > 0) return stablecoins[0];
 
-    // Fallback to first token
     return tokens[0];
   }, [tokens]);
 
-  // Only show deposit-appropriate tokens per chain
   const supportedStablecoins = useMemo(() => {
     if (!tokens) return [];
 
     if (chain?.id === 42220) {
-      // Celo
       const allowedSymbols = ["USDC", "USDT", "CUSD"];
       return tokens
         .filter((t) => allowedSymbols.includes(t.symbol.toUpperCase()))
         .map((t) => t.address);
     } else if (chain?.id === 534352) {
-      // Scroll
       const allowedSymbols = ["USDC", "WETH"];
       return tokens
         .filter((t) => allowedSymbols.includes(t.symbol.toUpperCase()))
@@ -1103,7 +1310,6 @@ export default function AppPage() {
     return tokens.map((t) => t.address);
   }, [tokens, chain?.id]);
 
-  // Use wallet balance hook for the default token
   const { data: walletBalanceData, isLoading: isBalanceLoading } =
     useWalletBalance({
       client,
@@ -1135,9 +1341,18 @@ export default function AppPage() {
   // Initialize user goals (create Quick Save goal for new users)
   useInitializeUserGoals(defaultToken, chain);
 
+  // Exchange rates hook
+  const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
+
+  // Group savings hook
+  const { amount: groupSavingsAmount, loading: groupSavingsLoading } =
+    useGroupSavingsAmount();
+
+  // Interest rates hook
+  const { getTokenRate, loading: interestRatesLoading } = useInterestRates();
+
   // State for the new design
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [saveOptionsModalOpen, setSaveOptionsModalOpen] = useState(false);
   const [saveActionsModalOpen, setSaveActionsModalOpen] = useState(false);
   const [showBalances, setShowBalances] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
@@ -1193,6 +1408,9 @@ export default function AppPage() {
   const [quickSaveConfirmationOpen, setQuickSaveConfirmationOpen] =
     useState(false);
   const [quickSaveAmount, setQuickSaveAmount] = useState("100");
+  const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
+  const [vaultPositions, setVaultPositions] = useState<any[]>([]);
+  const [vaultPositionsLoading, setVaultPositionsLoading] = useState(false);
 
   // Quick Save deposit transaction states
   const [isDepositLoading, setIsDepositLoading] = useState(false);
@@ -1217,7 +1435,7 @@ export default function AppPage() {
     name: "",
     amount: "",
     timeline: "12", // months
-    category: "personal",
+    category: "custom",
   });
 
   // Goals data is now fetched from API via useGoals hook above
@@ -1248,83 +1466,16 @@ export default function AppPage() {
     }
   }, [account, pendingDeposit]);
 
-  const handleSaveOptionSelect = (optionId: string) => {
-    setSaveOptionsModalOpen(false);
-    // Handle the different save options
-    switch (optionId) {
-      case "52-week":
-        // Handle 52 Week Challenge
-        console.log("52 Week Challenge selected");
-        setActiveModal("save");
-        break;
-      case "superfans":
-        // Handle Superfans Challenge
-        console.log("Superfans Challenge selected");
-        setActiveModal("save");
-        break;
-      case "vault":
-        // Handle The Chumz Vault
-        console.log("The Chumz Vault selected");
-        setActiveModal("save");
-        break;
-      case "mia-kwa-mia":
-        // Handle Mia Kwa Mia Challenge
-        console.log("Mia Kwa Mia Challenge selected");
-        setActiveModal("save");
-        break;
-      case "envelope":
-        // Handle Envelope Challenge
-        console.log("Envelope Challenge selected");
-        setActiveModal("save");
-        break;
-      case "personal":
-        // Handle Personal Goal
-        console.log("Personal Goal selected");
-        setCustomGoalModalOpen(true);
-        break;
-      case "emergency":
-        // Handle Emergency Fund
-        console.log("Emergency Fund selected");
-        setCustomGoalModalOpen(true);
-        break;
-      case "other":
-        // Handle Other
-        console.log("Other goal selected");
-        setCustomGoalModalOpen(true);
-        break;
-      case "group":
-        // Handle group goal creation
-        console.log("Group goal selected");
-        break;
-      case "quick":
-        // Handle quick save
-        setActiveModal("save");
-        break;
-      default:
-        console.log("Unknown option selected:", optionId);
-        break;
-    }
-  };
-
   const handleSaveActionSelect = (actionId: string) => {
     setSaveActionsModalOpen(false);
     // Handle the different save actions from main SAVE button
     switch (actionId) {
-      case "personal":
-        // Open custom goal creation
-        setCustomGoalModalOpen(true);
-        break;
-      case "group":
-        // Handle group goal creation
-        console.log("Group goal selected");
-        // You can add group goal functionality here
-        break;
       case "quick":
         // Handle quick save
         setQuickSaveDetailsOpen(true);
         break;
       default:
-        console.log("Unknown save action selected:", actionId);
+        // Unknown save action selected
         break;
     }
   };
@@ -1332,19 +1483,37 @@ export default function AppPage() {
   const handleCreateCustomGoal = async () => {
     // Validate form
     if (!customGoalForm.name.trim() || !customGoalForm.amount.trim()) {
-      console.error("Goal name and amount are required");
+      reportWarning("Goal name and amount are required", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
       return;
     }
 
     const targetAmount = parseFloat(customGoalForm.amount.replace(/,/g, ""));
     if (targetAmount <= 0) {
-      console.error("Target amount must be greater than 0");
+      reportWarning("Target amount must be greater than 0", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
       return;
     }
 
-    // Ensure we have default token info for the goal
     if (!defaultToken || !chain) {
-      console.error("Chain or token information not available");
+      reportError("Chain or token information not available", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+        chainId: chain?.id,
+      });
+      return;
+    }
+
+    // Don't proceed if interest rates are still loading (for better UX)
+    if (interestRatesLoading) {
+      reportWarning("Interest rates are still loading, please wait", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
       return;
     }
 
@@ -1352,14 +1521,14 @@ export default function AppPage() {
     const newGoalData = {
       title: customGoalForm.name,
       description: `Custom goal for ${customGoalForm.name}`,
-      category: customGoalForm.category as "personal" | "retirement" | "quick",
+      category: customGoalForm.category as GoalCategory,
       status: "active" as const,
       currentAmount: "0",
       targetAmount: targetAmount.toString(),
       tokenAddress: defaultToken.address,
       tokenSymbol: defaultToken.symbol,
       tokenDecimals: defaultToken.decimals,
-      interestRate: 5.0, // Default 5% interest
+      interestRate: getTokenRate(defaultToken.symbol),
       isPublic: false,
       allowContributions: false,
       isQuickSave: false,
@@ -1376,7 +1545,7 @@ export default function AppPage() {
       const createdGoal = await createGoal(newGoalData);
 
       if (createdGoal) {
-        console.log("Goal created successfully:", createdGoal);
+        // Goal created successfully - update UI
 
         // Refresh goals list
         await refetchGoals();
@@ -1386,14 +1555,18 @@ export default function AppPage() {
           name: "",
           amount: "",
           timeline: "12",
-          category: "personal",
+          category: "custom",
         });
 
         // Close modal
         setCustomGoalModalOpen(false);
       }
     } catch (error) {
-      console.error("Failed to create goal:", error);
+      reportError("Failed to create goal", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+        additional: { error, goalData: customGoalForm },
+      });
       // You might want to show an error message to the user here
     }
   };
@@ -1438,13 +1611,6 @@ export default function AppPage() {
     try {
       const vaultAddress = getVaultAddress(chainId, tokenSymbol);
 
-      if (process.env.NODE_ENV === "development") {
-        console.log("[QuickSave] Using Aave vault:", {
-          token: tokenSymbol,
-          vault: vaultAddress?.substring(0, 10) + "...",
-        });
-      }
-
       const vaultContract = getContract({
         client,
         chain: chain,
@@ -1455,7 +1621,6 @@ export default function AppPage() {
       // Use no lock period for Quick Save (lockTierId = 0)
       const lockTierId = 0;
 
-      // Create the deposit transaction for vault (amount, lockTierId)
       const depositTx = prepareContractCall({
         contract: vaultContract,
         method: "deposit",
@@ -1468,20 +1633,19 @@ export default function AppPage() {
 
       return depositTx;
     } catch (error) {
-      console.error("[QuickSave] Error preparing vault transaction:", error);
+      reportError("[QuickSave] Error preparing vault transaction", {
+        component: "AppPage",
+        operation: "prepareQuickSaveDepositTransaction",
+        chainId: chain?.id,
+        tokenSymbol: defaultToken?.symbol,
+        additional: { error },
+      });
       throw error;
     }
   };
 
   // Handle transaction errors with user-friendly messages
   const handleDepositError = (error: Error) => {
-    if (process.env.NODE_ENV === "development") {
-      console.error(
-        "[QuickSave] Transaction error:",
-        error?.message || "Unknown error"
-      );
-    }
-
     let userMessage = "Transaction failed. Please try again.";
 
     if (
@@ -1503,12 +1667,15 @@ export default function AppPage() {
 
   // Handle successful transaction
   const handleDepositSuccess = async (receipt: any) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        "[QuickSave] Transaction successful:",
-        receipt?.transactionHash || "unknown"
-      );
-    }
+    // Report successful transaction for monitoring
+    reportInfo("Quick Save deposit successful", {
+      component: "AppPage",
+      operation: "handleDepositSuccess",
+      transactionHash: receipt?.transactionHash,
+      amount: quickSaveAmount,
+      tokenSymbol: defaultToken?.symbol,
+      chainId: chain?.id,
+    });
 
     // Set the success state
     setDepositSuccess({
@@ -1520,7 +1687,12 @@ export default function AppPage() {
     try {
       await refetchGoals();
     } catch (error) {
-      console.error("Failed to refresh goals after deposit:", error);
+      reportError("Failed to refresh goals after deposit", {
+        component: "AppPage",
+        operation: "handleDepositSuccess",
+        transactionHash: receipt?.transactionHash,
+        additional: { error },
+      });
     }
 
     // Keep confirmation modal open to show success, reset after delay
@@ -1586,6 +1758,16 @@ export default function AppPage() {
     setDepositError(null);
     setTransactionStatus("Setting up your deposit...");
 
+    // Report transaction start for monitoring
+    reportInfo("Quick Save deposit started", {
+      component: "AppPage",
+      operation: "handleQuickSaveDeposit",
+      amount: quickSaveAmount,
+      tokenSymbol: defaultToken?.symbol,
+      chainId: chain?.id,
+      userId: user?.address,
+    });
+
     try {
       const depositTx =
         await prepareQuickSaveDepositTransaction(quickSaveAmount);
@@ -1628,7 +1810,7 @@ export default function AppPage() {
         try {
           reportTransactionToDivvi(depositResult.transactionHash, chain.id);
         } catch (error) {
-          console.log("[QuickSave] Divvi reporting skipped:", error);
+          // Divvi reporting failed - transaction still succeeded
         }
       }
     } catch (err: any) {
@@ -1638,6 +1820,147 @@ export default function AppPage() {
       setIsDepositLoading(false);
     }
   };
+
+  const handleVaultWithdrawal = async (
+    tokenSymbol: string,
+    depositIds: number[]
+  ) => {
+    if (!account?.address || !user?.address || !chain?.id) {
+      throw new Error("Missing required data for withdrawal");
+    }
+
+    const withdrawMethodABI = {
+      inputs: [{ internalType: "uint256", name: "depositId", type: "uint256" }],
+      name: "withdraw",
+      outputs: [
+        { internalType: "uint256", name: "amountWithdrawn", type: "uint256" },
+      ],
+      stateMutability: "nonpayable",
+      type: "function",
+    } as const;
+
+    const vaultAddress = getVaultAddress(chain.id, tokenSymbol);
+    if (!vaultAddress) {
+      throw new Error(
+        `No vault address found for ${tokenSymbol} on chain ${chain.id}`
+      );
+    }
+
+    try {
+      // Process each deposit withdrawal
+      for (const depositId of depositIds) {
+        const vaultContract = getContract({
+          client,
+          chain,
+          address: vaultAddress,
+        });
+
+        // Prepare withdrawal transaction
+        const withdrawTx = prepareContractCall({
+          contract: vaultContract,
+          method: withdrawMethodABI,
+          params: [BigInt(depositId)],
+        });
+
+        // Send transaction
+        const result = await sendTransaction(withdrawTx);
+
+        // Wait for transaction to be confirmed
+        await waitForReceipt({
+          client,
+          chain,
+          transactionHash: result.transactionHash,
+        });
+
+        // Record the withdrawal in the backend
+        // Note: In a full implementation, you'd want to get the actual withdrawal amount and yield from the transaction receipt
+        await fetch(`/api/goals/vault-withdraw`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: user.address,
+            chainId: chain.id,
+            depositId,
+            transactionHash: result.transactionHash,
+            withdrawnAmount: "0", // Should be extracted from transaction receipt
+            yieldEarned: "0", // Should be extracted from transaction receipt
+          }),
+        });
+      }
+
+      // Refresh goals after successful withdrawal
+      await refetchGoals();
+    } catch (error) {
+      reportError("Vault withdrawal failed", {
+        component: "AppPage",
+        operation: "handleVaultWithdrawal",
+        chainId: chain?.id,
+        tokenSymbol,
+        additional: { error, depositIds },
+      });
+      throw error;
+    }
+  };
+
+  const fetchVaultPositions = async () => {
+    if (!account?.address || !chain || !tokens) {
+      return;
+    }
+
+    setVaultPositionsLoading(true);
+    try {
+      const tokenSymbols = tokens.map((token) => token.symbol);
+
+      const positions = await vaultService.getAllVaultPositions(
+        chain,
+        account.address,
+        tokenSymbols
+      );
+
+      setVaultPositions(positions);
+    } catch (error) {
+      reportError("Failed to fetch vault positions", {
+        component: "AppPage",
+        operation: "fetchVaultPositions",
+        chainId: chain?.id,
+        additional: { error },
+      });
+      setVaultPositions([]);
+    } finally {
+      setVaultPositionsLoading(false);
+    }
+  };
+
+  // Effect to fetch vault positions when withdrawal modal opens
+  useEffect(() => {
+    if (withdrawalModalOpen && account?.address && chain) {
+      fetchVaultPositions();
+    }
+  }, [withdrawalModalOpen, account?.address, chain?.id]);
+
+  // Calculate dynamic savings data based on goals
+  const calculateSavingsStats = () => {
+    if (goalStats) {
+      return {
+        allTimeSavings: goalStats.totalSaved || "0",
+        currentSavings: goalStats.totalSaved || "0", // Same as total for now
+        groupSavings: groupSavingsAmount, // Use group savings from hook
+      };
+    }
+
+    // Fallback values
+    return {
+      allTimeSavings: "0",
+      currentSavings: "0",
+      groupSavings: groupSavingsAmount, // Use group savings from hook
+    };
+  };
+
+  // Get the calculated savings stats
+  const { allTimeSavings, currentSavings, groupSavings } =
+    calculateSavingsStats();
 
   const closeAllQuickSaveModals = () => {
     setQuickSaveDetailsOpen(false);
@@ -1657,7 +1980,7 @@ export default function AppPage() {
       name: "",
       amount: "",
       timeline: "12",
-      category: "personal",
+      category: "custom",
     });
   };
 
@@ -1786,7 +2109,7 @@ export default function AppPage() {
                   🎯 Quick Save
                 </ActionButton>
                 <ActionButton
-                  onClick={() => setSaveOptionsModalOpen(true)}
+                  onClick={() => setCustomGoalModalOpen(true)}
                   variant="outline"
                   size="lg"
                   className="w-full"
@@ -1838,7 +2161,7 @@ export default function AppPage() {
                 <>
                   {/* New Goal Button */}
                   <ActionButton
-                    onClick={() => setSaveOptionsModalOpen(true)}
+                    onClick={() => setCustomGoalModalOpen(true)}
                     variant="outline"
                     size="sm"
                     className="hidden sm:flex"
@@ -1848,7 +2171,7 @@ export default function AppPage() {
 
                   {/* Mobile New Goal Button */}
                   <ActionButton
-                    onClick={() => setSaveOptionsModalOpen(true)}
+                    onClick={() => setCustomGoalModalOpen(true)}
                     variant="outline"
                     size="sm"
                     className="sm:hidden"
@@ -1917,27 +2240,37 @@ export default function AppPage() {
                   {/* Quick Save Section */}
                   {goals.find((g) => g.category === "quick") && (
                     <div className="mb-8">
-                      <GoalCard
+                      <ExpandableQuickSaveCard
                         goal={goals.find((g) => g.category === "quick")!}
+                        goals={goals}
+                        account={account}
+                        user={user}
+                        isLoading={goalsLoading}
                         showBalance={showBalances}
                         onToggleBalance={toggleBalanceVisibility}
-                        onCardClick={handleQuickSaveCardClick}
+                        onDeposit={() => setQuickSaveDetailsOpen(true)}
+                        onWithdraw={() => setWithdrawalModalOpen(true)}
+                        defaultToken={defaultToken}
+                        chain={chain}
+                        tokenInfo={tokenInfos}
+                        exchangeRate={getKESRate() || undefined}
+                        onGoalsRefetch={refetchGoals}
                       />
                     </div>
                   )}
 
-                  {/* Personal Goals Section */}
-                  <div className="mb-8">
+                  {/* User Goals Section */}
+                  <div className="mb-32 pb-4">
                     <div className="flex items-center space-x-2 mb-6">
-                      <User className="w-5 h-5 text-gray-400" />
+                      <TrendingUp className="w-5 h-5 text-gray-400" />
                       <h2 className="text-lg font-semibold text-white">
-                        Personal goals
+                        My Goals
                       </h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                       {goals
-                        .filter((g) => g.category === "personal")
+                        .filter((g) => g.category !== "quick")
                         .map((goal) => (
                           <GoalCard
                             key={goal.id}
@@ -1946,12 +2279,12 @@ export default function AppPage() {
                           />
                         ))}
 
-                      {/* Show empty state for personal goals if none exist */}
-                      {goals.filter((g) => g.category === "personal").length ===
+                      {/* Show empty state if no user goals exist */}
+                      {goals.filter((g) => g.category !== "quick").length ===
                         0 && (
                         <div className="col-span-full text-center py-8">
                           <p className="text-gray-400 mb-4">
-                            No personal goals yet
+                            No goals created yet
                           </p>
                           <ActionButton
                             onClick={() => setCustomGoalModalOpen(true)}
@@ -1959,51 +2292,6 @@ export default function AppPage() {
                             size="sm"
                           >
                             Create Your First Goal
-                          </ActionButton>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Retirement Section */}
-                  <div className="mb-32 pb-4">
-                    <div className="flex items-center space-x-2 mb-6">
-                      <Shield className="w-5 h-5 text-gray-400" />
-                      <h2 className="text-lg font-semibold text-white">
-                        Retirement
-                      </h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                      {goals
-                        .filter((g) => g.category === "retirement")
-                        .map((goal) => (
-                          <GoalCard
-                            key={goal.id}
-                            goal={goal}
-                            showBalance={showBalances}
-                          />
-                        ))}
-
-                      {/* Show empty state for retirement goals if none exist */}
-                      {goals.filter((g) => g.category === "retirement")
-                        .length === 0 && (
-                        <div className="col-span-full text-center py-8">
-                          <p className="text-gray-400 mb-4">
-                            No retirement goals yet
-                          </p>
-                          <ActionButton
-                            onClick={() => {
-                              setCustomGoalForm((prev) => ({
-                                ...prev,
-                                category: "retirement",
-                              }));
-                              setCustomGoalModalOpen(true);
-                            }}
-                            variant="primary"
-                            size="sm"
-                          >
-                            Plan for Retirement
                           </ActionButton>
                         </div>
                       )}
@@ -2048,6 +2336,7 @@ export default function AppPage() {
               onToggleBalance={toggleBalanceVisibility}
               user={user}
               goalStats={goalStats}
+              groupSavings={groupSavingsAmount}
             />
           )}
         </main>
@@ -2087,12 +2376,6 @@ export default function AppPage() {
         </div>
 
         {/* Modals */}
-        <SaveOptionsModal
-          isOpen={saveOptionsModalOpen}
-          onClose={() => setSaveOptionsModalOpen(false)}
-          onOptionSelect={handleSaveOptionSelect}
-        />
-
         <SaveActionsModal
           isOpen={saveActionsModalOpen}
           onClose={() => setSaveActionsModalOpen(false)}
@@ -2143,7 +2426,7 @@ export default function AppPage() {
           onCreateGoal={handleCreateCustomGoal}
           form={customGoalForm}
           setForm={setCustomGoalForm}
-          isLoading={createGoalLoading}
+          isLoading={createGoalLoading || interestRatesLoading}
           error={createGoalError}
         />
 
@@ -2162,6 +2445,16 @@ export default function AppPage() {
           selectedAsset={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
           assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
           onSuccess={handleOnrampSuccess}
+        />
+
+        {/* Funds Withdrawal Modal */}
+        <FundsWithdrawalModal
+          isOpen={withdrawalModalOpen}
+          onClose={() => setWithdrawalModalOpen(false)}
+          onWithdraw={handleVaultWithdrawal}
+          vaultPositions={vaultPositions}
+          tokenInfos={tokenInfos}
+          loading={vaultPositionsLoading}
         />
       </div>
     </div>
