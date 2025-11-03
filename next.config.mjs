@@ -10,6 +10,24 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    turbo: {
+      resolveAlias: {
+        '@anon-aadhaar/core': '@anon-aadhaar/core/dist/index.js',
+      },
+    },
+  },
+  webpack: (config, { isServer }) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+    };
+    config.externals.push('pino-pretty', 'lokijs', 'encoding');
+    return config;
+  },
+  transpilePackages: ['@selfxyz/qrcode', '@selfxyz/common', '@anon-aadhaar/core'],
   // PWA configuration
   async headers() {
     return [

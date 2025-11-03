@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { useMiniApp } from "@/hooks/useMiniApp";
+import { getMemberSinceDate } from "@/lib/utils/profileUtils";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -68,6 +69,7 @@ import {
   SupportCard,
   StatsCard,
   GoalCard,
+  NewProfile,
   type SaveOption,
   type FrontendGoal,
   type GoalCategory,
@@ -331,18 +333,6 @@ const QuickSaveDetailsModal = ({
             </div>
           </InfoCard>
         </div>
-
-        {/* Timeline (Compact) */}
-        <InfoCard>
-          <div className="flex items-center justify-between text-xs">
-            <div>
-              <div className="text-white font-medium">Started</div>
-              <div className="text-xs text-gray-400">2 years ago</div>
-            </div>
-            <div className="text-cyan-400">25th Dec 2023</div>
-          </div>
-        </InfoCard>
-
         {/* Bottom spacing for safe area */}
         <div className="h-2"></div>
       </div>
@@ -757,81 +747,6 @@ const QuickSaveConfirmationModal = ({
         <div className="h-2"></div>
       </div>
     </BottomSheet>
-  );
-};
-
-// Profile Screen Component - Mobile-First with Separated Cards
-const ProfileScreen = ({
-  showBalance,
-  onToggleBalance,
-  user,
-  goalStats,
-  groupSavings,
-}: {
-  showBalance: boolean;
-  onToggleBalance: () => void;
-  user: any; // User from API
-  goalStats: any; // Goal stats from API
-  groupSavings: string; // Group savings amount
-}) => {
-  const account = useActiveAccount();
-  const address = account?.address;
-
-  const getUserName = () => {
-    if (user?.username) {
-      return user.username;
-    }
-    if (address) {
-      // Fallback to shortened address
-      return `${address.slice(0, 6)}...${address.slice(-4)}`;
-    }
-    return "Guest User";
-  };
-
-  const getMemberSince = () => {
-    if (user?.createdAt) {
-      const date = new Date(user.createdAt);
-      return `Member since ${date.toLocaleDateString("en-US", {
-        month: "long",
-        year: "numeric",
-      })}`;
-    }
-    return "New Member";
-  };
-
-  // Calculate savings data for display
-  const allTimeSavings = goalStats?.totalSaved || "0";
-  const currentSavings = goalStats?.totalSaved || "0";
-
-  return (
-    <div className="min-h-screen bg-black/20 pb-20">
-      {/* Profile Header Card */}
-      <ProfileHeaderCard
-        username={getUserName()}
-        memberSince={getMemberSince()}
-      />
-
-      {/* Savings Statistics Card */}
-      <SavingsStatsCard
-        allTimeSavings={allTimeSavings}
-        currentSavings={currentSavings}
-        groupSavings={groupSavings}
-        showBalance={showBalance}
-        onToggleBalance={onToggleBalance}
-      />
-
-      {/* Invite Friends Card */}
-      <InviteFriendsCard />
-
-      {/* Account Settings Card */}
-      <AccountSettingsCard />
-
-      {/* Support Card */}
-      <SupportCard />
-
-      {/* Bottom spacing for footer */}
-      <div className="h-2"></div>
-    </div>
   );
 };
 
@@ -2331,12 +2246,9 @@ export default function AppPage() {
           )}
 
           {activeTab === "profile" && (
-            <ProfileScreen
+            <NewProfile
               showBalance={showBalances}
               onToggleBalance={toggleBalanceVisibility}
-              user={user}
-              goalStats={goalStats}
-              groupSavings={groupSavingsAmount}
             />
           )}
         </main>

@@ -1,6 +1,7 @@
 import React from "react";
-import { Wallet, LogOut, ChevronRight } from "lucide-react";
+import { Wallet, LogOut, ChevronRight, Shield } from "lucide-react";
 import { ConnectWallet } from "../ConnectWallet";
+import Link from "next/link";
 
 export const AccountSettingsCard = () => {
   const handleLogout = () => {
@@ -28,6 +29,20 @@ export const AccountSettingsCard = () => {
           <ConnectWallet />
         </div>
       </div>
+
+      {/* Verify Identity */}
+      <Link href="/self" className="block px-4 py-3 border-b border-gray-700 hover:bg-gray-750 transition-colors">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Shield className="w-5 h-5 text-cyan-400" />
+            <div>
+              <span className="text-white block">Verify Identity</span>
+              <span className="text-xs text-gray-400">Complete KYC verification</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
+        </div>
+      </Link>
 
       {/* Log out */}
       <button
