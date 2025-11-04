@@ -9,25 +9,22 @@ import {
   ActionButton,
 } from "@/components/ui";
 
-interface VaultPosition {
+interface WithdrawableDeposit {
   depositId: number;
   tokenAddress: string;
+  tokenSymbol: string;
   amount: string;
   withdrawableAmount: string;
   lockTier: number;
-  depositTime: string;
-  unlockTime?: string;
+  depositTime: number;
+  unlockTime: number;
 }
 
 interface WithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
   onWithdraw: (tokenSymbol: string, depositIds: number[]) => Promise<void>;
-  vaultPositions: VaultPosition[];
-  tokenInfos: Record<
-    string,
-    { symbol: string; decimals: number; icon?: string }
-  >;
+  vaultPositions: WithdrawableDeposit[];
   loading: boolean;
 }
 
@@ -36,12 +33,11 @@ export const WithdrawModal = ({
   onClose,
   onWithdraw,
   vaultPositions,
-  tokenInfos,
   loading,
 }: WithdrawModalProps) => {
-  const [selectedPositions, setSelectedPositions] = useState<VaultPosition[]>(
-    []
-  );
+  const [selectedPositions, setSelectedPositions] = useState<
+    WithdrawableDeposit[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
@@ -52,7 +48,7 @@ export const WithdrawModal = ({
     }
   }, [isOpen]);
 
-  const handlePositionToggle = (position: VaultPosition) => {
+  const handlePositionToggle = (position: WithdrawableDeposit) => {
     setSelectedPositions((prev) => {
       const isSelected = prev.some((p) => p.depositId === position.depositId);
       if (isSelected) {
@@ -73,8 +69,7 @@ export const WithdrawModal = ({
       // Group selected positions by token symbol
       const positionsByToken = selectedPositions.reduce(
         (acc, position) => {
-          const tokenSymbol =
-            tokenInfos[position.tokenAddress]?.symbol || position.tokenAddress;
+          const tokenSymbol = position.tokenSymbol;
           if (!acc[tokenSymbol]) {
             acc[tokenSymbol] = [];
           }
@@ -104,15 +99,19 @@ export const WithdrawModal = ({
     const balancesBySymbol: Record<
       string,
       {
-        positions: VaultPosition[];
+        positions: WithdrawableDeposit[];
         totalBalance: number;
         symbol: string;
       }
     > = {};
 
-    vaultPositions.forEach((position) => {
-      const tokenSymbol =
-        tokenInfos[position.tokenAddress]?.symbol || position.tokenAddress;
+    // Only include positions that have withdrawable amounts > 0
+    const withdrawablePositions = vaultPositions.filter(
+      (position) => parseFloat(position.withdrawableAmount || "0") > 0
+    );
+
+    withdrawablePositions.forEach((position) => {
+      const tokenSymbol = position.tokenSymbol;
       if (!balancesBySymbol[tokenSymbol]) {
         balancesBySymbol[tokenSymbol] = {
           positions: [],
@@ -283,11 +282,19 @@ export const WithdrawModal = ({
         {/* Empty State */}
         {!loading && availableTokens.length === 0 && (
           <div className="text-center py-8">
-            <div className="text-4xl mb-3">😴</div>
-            <h3 className="text-white font-medium mb-2">No Funds Available</h3>
-            <p className="text-gray-400 text-sm">
+            <div className="text-4xl mb-3">�</div>
+            <h3 className="text-white font-medium mb-2">
+              No Withdrawable Funds
+            </h3>
+            <p className="text-gray-400 text-sm mb-1">
               You don't have any funds available for withdrawal at the moment.
             </p>
+            {vaultPositions.length > 0 && (
+              <p className="text-gray-500 text-xs">
+                Your deposits may still be locked or earning interest. Check
+                back later when the lock period expires.
+              </p>
+            )}
           </div>
         )}
 
@@ -311,9 +318,7 @@ export const WithdrawModal = ({
                 {Object.entries(
                   selectedPositions.reduce(
                     (acc, position) => {
-                      const tokenSymbol =
-                        tokenInfos[position.tokenAddress]?.symbol ||
-                        position.tokenAddress;
+                      const tokenSymbol = position.tokenSymbol;
                       if (!acc[tokenSymbol]) {
                         acc[tokenSymbol] = { count: 0, amount: 0 };
                       }
