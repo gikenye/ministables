@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSendTransaction } from "thirdweb/react";
 import {
   Dialog,
   DialogContent,
@@ -384,10 +383,10 @@ export function FundsWithdrawalModal({
                   </Button>
                   <Button
                     onClick={handleWithdraw}
-                    disabled={loading || isWithdrawing || isTransactionPending}
+                    disabled={loading || isWithdrawing}
                     className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12"
                   >
-                    {loading || isWithdrawing || isTransactionPending
+                    {loading || isWithdrawing
                       ? "Processing..."
                       : "Confirm Withdrawal"}
                   </Button>

@@ -50,7 +50,7 @@ export function ConnectWallet({ className }: { className?: string }) {
         showThirdwebBranding: false,
         size: "compact",
         title: "Minilend",
-        titleIcon: "./minilend-pwa.png",
+        titleIcon: "/minilend-pwa.png",
       }}
       theme={darkTheme({
         colors: {
