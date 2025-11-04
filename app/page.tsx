@@ -40,6 +40,7 @@ import {
   Trophy,
   Banknote,
   Mail,
+  Check,
   type LucideIcon,
 } from "lucide-react";
 
@@ -135,7 +136,7 @@ const vaultABI = [
 import { useChain } from "@/components/ChainProvider";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
-import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
+import { WithdrawModal } from "@/components/WithdrawModal";
 import { ChainDebug } from "@/components/ChainDebug";
 import {
   getTransactionUrl,
@@ -2328,7 +2329,7 @@ export default function AppPage() {
                 <h1 className="text-xl lg:text-2xl font-bold text-cyan-400">
                   {activeTab === "goals" && "Goals"}
                   {activeTab === "groups" && "Groups"}
-                  {activeTab === "leaderboard" && "LeaderBoard"}
+                  {activeTab === "leaderboard" && "Leaderboard"}
                   {activeTab === "profile" && "Profile"}
                 </h1>
                 <p className="text-sm lg:text-base text-gray-400">
@@ -2524,7 +2525,7 @@ export default function AppPage() {
               <div className="text-center py-20">
                 <BarChart3 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-white mb-2">
-                  LeaderBoard coming soon
+                  Leaderboard coming soon
                 </h3>
                 <p className="text-gray-400">
                   See how you rank among other savers
@@ -2706,7 +2707,7 @@ export default function AppPage() {
         />
 
         {/* Funds Withdrawal Modal */}
-        <FundsWithdrawalModal
+        <WithdrawModal
           isOpen={withdrawalModalOpen}
           onClose={() => setWithdrawalModalOpen(false)}
           onWithdraw={handleVaultWithdrawal}

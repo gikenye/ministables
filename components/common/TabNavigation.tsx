@@ -29,20 +29,35 @@ export const TabNavigation = ({
         bg-gray-800/20 backdrop-blur-sm border-t border-gray-700/30
       "
     >
-      <div className="flex items-center justify-between px-3 py-1 relative">
-        {/* Render tabs with center action in the middle */}
+      <div className="flex items-center justify-between px-4 py-1.5 relative">
+        {/* Render each tab individually so justify-between spreads them properly */}
         {tabs.map((tab, index) => {
           const IconComponent = tab.icon;
 
-          // Insert center action after the first 2 tabs
-          if (index === 2 && centerAction) {
+          // Add center button after the second tab (index 1)
+          if (index === 1 && centerAction) {
             return (
               <React.Fragment key={`${tab.id}-with-center`}>
-                {/* Center Action Button */}
-                <div className="absolute left-1/2 transform -translate-x-1/2 -top-4">
+                {/* Current tab */}
+                <button
+                  onClick={() => onTabChange(tab.id)}
+                  className={`flex flex-col items-center space-y-0.5 px-1 py-1.5 transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? "bg-cyan-400/15 text-cyan-400 rounded-lg"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <IconComponent className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-medium">{tab.label}</span>
+                </button>
+
+                {/* Center Action Button - elevated and floating */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 -top-6">
                   <button
                     onClick={centerAction.onClick}
-                    className="w-12 h-12 bg-cyan-400 hover:bg-cyan-500 text-black rounded-full text-xs font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-black flex items-center justify-center"
+                    className="w-16 h-16 bg-cyan-400 hover:bg-cyan-500 text-black rounded-full text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-black flex items-center justify-center"
                   >
                     {centerAction.icon ? (
                       <span className="text-base">{centerAction.icon}</span>
@@ -51,19 +66,6 @@ export const TabNavigation = ({
                     )}
                   </button>
                 </div>
-
-                {/* Current tab */}
-                <button
-                  onClick={() => onTabChange(tab.id)}
-                  className={`flex flex-col items-center space-y-0.5 px-1.5 py-1 min-w-[40px] transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? "bg-cyan-400/15 text-cyan-400"
-                      : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  <IconComponent className="w-4 h-4" />
-                  <span className="text-xs">{tab.label}</span>
-                </button>
               </React.Fragment>
             );
           }
@@ -72,14 +74,14 @@ export const TabNavigation = ({
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center space-y-0.5 px-1.5 py-1 min-w-[40px] rounded-lg transition-all duration-200 ${
+              className={`flex flex-col items-center space-y-0.5 px-1 py-1.5 transition-all duration-200 ${
                 activeTab === tab.id
-                  ? "bg-cyan-400/15 text-cyan-400"
+                  ? "bg-cyan-400/15 text-cyan-400 rounded-lg"
                   : "text-gray-400 hover:text-gray-200"
               }`}
             >
-              <div className="w-4 h-4 flex items-center justify-center">
-                <IconComponent className="w-4 h-4" />
+              <div className="w-5 h-5 flex items-center justify-center">
+                <IconComponent className="w-5 h-5" />
               </div>
               <span className="text-xs font-medium">{tab.label}</span>
             </button>

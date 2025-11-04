@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Try calling the external verification service with the requestor address first
-    // From blockchain data, requestor is usually 0x4ea3a08de3d5Cc74A5B2E20BA813Af1ab3765956
-    const requestorAddress = "0x4ea3a08de3d5Cc74A5B2E20BA813Af1ab3765956";
+    // From blockchain data, requestor is usually 0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956
+    const requestorAddress = "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
 
     let verificationResponse = await fetch(
       `https://selfda1.vercel.app/api/verification?userAddress=${requestorAddress}`
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // First check database
+    // ONLY check database - do not fallback to blockchain
     const collection = await getCollection("selfVerifications");
     const existingVerification = await collection.findOne({
       walletAddress: userAddress,
@@ -111,34 +111,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Try calling the external verification service with the requestor address first
-    // From blockchain data, requestor is usually 0x4ea3a08de3d5Cc74A5B2E20BA813Af1ab3765956
-    const requestorAddress = "0x4ea3a08de3d5Cc74A5B2E20BA813Af1ab3765956";
-
-    let verificationResponse = await fetch(
-      `https://selfda1.vercel.app/api/verification?userAddress=${requestorAddress}`
+    // If no verification found in database, return 404
+    // Do NOT fallback to blockchain service
+    return NextResponse.json(
+      { error: "No verification found" },
+      { status: 404 }
     );
-
-    // If that doesn't work, try with the wallet address
-    if (!verificationResponse.ok) {
-      verificationResponse = await fetch(
-        `https://selfda1.vercel.app/api/verification?userAddress=${userAddress}`
-      );
-    }
-
-    if (!verificationResponse.ok) {
-      return NextResponse.json(
-        { error: "No verification found" },
-        { status: 404 }
-      );
-    }
-
-    const verificationData = await verificationResponse.json();
-
-    return NextResponse.json({
-      nationality: verificationData.nationality,
-      olderThan: verificationData.olderThan,
-    });
   } catch (error) {
     console.error("Error fetching verification data:", error);
     return NextResponse.json(

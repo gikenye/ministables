@@ -1,21 +1,25 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { Check, AlertCircle, Loader2 } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ArrowLeft, AlertCircle } from "lucide-react";
-import { useChain } from "@/components/ChainProvider";
-import { VaultPosition } from "@/lib/services/vaultService";
+  BottomSheet,
+  ModalHeader,
+  InfoCard,
+  ActionButton,
+} from "@/components/ui";
 
-interface FundsWithdrawalModalProps {
+interface VaultPosition {
+  depositId: number;
+  tokenAddress: string;
+  amount: string;
+  withdrawableAmount: string;
+  lockTier: number;
+  depositTime: string;
+  unlockTime?: string;
+}
+
+interface WithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
   onWithdraw: (tokenSymbol: string, depositIds: number[]) => Promise<void>;
@@ -27,374 +31,369 @@ interface FundsWithdrawalModalProps {
   loading: boolean;
 }
 
-export function FundsWithdrawalModal({
+export const WithdrawModal = ({
   isOpen,
   onClose,
   onWithdraw,
   vaultPositions,
   tokenInfos,
   loading,
-}: FundsWithdrawalModalProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [selectedToken, setSelectedToken] = useState<string>("");
-  const [selectedDepositIds, setSelectedDepositIds] = useState<number[]>([]);
-
+}: WithdrawModalProps) => {
+  const [selectedPositions, setSelectedPositions] = useState<VaultPosition[]>(
+    []
+  );
   const [error, setError] = useState<string | null>(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setCurrentStep(1);
-      setSelectedToken("");
-      setSelectedDepositIds([]);
+      setSelectedPositions([]);
       setError(null);
     }
   }, [isOpen]);
 
+  const handlePositionToggle = (position: VaultPosition) => {
+    setSelectedPositions((prev) => {
+      const isSelected = prev.some((p) => p.depositId === position.depositId);
+      if (isSelected) {
+        return prev.filter((p) => p.depositId !== position.depositId);
+      } else {
+        return [...prev, position];
+      }
+    });
+  };
+
   const handleWithdraw = async () => {
-    if (!selectedToken || selectedDepositIds.length === 0) return;
+    if (selectedPositions.length === 0) return;
 
     setError(null);
     setIsWithdrawing(true);
 
     try {
-      await onWithdraw(selectedToken, selectedDepositIds);
-      setSelectedToken("");
-      setSelectedDepositIds([]);
+      // Group selected positions by token symbol
+      const positionsByToken = selectedPositions.reduce(
+        (acc, position) => {
+          const tokenSymbol =
+            tokenInfos[position.tokenAddress]?.symbol || position.tokenAddress;
+          if (!acc[tokenSymbol]) {
+            acc[tokenSymbol] = [];
+          }
+          acc[tokenSymbol].push(position.depositId);
+          return acc;
+        },
+        {} as Record<string, number[]>
+      );
+
+      // Process withdrawals for each token
+      for (const [tokenSymbol, depositIds] of Object.entries(
+        positionsByToken
+      )) {
+        await onWithdraw(tokenSymbol, depositIds);
+      }
+
+      setSelectedPositions([]);
       onClose();
-    } catch (err: any) {
-      console.error("Withdrawal error:", err);
-      setError(err.message || "Transaction failed. Please try again.");
+    } catch (error: any) {
+      setError(error.message || "Withdrawal failed. Please try again.");
     } finally {
       setIsWithdrawing(false);
     }
   };
 
-  const isLocked = (timestamp: number) => {
-    return timestamp > 0 && timestamp > Date.now() / 1000;
+  const getTokenBalancesBySymbol = () => {
+    const balancesBySymbol: Record<
+      string,
+      {
+        positions: VaultPosition[];
+        totalBalance: number;
+        symbol: string;
+      }
+    > = {};
+
+    vaultPositions.forEach((position) => {
+      const tokenSymbol =
+        tokenInfos[position.tokenAddress]?.symbol || position.tokenAddress;
+      if (!balancesBySymbol[tokenSymbol]) {
+        balancesBySymbol[tokenSymbol] = {
+          positions: [],
+          totalBalance: 0,
+          symbol: tokenSymbol,
+        };
+      }
+      balancesBySymbol[tokenSymbol].positions.push(position);
+      balancesBySymbol[tokenSymbol].totalBalance += parseFloat(
+        position.withdrawableAmount || "0"
+      );
+    });
+
+    return balancesBySymbol;
   };
 
-  const formatDate = (timestamp: number) => {
-    if (timestamp === 0) return "No lock";
-    return new Date(timestamp * 1000).toLocaleDateString();
+  const formatBalance = (amount: string | number) => {
+    const num = typeof amount === "string" ? parseFloat(amount) : amount;
+    // Always show 4 decimal places for better precision with tiny deposits
+    return num.toFixed(4);
   };
 
-  const availablePositions = useMemo(
-    () => vaultPositions.filter((pos) => pos.deposits.length > 0),
-    [vaultPositions]
+  const totalSelectedAmount = selectedPositions.reduce(
+    (sum, position) => sum + parseFloat(position.withdrawableAmount || "0"),
+    0
   );
 
-  const selectedPosition = useMemo(
-    () => vaultPositions.find((pos) => pos.tokenSymbol === selectedToken),
-    [vaultPositions, selectedToken]
+  const tokenBalances = getTokenBalancesBySymbol();
+  const availableTokens = Object.keys(tokenBalances).filter(
+    (symbol) => tokenBalances[symbol].positions.length > 0
   );
-
-  const goToNextStep = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-      setError(null);
-    }
-  };
-
-  const goToPreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-      setError(null);
-    }
-  };
-
-  const canProceedToStep2 =
-    selectedToken &&
-    selectedPosition &&
-    selectedPosition.deposits.some((d) => d.canWithdraw);
-  const canProceedToStep3 = canProceedToStep2 && selectedDepositIds.length > 0;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-sm mx-auto bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 shadow-2xl">
-        <DialogHeader className="space-y-3">
-          <div className="flex items-center justify-between">
-            {currentStep > 1 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToPreviousStep}
-                className="text-[#a2c398] hover:text-white hover:bg-[#21301c] p-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            )}
-            <div className="flex-1 text-center">
-              <DialogTitle className="text-white text-xl font-semibold">
-                Cash Out
-              </DialogTitle>
-              <DialogDescription className="text-[#a2c398] text-sm">
-                {currentStep === 1 && "Choose what to withdraw"}
-                {currentStep === 2 && "Enter withdrawal amount"}
-                {currentStep === 3 && "Confirm your withdrawal"}
-              </DialogDescription>
-            </div>
-            <div className="w-8" /> {/* Spacer for centering */}
-          </div>
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
+      <ModalHeader title="Withdraw Funds" onClose={onClose} />
 
-          <div className="flex justify-center space-x-2">
-            {[1, 2, 3].map((step) => (
-              <div
-                key={step}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  step <= currentStep ? "bg-[#54d22d]" : "bg-[#426039]"
-                }`}
-              />
-            ))}
-          </div>
-        </DialogHeader>
+      <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3 overflow-y-auto">
+        {/* Header */}
+        <div className="text-center py-0.5">
+          <div className="text-2xl mb-1.5">💰</div>
+          <h3 className="text-base font-semibold text-white mb-0.5">
+            Choose Positions to Withdraw
+          </h3>
+          <p className="text-xs text-gray-400">
+            Select multiple positions from any token to withdraw
+          </p>
+        </div>
 
+        {/* Error Display */}
         {error && (
-          <div className="bg-red-900/20 border border-red-500/30 text-red-400 p-3 rounded-xl text-sm">
-            <div className="flex items-center">
-              <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-              {error}
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
+              <p className="text-red-400 text-xs">{error}</p>
             </div>
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* Step 1: Select Token */}
-          {currentStep === 1 && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="text-white text-lg font-medium mb-2">
-                  Select Asset
-                </h3>
-                <p className="text-[#a2c398] text-sm">
-                  Choose which asset you want to withdraw
-                </p>
-              </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-3"></div>
+            <p className="text-gray-400 text-sm">Loading your positions...</p>
+          </div>
+        )}
 
-              {availablePositions.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-[#a2c398] text-sm">
-                    No funds available to withdraw
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {availablePositions.map((pos) => {
-                    const withdrawableCount = pos.deposits.filter(
-                      (d) => d.canWithdraw
-                    ).length;
-                    const totalValue =
-                      Number(BigInt(pos.totalCurrentValue)) /
-                      Number(BigInt(10 ** pos.decimals));
-                    const tokenInfo = tokenInfos[pos.tokenAddress];
-                    const iconUrl = tokenInfo?.icon;
+        {/* Available Tokens and Positions */}
+        {!loading && availableTokens.length > 0 && (
+          <div className="space-y-3">
+            {availableTokens.map((tokenSymbol) => {
+              const tokenData = tokenBalances[tokenSymbol];
 
-                    return (
-                      <button
-                        key={pos.tokenSymbol}
-                        onClick={() => {
-                          setSelectedToken(pos.tokenSymbol);
-                          if (withdrawableCount > 0) {
-                            goToNextStep();
-                          }
-                        }}
-                        className={`w-full p-4 rounded-xl border transition-all ${
-                          selectedToken === pos.tokenSymbol
-                            ? "border-[#54d22d] bg-[#54d22d]/10"
-                            : withdrawableCount === 0
-                              ? "border-[#426039] bg-[#21301c]/50"
-                              : "border-[#426039] bg-[#21301c] hover:border-[#54d22d] hover:bg-[#2e4328]"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            {iconUrl ? (
-                              <img
-                                src={iconUrl}
-                                alt={pos.tokenSymbol}
-                                className="w-8 h-8 mr-3 rounded-full"
-                              />
-                            ) : (
-                              <span className="text-2xl mr-3">💱</span>
-                            )}
-                            <div className="text-left">
-                              <div className="text-white font-medium">
-                                {pos.tokenSymbol}
-                              </div>
-                              <div className="text-[#a2c398] text-sm">
-                                {withdrawableCount} available
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-white font-semibold">
-                              {totalValue.toFixed(6)}
-                            </div>
-                            <div className="text-xs text-[#a2c398]">
-                              {pos.deposits.length} deposits
-                            </div>
-                          </div>
+              return (
+                <div key={tokenSymbol} className="space-y-2">
+                  {/* Token Header */}
+                  <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-6 h-6 bg-cyan-400/20 rounded-full flex items-center justify-center">
+                        <span className="text-cyan-400 text-xs font-bold">
+                          {tokenSymbol.charAt(0)}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-white">
+                          {tokenSymbol}
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 2: Select Deposits */}
-          {currentStep === 2 && selectedPosition && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="text-white text-lg font-medium mb-2">
-                  Select Deposits
-                </h3>
-                <p className="text-[#a2c398] text-sm">
-                  Choose which deposits to withdraw
-                </p>
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {selectedPosition.deposits.map((deposit, idx) => {
-                  const value =
-                    Number(BigInt(deposit.currentValue)) /
-                    Number(BigInt(10 ** selectedPosition.decimals));
-                  const isSelected = selectedDepositIds.includes(idx);
-
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        if (!deposit.canWithdraw) return;
-                        setSelectedDepositIds((prev) =>
-                          prev.includes(idx)
-                            ? prev.filter((id) => id !== idx)
-                            : [...prev, idx]
-                        );
-                      }}
-                      disabled={!deposit.canWithdraw}
-                      className={`w-full p-3 rounded-xl border transition-all ${
-                        isSelected
-                          ? "border-[#54d22d] bg-[#54d22d]/10"
-                          : !deposit.canWithdraw
-                            ? "border-[#426039] bg-[#21301c]/30 opacity-50"
-                            : "border-[#426039] bg-[#21301c] hover:border-[#54d22d]"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-left">
-                          <div className="text-white text-sm">
-                            Deposit #{idx}
-                          </div>
-                          <div className="text-[#a2c398] text-xs">
-                            {deposit.canWithdraw
-                              ? "Available"
-                              : `Locked until ${formatDate(deposit.lockEnd)}`}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-white font-semibold">
-                            {value.toFixed(6)}
-                          </div>
-                          <div className="text-[#a2c398] text-xs">
-                            {selectedPosition.tokenSymbol}
-                          </div>
+                        <div className="text-xs text-gray-400">
+                          {tokenData.positions.length} position
+                          {tokenData.positions.length !== 1 ? "s" : ""}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button
-                  onClick={goToPreviousStep}
-                  variant="outline"
-                  className="flex-1 bg-transparent border-[#426039] text-[#a2c398] hover:bg-[#21301c] hover:text-white h-12"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={goToNextStep}
-                  disabled={!canProceedToStep3}
-                  className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Continue
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Confirm Withdrawal */}
-          {currentStep === 3 &&
-            selectedPosition &&
-            selectedDepositIds.length > 0 && (
-              <div className="space-y-4">
-                <div className="text-center">
-                  <h3 className="text-white text-lg font-medium mb-2">
-                    Confirm Withdrawal
-                  </h3>
-                  <p className="text-[#a2c398] text-sm">
-                    Review your withdrawal details
-                  </p>
-                </div>
-
-                <div className="bg-[#21301c] rounded-xl p-4 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[#a2c398]">Asset</span>
-                    <span className="text-white font-medium">
-                      {selectedPosition.tokenSymbol}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[#a2c398]">Deposits</span>
-                    <span className="text-white font-semibold">
-                      {selectedDepositIds.length}
-                    </span>
-                  </div>
-                  <div className="border-t border-[#426039] pt-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[#a2c398]">Total Amount</span>
-                      <span className="text-[#54d22d] font-bold text-lg">
-                        {selectedDepositIds
-                          .reduce((sum, id) => {
-                            const deposit = selectedPosition.deposits[id];
-                            return (
-                              sum +
-                              Number(BigInt(deposit.currentValue)) /
-                                Number(BigInt(10 ** selectedPosition.decimals))
-                            );
-                          }, 0)
-                          .toFixed(6)}{" "}
-                        {selectedPosition.tokenSymbol}
-                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-cyan-400">
+                        {formatBalance(tokenData.totalBalance)}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Total Available
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    onClick={goToPreviousStep}
-                    variant="outline"
-                    className="flex-1 bg-transparent border-[#426039] text-[#a2c398] hover:bg-[#21301c] hover:text-white h-12"
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    onClick={handleWithdraw}
-                    disabled={loading || isWithdrawing}
-                    className="flex-1 bg-[#54d22d] hover:bg-[#54d22d]/90 text-[#162013] font-semibold h-12"
-                  >
-                    {loading || isWithdrawing
-                      ? "Processing..."
-                      : "Confirm Withdrawal"}
-                  </Button>
+                  {/* Token Positions */}
+                  <div className="space-y-1.5 pl-2">
+                    {tokenData.positions.map((position) => {
+                      const isSelected = selectedPositions.some(
+                        (p) => p.depositId === position.depositId
+                      );
+                      const withdrawableAmount = parseFloat(
+                        position.withdrawableAmount || "0"
+                      );
+
+                      return (
+                        <InfoCard
+                          key={position.depositId}
+                          variant="action"
+                          className={`cursor-pointer transition-all duration-200 ${
+                            isSelected
+                              ? "border-cyan-400 bg-cyan-400/5"
+                              : "hover:border-cyan-400"
+                          }`}
+                        >
+                          <button
+                            onClick={() => handlePositionToggle(position)}
+                            className="w-full flex items-center justify-between p-1"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className={`w-4 h-4 rounded border-2 transition-all flex items-center justify-center ${
+                                  isSelected
+                                    ? "bg-cyan-400 border-cyan-400"
+                                    : "border-gray-400"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <Check className="w-3 h-3 text-white" />
+                                )}
+                              </div>
+                              <div className="text-left">
+                                <div className="text-xs font-medium text-white">
+                                  Position #{position.depositId}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  Deposited: {formatBalance(position.amount)}{" "}
+                                  {tokenSymbol}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs font-semibold text-cyan-400">
+                                {formatBalance(withdrawableAmount)}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                Withdrawable
+                              </div>
+                            </div>
+                          </button>
+                        </InfoCard>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && availableTokens.length === 0 && (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-3">😴</div>
+            <h3 className="text-white font-medium mb-2">No Funds Available</h3>
+            <p className="text-gray-400 text-sm">
+              You don't have any funds available for withdrawal at the moment.
+            </p>
+          </div>
+        )}
+
+        {/* Selection Summary */}
+        {selectedPositions.length > 0 && (
+          <InfoCard variant="stats">
+            <div className="space-y-2">
+              <div className="text-center">
+                <div className="text-xs text-gray-400 mb-1">Total Selected</div>
+                <div className="text-lg font-bold text-cyan-400">
+                  {formatBalance(totalSelectedAmount)}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {selectedPositions.length} position
+                  {selectedPositions.length !== 1 ? "s" : ""} selected
                 </div>
               </div>
+
+              {/* Breakdown by token */}
+              <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-700/30">
+                {Object.entries(
+                  selectedPositions.reduce(
+                    (acc, position) => {
+                      const tokenSymbol =
+                        tokenInfos[position.tokenAddress]?.symbol ||
+                        position.tokenAddress;
+                      if (!acc[tokenSymbol]) {
+                        acc[tokenSymbol] = { count: 0, amount: 0 };
+                      }
+                      acc[tokenSymbol].count += 1;
+                      acc[tokenSymbol].amount += parseFloat(
+                        position.withdrawableAmount || "0"
+                      );
+                      return acc;
+                    },
+                    {} as Record<string, { count: number; amount: number }>
+                  )
+                ).map(([symbol, data]) => (
+                  <div
+                    key={symbol}
+                    className="flex justify-between items-center"
+                  >
+                    <div className="text-xs text-gray-400">
+                      {data.count} {symbol} position
+                      {data.count !== 1 ? "s" : ""}
+                    </div>
+                    <div className="text-xs font-semibold text-white">
+                      {formatBalance(data.amount)} {symbol}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </InfoCard>
+        )}
+
+        {/* Action Buttons */}
+        <div className="space-y-2">
+          <ActionButton
+            onClick={handleWithdraw}
+            variant="primary"
+            size="md"
+            className="w-full"
+            disabled={selectedPositions.length === 0 || isWithdrawing}
+          >
+            {isWithdrawing ? (
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing Withdrawal...
+              </div>
+            ) : selectedPositions.length === 0 ? (
+              "Select positions to withdraw"
+            ) : (
+              `Withdraw ${formatBalance(totalSelectedAmount)} from ${selectedPositions.length} position${selectedPositions.length !== 1 ? "s" : ""}`
             )}
+          </ActionButton>
+
+          {selectedPositions.length > 0 && (
+            <ActionButton
+              onClick={() => setSelectedPositions([])}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              Clear Selection
+            </ActionButton>
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Important Notice */}
+        <InfoCard>
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 text-yellow-400 flex-shrink-0" />
+            <div className="text-xs text-gray-300">
+              <div className="font-medium text-yellow-400 mb-1">Important</div>
+              <p>
+                Withdrawals cannot be undone. Funds will be transferred to your
+                connected wallet.
+              </p>
+            </div>
+          </div>
+        </InfoCard>
+
+        {/* Bottom spacing for safe area */}
+        <div className="h-2"></div>
+      </div>
+    </BottomSheet>
   );
-}
+};

@@ -173,7 +173,7 @@ export const NewProfile = ({
           <div className="bg-gray-800/20 backdrop-blur-sm rounded-xl border border-gray-700/30 overflow-hidden">
             {/* Join Telegram */}
             <a
-              href="https://t.me/your_telegram_group" // Replace with your actual Telegram link
+              href="https://t.me/minilendxyz" 
               target="_blank"
               rel="noopener noreferrer"
               className="w-full px-4 py-4 flex items-center justify-between text-left hover:bg-gray-700/30 transition-colors border-b border-gray-700/30 block"
