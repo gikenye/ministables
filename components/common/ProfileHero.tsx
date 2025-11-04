@@ -318,28 +318,20 @@ export const ProfileHero = ({
   const coverPattern = generateCoverPattern(walletAddress);
 
   return (
-    <div className={`relative ${className}`}>
-      {/* Smaller Cover Image */}
-      <div
-        className="h-16 w-full rounded-t-2xl"
-        style={{ background: coverPattern }}
-      />
-
-      {/* Profile Content */}
-      <div className="relative bg-gray-900/70 backdrop-blur-md rounded-b-2xl px-4 pt-6 pb-4 border border-gray-700/30">
-        {/* Smaller Avatar */}
-        <div className="absolute -top-6 left-4">
-          <div
-            className="w-12 h-12 rounded-full border-2 border-gray-900 flex items-center justify-center text-white text-sm font-bold shadow-lg"
-            style={{ backgroundColor: avatarColor }}
-          >
-            {displayUsername.slice(0, 2).toUpperCase()}
-          </div>
+    <div className={`px-4 pt-4 ${className}`}>
+      {/* Simplified Profile Layout */}
+      <div className="flex items-center gap-3">
+        {/* Avatar */}
+        <div
+          className="w-14 h-14 rounded-full border-2 border-gray-700/30 flex items-center justify-center text-white text-base font-bold shadow-lg"
+          style={{ backgroundColor: avatarColor }}
+        >
+          {displayUsername.slice(0, 2).toUpperCase()}
         </div>
 
         {/* User Info */}
-        <div className="pt-2">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="flex-1">
+          <div className="flex items-center gap-1.5 mb-1">
             <h1 className="text-lg font-bold text-white">{displayUsername}</h1>
             {countryCode && (
               <span className="text-base" title={`From ${countryCode}`}>
@@ -348,7 +340,7 @@ export const ProfileHero = ({
             )}
             {isVerified && (
               <div className="flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-blue-400" />
+                <CheckCircle className="w-3.5 h-3.5 text-blue-400" />
                 <span className="text-xs text-blue-400 font-medium">
                   Verified
                 </span>

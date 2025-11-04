@@ -11,50 +11,55 @@ export const AccountSettingsCard = () => {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg mx-4 mt-4 overflow-hidden">
+    <div className="bg-gray-800/20 backdrop-blur-sm rounded-lg mx-4 mt-4 overflow-hidden border border-gray-700/30">
       {/* Section Header */}
-      <div className="px-4 py-3 border-b border-gray-700 bg-gray-900">
+      <div className="px-4 py-3 border-b border-gray-700/30 bg-gray-900/20 backdrop-blur-sm">
         <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
           Account
         </h3>
       </div>
 
       {/* Connect/Disconnect Wallet */}
-      <div className="px-4 py-3 border-b border-gray-700">
+      <div className="px-3 py-2.5 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Wallet className="w-5 h-5 text-gray-400" />
-            <span className="text-white">Manage wallet</span>
+          <div className="flex items-center space-x-2.5">
+            <Wallet className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-white">Manage wallet</span>
           </div>
           <ConnectWallet />
         </div>
       </div>
 
       {/* Verify Identity */}
-      <Link href="/self" className="block px-4 py-3 border-b border-gray-700 hover:bg-gray-750 transition-colors">
+      <Link
+        href="/self"
+        className="block px-3 py-2.5 border-b border-gray-700 hover:bg-gray-750 transition-colors"
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Shield className="w-5 h-5 text-cyan-400" />
+          <div className="flex items-center space-x-2.5">
+            <Shield className="w-4 h-4 text-cyan-400" />
             <div>
-              <span className="text-white block">Verify Identity</span>
-              <span className="text-xs text-gray-400">Complete KYC verification</span>
+              <span className="text-sm text-white block">Verify Identity</span>
+              <span className="text-xs text-gray-400">
+                Complete KYC verification
+              </span>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </div>
       </Link>
 
       {/* Log out */}
       <button
         onClick={handleLogout}
-        className="w-full px-4 py-3 hover:bg-gray-750 transition-colors text-red-400 hover:text-red-300"
+        className="w-full px-3 py-2.5 hover:bg-gray-750 transition-colors text-red-400 hover:text-red-300"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <LogOut className="w-5 h-5" />
-            <span>Log out</span>
+          <div className="flex items-center space-x-2.5">
+            <LogOut className="w-4 h-4" />
+            <span className="text-sm">Log out</span>
           </div>
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-4 h-4" />
         </div>
       </button>
     </div>

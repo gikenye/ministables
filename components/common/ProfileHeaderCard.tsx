@@ -302,36 +302,36 @@ export const ProfileHeaderCard = ({
   const avatarColor = generateAvatar(walletAddress);
 
   return (
-    <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 rounded-2xl p-6 mx-4 mt-4 relative overflow-hidden">
+    <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 rounded-2xl p-4 mx-4 mt-3 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 to-transparent"></div>
 
       <div className="relative flex flex-col items-center">
         {/* Avatar */}
         <div
-          className="w-20 h-20 rounded-full mb-4 flex items-center justify-center text-white text-2xl font-bold shadow-lg"
+          className="w-16 h-16 rounded-full mb-3 flex items-center justify-center text-white text-lg font-bold shadow-lg"
           style={{ backgroundColor: avatarColor }}
         >
           {username.slice(0, 2).toUpperCase()}
         </div>
 
         {/* Username and Country */}
-        <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-2xl font-bold text-white">{username}</h1>
+        <div className="flex items-center gap-1.5 mb-2">
+          <h1 className="text-lg font-bold text-white">{username}</h1>
           {countryCode && (
-            <span className="text-2xl" title={`From ${countryCode}`}>
+            <span className="text-lg" title={`From ${countryCode}`}>
               {countryToEmoji(countryCode)}
             </span>
           )}
         </div>
 
         {/* Wallet Address */}
-        <p className="text-sm text-purple-200 mb-3 font-mono">
+        <p className="text-xs text-purple-200 mb-2 font-mono">
           {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
         </p>
 
         {/* Member Since */}
-        <p className="text-sm text-purple-300">Member since {memberSince}</p>
+        <p className="text-xs text-purple-300">Member since {memberSince}</p>
       </div>
     </div>
   );

@@ -48,28 +48,28 @@ export const AmountInputModal = ({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[95vh]">
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[85vh]">
       <ModalHeader title={title} onClose={onClose} />
 
-      <div className="bg-black p-4 space-y-6">
+      <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3 overflow-y-auto pb-6">
         {/* Amount Display */}
-        <div className="text-center py-6">
-          <div className="text-6xl mb-6">{icon}</div>
-          <AmountDisplay amount={amount} currency={currency} size="xl" />
+        <div className="text-center py-3">
+          <div className="text-3xl mb-3">{icon}</div>
+          <AmountDisplay amount={amount} currency={currency} size="lg" />
         </div>
 
         {/* Continue Button */}
         <ActionButton
           onClick={handleContinue}
           variant="primary"
-          size="lg"
+          size="md"
           className="w-full"
         >
           CONTINUE
         </ActionButton>
 
         {/* Number Keypad */}
-        <NumberKeypad onNumberPress={handleNumberPress} className="pb-6" />
+        <NumberKeypad onNumberPress={handleNumberPress} className="pb-3" />
       </div>
     </BottomSheet>
   );

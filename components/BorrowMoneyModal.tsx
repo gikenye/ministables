@@ -1,62 +1,81 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ArrowLeft, AlertCircle, CreditCard, CheckCircle2, RefreshCw } from "lucide-react"
-import { formatAmount } from "@/lib/utils"
-import { useToast } from "@/hooks/use-toast"
-import { parseUnits } from "viem"
-import { OnrampDepositModal } from "./OnrampDepositModal"
-import { onrampService } from "@/lib/services/onrampService"
-import { generateDivviReferralTag, reportTransactionToDivvi } from "@/lib/services/divviService"
+import { useState, useEffect, useMemo } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  ArrowLeft,
+  AlertCircle,
+  CreditCard,
+  CheckCircle2,
+  RefreshCw,
+} from "lucide-react";
+import { formatAmount } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { parseUnits } from "viem";
+import { OnrampDepositModal } from "./OnrampDepositModal";
+import { onrampService } from "@/lib/services/onrampService";
+import {
+  generateDivviReferralTag,
+  reportTransactionToDivvi,
+} from "@/lib/services/divviService";
 
-import { 
-  getContract, 
-  prepareContractCall, 
+import {
+  getContract,
+  prepareContractCall,
   sendTransaction,
-  waitForReceipt
-} from "thirdweb"
-import { client } from "@/lib/thirdweb/client"
+  waitForReceipt,
+} from "thirdweb";
+import { client } from "@/lib/thirdweb/client";
 
-import { calculateRequiredCollateral } from "@/lib/oracles/priceService"
-import { useRouter } from "next/navigation"
+import { calculateRequiredCollateral } from "@/lib/oracles/priceService";
+import { useRouter } from "next/navigation";
 
-import { 
-  useActiveAccount, 
-  useReadContract, 
-  useWalletBalance 
-} from "thirdweb/react"
-import { useChain } from "@/components/ChainProvider"
+import {
+  useActiveAccount,
+  useReadContract,
+  useWalletBalance,
+} from "thirdweb/react";
+import { useChain } from "@/components/ChainProvider";
 
 // Helper to safely log thirdweb responses (avoid throwing on circular objects)
 const logThirdweb = (label: string, obj: any) => {
   try {
     // Primary dump
-    console.debug(`[thirdweb:${label}]`, obj)
+    console.debug(`[thirdweb:${label}]`, obj);
 
     // Try to stringify for easier server-side capture; ignore stringify errors
     try {
-      const json = JSON.stringify(obj, Object.getOwnPropertyNames(obj))
-      console.debug(`[thirdweb:${label}:json]`, json)
+      const json = JSON.stringify(obj, Object.getOwnPropertyNames(obj));
+      console.debug(`[thirdweb:${label}:json]`, json);
     } catch (e) {
       // ignore
     }
   } catch (e) {
     // ignore
   }
-}
+};
 
 interface BorrowMoneyModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onBorrow: (token: string, amount: string, collateralToken: string) => Promise<void>
-  onDepositCollateral: (token: string, amount: string) => Promise<void>
-  userBalances: Record<string, string>
-  userCollaterals: Record<string, string>
-  loading: boolean
-  requiresAuth?: boolean
+  isOpen: boolean;
+  onClose: () => void;
+  onBorrow: (
+    token: string,
+    amount: string,
+    collateralToken: string
+  ) => Promise<void>;
+  onDepositCollateral: (token: string, amount: string) => Promise<void>;
+  userBalances: Record<string, string>;
+  userCollaterals: Record<string, string>;
+  loading: boolean;
+  requiresAuth?: boolean;
 }
 
 enum BorrowStep {
@@ -76,65 +95,79 @@ export function BorrowMoneyModal({
   loading,
   requiresAuth = false,
 }: BorrowMoneyModalProps) {
-  const { toast } = useToast()
-  const account = useActiveAccount()
-  const router = useRouter()
-  const { chain, tokens, tokenInfos } = useChain()
+  const { toast } = useToast();
+  const account = useActiveAccount();
+  const router = useRouter();
+  const { chain, tokens, tokenInfos } = useChain();
 
   // Valid collateral assets - only specific tokens per chain
   const SUPPORTED_COLLATERAL = useMemo(() => {
-    if (chain?.id === 42220) { // Celo
-      const allowedSymbols = ["USDC", "USDT", "CUSD"]
-      return Object.entries(tokenInfos || {}).filter(([, info]) => {
-        const s = (info.symbol || "").toUpperCase()
-        return allowedSymbols.includes(s)
-      }).map(([addr]) => addr)
-    } else if (chain?.id === 534352) { // Scroll
-      const allowedSymbols = ["USDC"]
-      return Object.entries(tokenInfos || {}).filter(([, info]) => {
-        const s = (info.symbol || "").toUpperCase()
-        return allowedSymbols.includes(s)
-      }).map(([addr]) => addr)
+    if (chain?.id === 42220) {
+      // Celo
+      const allowedSymbols = ["USDC", "USDT", "CUSD"];
+      return Object.entries(tokenInfos || {})
+        .filter(([, info]) => {
+          const s = (info.symbol || "").toUpperCase();
+          return allowedSymbols.includes(s);
+        })
+        .map(([addr]) => addr);
+    } else if (chain?.id === 534352) {
+      // Scroll
+      const allowedSymbols = ["USDC"];
+      return Object.entries(tokenInfos || {})
+        .filter(([, info]) => {
+          const s = (info.symbol || "").toUpperCase();
+          return allowedSymbols.includes(s);
+        })
+        .map(([addr]) => addr);
     }
-    return []
-  }, [tokenInfos, chain?.id])
+    return [];
+  }, [tokenInfos, chain?.id]);
 
   // Only cKES, bKES, and cNGN available for borrowing
   const SUPPORTED_STABLECOINS = useMemo(() => {
     // Filter tokens to only allow cKES, bKES, and cNGN
-    const allowedSymbols = ["CKES", "BKES", "CNGN"]
-    const filtered = Object.entries(tokenInfos || {}).filter(([, info]) => {
-      const s = (info.symbol || "").toUpperCase()
-      return allowedSymbols.includes(s)
-    }).map(([addr]) => addr)
+    const allowedSymbols = ["CKES", "BKES", "CNGN"];
+    const filtered = Object.entries(tokenInfos || {})
+      .filter(([, info]) => {
+        const s = (info.symbol || "").toUpperCase();
+        return allowedSymbols.includes(s);
+      })
+      .map(([addr]) => addr);
 
-    return filtered
-  }, [tokenInfos])
+    return filtered;
+  }, [tokenInfos]);
 
-  const [currentStep, setCurrentStep] = useState<BorrowStep>(BorrowStep.SELECT_TOKEN)
+  const [currentStep, setCurrentStep] = useState<BorrowStep>(
+    BorrowStep.SELECT_TOKEN
+  );
   const [form, setForm] = useState({
     token: "",
     collateralToken: "",
     amount: "",
-  })
+  });
 
-  const [requiredCollateral, setRequiredCollateral] = useState<string | null>(null)
-  const [exchangeRate, setExchangeRate] = useState<number | null>(null)
-  const [fetchingRate, setFetchingRate] = useState(false)
-  const [transactionStatus, setTransactionStatus] = useState<string | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [showOnrampModal, setShowOnrampModal] = useState(false)
+  const [requiredCollateral, setRequiredCollateral] = useState<string | null>(
+    null
+  );
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [fetchingRate, setFetchingRate] = useState(false);
+  const [transactionStatus, setTransactionStatus] = useState<string | null>(
+    null
+  );
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showOnrampModal, setShowOnrampModal] = useState(false);
 
   // Reset when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setCurrentStep(BorrowStep.SELECT_TOKEN)
-      setForm({ token: "", collateralToken: "", amount: "" })
-      setRequiredCollateral(null)
-      setExchangeRate(null)
-      setTransactionStatus(null)
+      setCurrentStep(BorrowStep.SELECT_TOKEN);
+      setForm({ token: "", collateralToken: "", amount: "" });
+      setRequiredCollateral(null);
+      setExchangeRate(null);
+      setTransactionStatus(null);
     }
-  }, [isOpen])
+  }, [isOpen]);
 
   // Reset modal-specific state when the selected chain changes to avoid
   // carrying over token addresses or selections from the previous chain.
@@ -142,75 +175,88 @@ export function BorrowMoneyModal({
     // Only reset if modal is open (user is interacting) to avoid surprising
     // behaviour when switching chains elsewhere in the app.
     if (isOpen) {
-      setCurrentStep(BorrowStep.SELECT_TOKEN)
-      setForm({ token: "", collateralToken: "", amount: "" })
-      setRequiredCollateral(null)
-      setExchangeRate(null)
-      setTransactionStatus(null)
-      setIsProcessing(false)
-      setShowOnrampModal(false)
+      setCurrentStep(BorrowStep.SELECT_TOKEN);
+      setForm({ token: "", collateralToken: "", amount: "" });
+      setRequiredCollateral(null);
+      setExchangeRate(null);
+      setTransactionStatus(null);
+      setIsProcessing(false);
+      setShowOnrampModal(false);
     }
-  }, [chain?.id])
+  }, [chain?.id]);
 
   // Calculate required collateral using price service
   useEffect(() => {
-    if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
-      setFetchingRate(true)
+    if (
+      form.token &&
+      form.collateralToken &&
+      form.amount &&
+      Number(form.amount) > 0
+    ) {
+      setFetchingRate(true);
       calculateRequiredCollateral(
         form.token,
         form.collateralToken,
         form.amount,
         1.5
-      ).then(result => {
-        if (result) {
-          setRequiredCollateral(result.amount)
-          setExchangeRate(result.rate)
-        } else {
-          // Fallback only if price service fails
-          const amountValue = Number(form.amount)
-          setRequiredCollateral((amountValue * 1.5).toFixed(4))
-          setExchangeRate(1.5)
-        }
-      }).catch(() => {
-        // Fallback on error
-        const amountValue = Number(form.amount)
-        setRequiredCollateral((amountValue * 1.5).toFixed(4))
-        setExchangeRate(1.5)
-      }).finally(() => {
-        setFetchingRate(false)
-      })
+      )
+        .then((result) => {
+          if (result) {
+            setRequiredCollateral(result.amount);
+            setExchangeRate(result.rate);
+          } else {
+            // Fallback only if price service fails
+            const amountValue = Number(form.amount);
+            setRequiredCollateral((amountValue * 1.5).toFixed(4));
+            setExchangeRate(1.5);
+          }
+        })
+        .catch(() => {
+          // Fallback on error
+          const amountValue = Number(form.amount);
+          setRequiredCollateral((amountValue * 1.5).toFixed(4));
+          setExchangeRate(1.5);
+        })
+        .finally(() => {
+          setFetchingRate(false);
+        });
     } else {
-      setRequiredCollateral(null)
-      setExchangeRate(null)
+      setRequiredCollateral(null);
+      setExchangeRate(null);
     }
-  }, [form.token, form.collateralToken, form.amount])
+  }, [form.token, form.collateralToken, form.amount]);
 
   const hasCollateral = (token: string) => {
-    const collateral = userCollaterals[token]
-    return collateral && collateral !== "0"
-  }
+    const collateral = userCollaterals[token];
+    return collateral && collateral !== "0";
+  };
 
   const hasSufficientCollateral = (token: string, required: string) => {
-    if (!hasCollateral(token)) return false
-    const available = Number.parseFloat(formatAmount(userCollaterals[token], tokenInfos[token]?.decimals || 18))
-    return available >= Number.parseFloat(required)
-  }
+    if (!hasCollateral(token)) return false;
+    const available = Number.parseFloat(
+      formatAmount(userCollaterals[token], tokenInfos[token]?.decimals || 18)
+    );
+    return available >= Number.parseFloat(required);
+  };
 
   // Pre-fetch liquidity data for all supported tokens
   const tokenLiquidityData = useMemo(() => {
-    const data: Record<string, { 
-      totalSupply?: bigint, 
-      totalBorrows?: bigint, 
-      isBorrowingPaused?: boolean,
-      isLoading: boolean 
-    }> = {}
-    
-    SUPPORTED_STABLECOINS.forEach(token => {
-      data[token] = { isLoading: true }
-    })
-    
-    return data
-  }, [SUPPORTED_STABLECOINS])
+    const data: Record<
+      string,
+      {
+        totalSupply?: bigint;
+        totalBorrows?: bigint;
+        isBorrowingPaused?: boolean;
+        isLoading: boolean;
+      }
+    > = {};
+
+    SUPPORTED_STABLECOINS.forEach((token) => {
+      data[token] = { isLoading: true };
+    });
+
+    return data;
+  }, [SUPPORTED_STABLECOINS]);
 
   // Create a stable array to avoid hook order issues when chain changes
   const maxTokens = 10; // Fixed number to ensure consistent hook calls
@@ -224,48 +270,67 @@ export function BorrowMoneyModal({
 
   // Liquidity queries disabled - using vault contracts now
   const allLiquidityQueries = paddedTokens.map((token) => {
-    return { token, totalSupply: undefined, totalBorrows: undefined, isBorrowingPaused: undefined }
-  })
+    return {
+      token,
+      totalSupply: undefined,
+      totalBorrows: undefined,
+      isBorrowingPaused: undefined,
+    };
+  });
 
   // Filter out null entries after all hooks have been called
-  const liquidityQueries = allLiquidityQueries.filter(query => query.token !== null)
+  const liquidityQueries = allLiquidityQueries.filter(
+    (query) => query.token !== null
+  );
 
   // Calculate liquidity for all tokens
   const allTokenLiquidity = useMemo(() => {
-    const result: Record<string, {
-      liquidity: string,
-      isPaused: boolean,
-      isLoading: boolean
-    }> = {}
-
-    liquidityQueries.forEach(({ token, totalSupply, totalBorrows, isBorrowingPaused }) => {
-      const isLoading = totalSupply === undefined || totalBorrows === undefined || isBorrowingPaused === undefined
-      
-      if (isLoading) {
-        result[token] = { liquidity: "0", isPaused: false, isLoading: true }
-        return
+    const result: Record<
+      string,
+      {
+        liquidity: string;
+        isPaused: boolean;
+        isLoading: boolean;
       }
+    > = {};
 
-      const borrowsAmount = totalBorrows || BigInt(0)
-      const availableLiquidity = totalSupply && totalSupply > borrowsAmount ? totalSupply - borrowsAmount : BigInt(0)
-      
-      const decimals = tokenInfos[token]?.decimals || 18
-      const liquidityFormatted = availableLiquidity > 0 ? formatAmount(availableLiquidity.toString(), decimals) : "0"
-      
-      result[token] = {
-        liquidity: liquidityFormatted,
-        isPaused: isBorrowingPaused || false,
-        isLoading: false
+    liquidityQueries.forEach(
+      ({ token, totalSupply, totalBorrows, isBorrowingPaused }) => {
+        const isLoading =
+          totalSupply === undefined ||
+          totalBorrows === undefined ||
+          isBorrowingPaused === undefined;
+
+        if (isLoading) {
+          result[token] = { liquidity: "0", isPaused: false, isLoading: true };
+          return;
+        }
+
+        const borrowsAmount = totalBorrows || BigInt(0);
+        const availableLiquidity =
+          totalSupply && totalSupply > borrowsAmount
+            ? totalSupply - borrowsAmount
+            : BigInt(0);
+
+        const decimals = tokenInfos[token]?.decimals || 18;
+        const liquidityFormatted =
+          availableLiquidity > 0
+            ? formatAmount(availableLiquidity.toString(), decimals)
+            : "0";
+
+        result[token] = {
+          liquidity: liquidityFormatted,
+          isPaused: isBorrowingPaused || false,
+          isLoading: false,
+        };
       }
-    })
+    );
 
-    return result
-  }, [liquidityQueries, tokenInfos])
+    return result;
+  }, [liquidityQueries, tokenInfos]);
 
   // Get data for selected token
-  const selectedTokenData = form.token ? allTokenLiquidity[form.token] : null
-
-
+  const selectedTokenData = form.token ? allTokenLiquidity[form.token] : null;
 
   // Balances for auto-wrap support when depositing collateral in CELO
   const { data: collateralTokenBalance } = useWalletBalance({
@@ -273,163 +338,216 @@ export function BorrowMoneyModal({
     chain: chain,
     address: account?.address,
     tokenAddress: form.collateralToken || undefined,
-  })
+  });
 
   const { data: nativeBalanceData } = useWalletBalance({
     client,
     chain: chain,
     address: account?.address,
-  })
+  });
 
   // Force refresh of rates
   const refreshExchangeRate = async () => {
-    if (form.token && form.collateralToken && form.amount && Number(form.amount) > 0) {
-      setFetchingRate(true)
+    if (
+      form.token &&
+      form.collateralToken &&
+      form.amount &&
+      Number(form.amount) > 0
+    ) {
+      setFetchingRate(true);
       try {
         const result = await calculateRequiredCollateral(
           form.token,
-          form.collateralToken, 
+          form.collateralToken,
           form.amount,
           1.5
-        )
-        
-                  if (result) {
-            setRequiredCollateral(result.amount)
-            setExchangeRate(result.rate)
-          }
+        );
+
+        if (result) {
+          setRequiredCollateral(result.amount);
+          setExchangeRate(result.rate);
+        }
       } catch (error) {
-        console.error("Failed to refresh rates:", error instanceof Error ? error.message.replace(/[\r\n]/g, ' ') : 'Unknown error')
-        setTransactionStatus("Could not update market rates. Using previous values.")
+        console.error(
+          "Failed to refresh rates:",
+          error instanceof Error
+            ? error.message.replace(/[\r\n]/g, " ")
+            : "Unknown error"
+        );
+        setTransactionStatus(
+          "Could not update market rates. Using previous values."
+        );
       } finally {
-        setFetchingRate(false)
+        setFetchingRate(false);
       }
     }
-  }
+  };
 
   const handleBorrowWithCollateral = async () => {
-    if (!form.token || !form.collateralToken || !form.amount || !requiredCollateral) return
-    
+    if (
+      !form.token ||
+      !form.collateralToken ||
+      !form.amount ||
+      !requiredCollateral
+    )
+      return;
+
     if (requiresAuth) {
-      alert('Please sign in to complete this transaction')
-      return
+      alert("Please sign in to complete this transaction");
+      return;
     }
-    
-    if (!account) return
+
+    if (!account) return;
 
     if (selectedTokenData?.isPaused) {
-      setTransactionStatus(`Borrowing ${tokenInfos[form.token]?.symbol} is currently paused. Please try again later or select another token.`)
-      return
+      setTransactionStatus(
+        `Borrowing ${tokenInfos[form.token]?.symbol} is currently paused. Please try again later or select another token.`
+      );
+      return;
     }
 
     if (selectedTokenData?.liquidity === "0") {
-      setTransactionStatus(`There are no funds available for ${tokenInfos[form.token]?.symbol}. Please try again later.`)
-      return
+      setTransactionStatus(
+        `There are no funds available for ${tokenInfos[form.token]?.symbol}. Please try again later.`
+      );
+      return;
     }
 
-    setIsProcessing(true)
-    setTransactionStatus("Processing your request...")
+    setIsProcessing(true);
+    setTransactionStatus("Processing your request...");
 
     try {
       // Check if user has sufficient collateral
       if (!hasSufficientCollateral(form.collateralToken, requiredCollateral)) {
-        setTransactionStatus("Securing your loan...")
-        const decimals = tokenInfos[form.collateralToken]?.decimals || 18
-        const walletBalance = Number.parseFloat(formatAmount(userBalances[form.collateralToken] || "0", decimals))
+        setTransactionStatus("Securing your loan...");
+        const decimals = tokenInfos[form.collateralToken]?.decimals || 18;
+        const walletBalance = Number.parseFloat(
+          formatAmount(userBalances[form.collateralToken] || "0", decimals)
+        );
         // Find CELO token from current chain tokens
-        const CELO_ERC20 = tokens.find(t => t.symbol.toUpperCase() === "CELO")?.address
-        const required = Number.parseFloat(requiredCollateral)
+        const CELO_ERC20 = tokens.find(
+          (t) => t.symbol.toUpperCase() === "CELO"
+        )?.address;
+        const required = Number.parseFloat(requiredCollateral);
 
         // Auto-wrap native CELO to ERC-20 if collateral is CELO and ERC-20 balance is short
-        if (CELO_ERC20 && form.collateralToken === CELO_ERC20 && walletBalance < required) {
-          const nativeBal = Number.parseFloat(nativeBalanceData?.displayValue || "0")
-          const amountToWrap = Math.min(required - walletBalance, nativeBal)
+        if (
+          CELO_ERC20 &&
+          form.collateralToken === CELO_ERC20 &&
+          walletBalance < required
+        ) {
+          const nativeBal = Number.parseFloat(
+            nativeBalanceData?.displayValue || "0"
+          );
+          const amountToWrap = Math.min(required - walletBalance, nativeBal);
           if (amountToWrap > 0) {
-            setTransactionStatus("Converting CELO for collateral...")
+            setTransactionStatus("Converting CELO for collateral...");
             // TODO: Implement CELO wrapping for vault
-            throw new Error("CELO wrapping not yet implemented for vaults")
-            
-            const wrapResult = await sendTransaction({ transaction: wrapTx, account })
-            logThirdweb('wrapResult', wrapResult)
+            throw new Error("CELO wrapping not yet implemented for vaults");
+
+            const wrapResult = await sendTransaction({
+              transaction: wrapTx,
+              account,
+            });
+            logThirdweb("wrapResult", wrapResult);
             if (wrapResult?.transactionHash) {
-              setTransactionStatus("Waiting for CELO conversion...")
-              await waitForReceipt({ client, chain: chain, transactionHash: wrapResult.transactionHash })
-              setTransactionStatus("CELO converted successfully ✓")
+              setTransactionStatus("Waiting for CELO conversion...");
+              await waitForReceipt({
+                client,
+                chain: chain,
+                transactionHash: wrapResult.transactionHash,
+              });
+              setTransactionStatus("CELO converted successfully ✓");
             }
           }
         }
 
         // Re-check balance after potential wrap
-        const updatedBalance = Number.parseFloat(formatAmount(userBalances[form.collateralToken] || "0", decimals))
+        const updatedBalance = Number.parseFloat(
+          formatAmount(userBalances[form.collateralToken] || "0", decimals)
+        );
         if (updatedBalance < required) {
           throw new Error(
-            `You need ${requiredCollateral} ${tokenInfos[form.collateralToken]?.symbol} but only have ${updatedBalance.toFixed(4)}.`,
-          )
+            `You need ${requiredCollateral} ${tokenInfos[form.collateralToken]?.symbol} but only have ${updatedBalance.toFixed(4)}.`
+          );
         }
 
         // Deposit collateral using thirdweb contract call
-        setTransactionStatus("Adding security...")
-        const amount = parseUnits(requiredCollateral, tokenInfos[form.collateralToken]?.decimals || 18)
-        
+        setTransactionStatus("Adding security...");
+        const amount = parseUnits(
+          requiredCollateral,
+          tokenInfos[form.collateralToken]?.decimals || 18
+        );
+
         // TODO: Implement vault collateral deposit
-        setTransactionStatus("Vault operations not yet implemented")
-        throw new Error("Vault operations not yet implemented")
+        setTransactionStatus("Vault operations not yet implemented");
+        throw new Error("Vault operations not yet implemented");
       }
 
       // TODO: Implement vault borrow
-      setTransactionStatus("Vault operations not yet implemented")
-      throw new Error("Vault operations not yet implemented")
-      
+      setTransactionStatus("Vault operations not yet implemented");
+      throw new Error("Vault operations not yet implemented");
+
       // Instead of automatically closing, update status with instructions
       setTimeout(() => {
         setTransactionStatus(
           `${form.amount} ${tokenInfos[form.token]?.symbol} has been sent to your wallet.\n\nPlease check your wallet to confirm receipt and visit the dashboard to view your outstanding loans.`
-        )
-        
-        // Don't automatically close - let the user close the modal when ready
-      }, 2000)
-    } catch (error: any) {
-  setTransactionStatus("Something went wrong")
-  // Log full error for debugging
-  logThirdweb('error', error)
+        );
 
-      if (error.message?.includes("insufficient reserves") || error.message?.includes("E5")) {
-        setTransactionStatus("Not enough funds available. Please try a smaller amount.")
+        // Don't automatically close - let the user close the modal when ready
+      }, 2000);
+    } catch (error: any) {
+      setTransactionStatus("Something went wrong");
+      // Log full error for debugging
+      logThirdweb("error", error);
+
+      if (
+        error.message?.includes("insufficient reserves") ||
+        error.message?.includes("E5")
+      ) {
+        setTransactionStatus(
+          "Not enough funds available. Please try a smaller amount."
+        );
       } else {
-        setTransactionStatus(error.message || "Failed to process your request")
+        setTransactionStatus(error.message || "Failed to process your request");
       }
 
-      setTimeout(() => setTransactionStatus(null), 3000)
+      setTimeout(() => setTransactionStatus(null), 3000);
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
 
   const goToNextStep = () => {
     if (currentStep < BorrowStep.CONFIRM) {
-      setCurrentStep(currentStep + 1)
+      setCurrentStep(currentStep + 1);
     }
-  }
+  };
 
   const goToPreviousStep = () => {
     if (currentStep > BorrowStep.SELECT_TOKEN) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep(currentStep - 1);
     }
-  }
+  };
 
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case BorrowStep.SELECT_TOKEN:
-        return !!form.token && selectedTokenData?.liquidity !== "0" && !selectedTokenData?.isPaused
+        return (
+          !!form.token &&
+          selectedTokenData?.liquidity !== "0" &&
+          !selectedTokenData?.isPaused
+        );
       case BorrowStep.ENTER_AMOUNT:
-        return !!form.amount && Number.parseFloat(form.amount) > 0
+        return !!form.amount && Number.parseFloat(form.amount) > 0;
       case BorrowStep.CHOOSE_SECURITY:
-        return !!form.collateralToken
+        return !!form.collateralToken;
       case BorrowStep.CONFIRM:
-        return !!requiredCollateral && !fetchingRate
+        return !!requiredCollateral && !fetchingRate;
       default:
-        return false
+        return false;
     }
-  }
+  };
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -437,21 +555,27 @@ export function BorrowMoneyModal({
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">What do you need?</h3>
-              <p className="text-sm text-[#a2c398]">Choose the currency you'd like to borrow</p>
+              <h3 className="text-lg font-semibold text-white">
+                What do you need?
+              </h3>
+              <p className="text-sm text-[#a2c398]">
+                Choose the currency you'd like to borrow
+              </p>
             </div>
 
             <div className="space-y-3">
               {SUPPORTED_STABLECOINS.length === 0 ? (
                 <div className="text-center py-8">
                   <AlertCircle className="w-12 h-12 text-[#a2c398] mx-auto mb-3" />
-                  <p className="text-[#a2c398]">No currencies available right now</p>
+                  <p className="text-[#a2c398]">
+                    No currencies available right now
+                  </p>
                 </div>
               ) : (
                 SUPPORTED_STABLECOINS.map((token) => {
-                  const tokenInfo = tokenInfos[token]
-                  const symbol = tokenInfo?.symbol || token.slice(0, 6) + "..."
-                  const isSelected = form.token === token
+                  const tokenInfo = tokenInfos[token];
+                  const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
+                  const isSelected = form.token === token;
 
                   return (
                     <button
@@ -476,40 +600,68 @@ export function BorrowMoneyModal({
                           </div>
                         )}
                         <div className="flex-1 text-left">
-                          <div className="font-semibold text-white">{symbol}</div>
+                          <div className="font-semibold text-white">
+                            {symbol}
+                          </div>
                           {(() => {
-                            const tokenData = allTokenLiquidity[token]
+                            const tokenData = allTokenLiquidity[token];
                             if (tokenData?.isLoading) {
-                              return <div className="text-xs text-[#a2c398]">Loading...</div>
+                              return (
+                                <div className="text-xs text-[#a2c398]">
+                                  Loading...
+                                </div>
+                              );
                             }
                             if (tokenData?.isPaused) {
-                              return <div className="text-xs text-red-400">Currently paused</div>
+                              return (
+                                <div className="text-xs text-red-400">
+                                  Currently paused
+                                </div>
+                              );
                             }
                             if (tokenData?.liquidity === "0") {
-                              return <div className="text-xs text-red-400">Not available</div>
+                              return (
+                                <div className="text-xs text-red-400">
+                                  Not available
+                                </div>
+                              );
                             }
                             if (tokenData?.liquidity && isSelected) {
-                              return <div className="text-xs text-[#54d22d]">Available: {tokenData.liquidity}</div>
+                              return (
+                                <div className="text-xs text-[#54d22d]">
+                                  Available: {tokenData.liquidity}
+                                </div>
+                              );
                             }
-                            return <div className="text-xs text-[#a2c398]">Tap to select</div>
+                            return (
+                              <div className="text-xs text-[#a2c398]">
+                                Tap to select
+                              </div>
+                            );
                           })()}
                         </div>
-                        {isSelected && <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />}
+                        {isSelected && (
+                          <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />
+                        )}
                       </div>
                     </button>
-                  )
+                  );
                 })
               )}
             </div>
           </div>
-        )
+        );
 
       case BorrowStep.ENTER_AMOUNT:
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">How much do you need?</h3>
-              <p className="text-sm text-[#a2c398]">Enter the amount you'd like to borrow</p>
+              <h3 className="text-lg font-semibold text-white">
+                How much do you need?
+              </h3>
+              <p className="text-sm text-[#a2c398]">
+                Enter the amount you'd like to borrow
+              </p>
             </div>
 
             <div className="space-y-4">
@@ -528,29 +680,38 @@ export function BorrowMoneyModal({
                 </div>
               </div>
 
-              {selectedTokenData?.liquidity && selectedTokenData.liquidity !== "0" && (
-                <div className="text-center text-sm text-[#a2c398]">
-                  Available to borrow: {selectedTokenData.liquidity} {tokenInfos[form.token]?.symbol}
-                </div>
-              )}
+              {selectedTokenData?.liquidity &&
+                selectedTokenData.liquidity !== "0" && (
+                  <div className="text-center text-sm text-[#a2c398]">
+                    Available to borrow: {selectedTokenData.liquidity}{" "}
+                    {tokenInfos[form.token]?.symbol}
+                  </div>
+                )}
             </div>
           </div>
-        )
+        );
 
       case BorrowStep.CHOOSE_SECURITY:
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">Choose your security</h3>
-              <p className="text-sm text-[#a2c398]">Select what you'll use to secure this loan</p>
+              <h3 className="text-lg font-semibold text-white">
+                Choose your security
+              </h3>
+              <p className="text-sm text-[#a2c398]">
+                Select what you'll use to secure this loan
+              </p>
             </div>
 
             <div className="space-y-3">
               {SUPPORTED_COLLATERAL.map((token) => {
-                const tokenInfo = tokenInfos[token]
-                const symbol = tokenInfo?.symbol || token.slice(0, 6) + "..."
-                const isSelected = form.collateralToken === token
-                const balance = formatAmount(userBalances[token] || "0", tokenInfo?.decimals || 18)
+                const tokenInfo = tokenInfos[token];
+                const symbol = tokenInfo?.symbol || token.slice(0, 6) + "...";
+                const isSelected = form.collateralToken === token;
+                const balance = formatAmount(
+                  userBalances[token] || "0",
+                  tokenInfo?.decimals || 18
+                );
 
                 return (
                   <button
@@ -580,25 +741,31 @@ export function BorrowMoneyModal({
                           Balance: {balance} {symbol}
                         </div>
                       </div>
-                      {isSelected && <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />}
+                      {isSelected && (
+                        <CheckCircle2 className="w-5 h-5 text-[#54d22d]" />
+                      )}
                     </div>
                   </button>
-                )
+                );
               })}
             </div>
           </div>
-        )
+        );
 
       case BorrowStep.CONFIRM:
         return (
           <div className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-white">Confirm your loan</h3>
-              <p className="text-sm text-[#a2c398]">Review the details before proceeding</p>
+              <h3 className="text-lg font-semibold text-white">
+                Confirm your loan
+              </h3>
+              <p className="text-sm text-[#a2c398]">
+                Review the details before proceeding
+              </p>
             </div>
 
             <div className="space-y-4">
-              <div className="bg-[#2e4328] rounded-xl p-4 space-y-3">
+              <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-[#a2c398]">You'll receive</span>
                   <span className="text-white font-semibold">
@@ -610,23 +777,34 @@ export function BorrowMoneyModal({
                   <span className="text-[#a2c398]">Security required</span>
                   <div className="text-right">
                     <span className="text-white font-semibold">
-                      {fetchingRate ? "Calculating..." : requiredCollateral} {tokenInfos[form.collateralToken]?.symbol}
+                      {fetchingRate ? "Calculating..." : requiredCollateral}{" "}
+                      {tokenInfos[form.collateralToken]?.symbol}
                     </span>
-                    <button 
+                    <button
                       onClick={refreshExchangeRate}
-                      disabled={fetchingRate || !form.token || !form.collateralToken || !form.amount}
+                      disabled={
+                        fetchingRate ||
+                        !form.token ||
+                        !form.collateralToken ||
+                        !form.amount
+                      }
                       className="ml-2 p-1 rounded-full hover:bg-[#426039] text-[#a2c398] hover:text-white"
                     >
-                      <RefreshCw className={`w-4 h-4 ${fetchingRate ? "animate-spin" : ""}`} />
+                      <RefreshCw
+                        className={`w-4 h-4 ${fetchingRate ? "animate-spin" : ""}`}
+                      />
                     </button>
                   </div>
                 </div>
-                
+
                 {exchangeRate && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-[#a2c398]">Current exchange rate</span>
                     <span className="text-[#a2c398]">
-                      1 {tokenInfos[form.collateralToken]?.symbol} = {exchangeRate.toFixed(4)} {tokenInfos[form.token]?.symbol}
+                      Current exchange rate
+                    </span>
+                    <span className="text-[#a2c398]">
+                      1 {tokenInfos[form.collateralToken]?.symbol} ={" "}
+                      {exchangeRate.toFixed(4)} {tokenInfos[form.token]?.symbol}
                     </span>
                   </div>
                 )}
@@ -635,17 +813,27 @@ export function BorrowMoneyModal({
                   requiredCollateral &&
                   (() => {
                     // Check wallet balance and compare against required collateral
-                    const decimals = tokenInfos[form.collateralToken]?.decimals || 18;
-                    const walletBalance = Number.parseFloat(formatAmount(userBalances[form.collateralToken] || "0", decimals));
-                    const requiredAmount = Number.parseFloat(requiredCollateral);
-                    
+                    const decimals =
+                      tokenInfos[form.collateralToken]?.decimals || 18;
+                    const walletBalance = Number.parseFloat(
+                      formatAmount(
+                        userBalances[form.collateralToken] || "0",
+                        decimals
+                      )
+                    );
+                    const requiredAmount =
+                      Number.parseFloat(requiredCollateral);
+
                     // Only show the "Get more" section if wallet balance is insufficient
                     return walletBalance < requiredAmount ? (
                       <div className="border-t border-[#426039] pt-3">
                         <div className="text-xs text-[#a2c398] mb-2">
-                          You need more {tokenInfos[form.collateralToken]?.symbol}
+                          You need more{" "}
+                          {tokenInfos[form.collateralToken]?.symbol}
                         </div>
-                        {onrampService.isAssetSupportedForOnramp(tokenInfos[form.collateralToken]?.symbol || "") && (
+                        {onrampService.isAssetSupportedForOnramp(
+                          tokenInfos[form.collateralToken]?.symbol || ""
+                        ) && (
                           <Button
                             onClick={() => setShowOnrampModal(true)}
                             variant="outline"
@@ -662,20 +850,29 @@ export function BorrowMoneyModal({
               </div>
 
               {transactionStatus && (
-                <div className="bg-[#21301c] border border-[#54d22d] rounded-xl p-4">
-                  <div className="text-sm text-[#54d22d] font-medium text-center" style={{ whiteSpace: 'pre-line' }}>{transactionStatus}</div>
-                  
+                <div className="bg-gray-800/20 backdrop-blur-sm border border-green-500/30 rounded-xl p-4">
+                  <div
+                    className="text-sm text-[#54d22d] font-medium text-center"
+                    style={{ whiteSpace: "pre-line" }}
+                  >
+                    {transactionStatus}
+                  </div>
+
                   {/* Show a "View Dashboard" button if transaction is complete */}
                   {transactionStatus.includes("check your wallet") && (
                     <div className="mt-4 flex justify-center">
                       <Button
                         onClick={() => {
                           // Reset the form and close the modal
-                          setForm({ token: "", collateralToken: "", amount: "" })
-                          setTransactionStatus(null)
-                          setCurrentStep(BorrowStep.SELECT_TOKEN)
-                          onClose()
-                          
+                          setForm({
+                            token: "",
+                            collateralToken: "",
+                            amount: "",
+                          });
+                          setTransactionStatus(null);
+                          setCurrentStep(BorrowStep.SELECT_TOKEN);
+                          onClose();
+
                           // Use Next.js router to navigate to dashboard without page reload
                           // Make sure to leave some time for wallet to persist
                           setTimeout(() => router.push("/dashboard"), 300);
@@ -690,20 +887,21 @@ export function BorrowMoneyModal({
               )}
             </div>
           </div>
-        )
+        );
 
       default:
-        return null
+        return null;
     }
-  }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[90vw] max-w-md mx-auto bg-[#162013] border-[#426039] shadow-2xl [&>button]:text-white [&>button]:hover:text-[#a2c398]">
+      <DialogContent className="w-[90vw] max-w-md mx-auto bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 shadow-2xl [&>button]:text-white [&>button]:hover:text-gray-300">
         <DialogHeader className="pb-6">
           <DialogTitle className="sr-only">Borrow Money</DialogTitle>
           <DialogDescription className="sr-only">
-            Borrow stablecoins using your assets as collateral through a multi-step process.
+            Borrow stablecoins using your assets as collateral through a
+            multi-step process.
           </DialogDescription>
           <div className="flex items-center gap-3">
             {currentStep > BorrowStep.SELECT_TOKEN && (
@@ -718,7 +916,9 @@ export function BorrowMoneyModal({
               </Button>
             )}
             <div className="flex-1">
-              <DialogTitle className="text-xl font-bold text-white">Get Cash</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-white">
+                Get Cash
+              </DialogTitle>
               <div className="flex gap-1 mt-2">
                 {[1, 2, 3, 4].map((step) => (
                   <div
@@ -784,18 +984,20 @@ export function BorrowMoneyModal({
           selectedAsset={tokenInfos[form.collateralToken]?.symbol || ""}
           assetSymbol={tokenInfos[form.collateralToken]?.symbol || ""}
           onSuccess={(transactionCode, amount) => {
-            setTransactionStatus(`${tokenInfos[form.collateralToken]?.symbol} deposit initiated. Funds will appear in your wallet soon.`)
-            setShowOnrampModal(false)
-            
+            setTransactionStatus(
+              `${tokenInfos[form.collateralToken]?.symbol} deposit initiated. Funds will appear in your wallet soon.`
+            );
+            setShowOnrampModal(false);
+
             // Clear message after a few seconds
             setTimeout(() => {
-              setTransactionStatus(null)
-            }, 4000)
+              setTransactionStatus(null);
+            }, 4000);
           }}
         />
       )}
     </Dialog>
-  )
+  );
 }
 
 // This helper function is no longer needed as we're using transaction status directly

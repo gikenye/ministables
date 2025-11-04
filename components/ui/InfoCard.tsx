@@ -14,10 +14,10 @@ export const InfoCard = ({
   const baseClasses = "rounded-lg border";
 
   const variantClasses = {
-    default: "bg-gray-800 border-gray-700 p-3",
-    stats: "bg-gray-800 border-gray-700 p-2",
+    default: "bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-3",
+    stats: "bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-2",
     action:
-      "bg-gray-800 border-gray-700 p-3 hover:bg-gray-750 transition-colors duration-200",
+      "bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-3 hover:bg-gray-700/30 transition-colors duration-200",
   };
 
   return (
