@@ -7,7 +7,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Check, AlertCircle, Loader2, Plus, Copy } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  AlertCircle,
+  Loader2,
+  Plus,
+  Copy,
+} from "lucide-react";
 import {
   useActiveAccount,
   useSendTransaction,
@@ -16,7 +23,7 @@ import {
 import { OnrampDepositModal } from "./OnrampDepositModal";
 import { onrampService } from "@/lib/services/onrampService";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
-import { getReferralTag } from '@divvi/referral-sdk';
+import { getReferralTag } from "@divvi/referral-sdk";
 
 // Define the vault contract ABI for deposit function (Aave-integrated vaults on Celo)
 export const vaultABI = [
@@ -58,7 +65,11 @@ import { client } from "@/lib/thirdweb/client";
 
 import { parseUnits } from "viem";
 import { useChain } from "@/components/ChainProvider";
-import { getExplorerUrl, getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
+import {
+  getExplorerUrl,
+  getVaultAddress,
+  hasVaultContracts,
+} from "@/config/chainConfig";
 import { aaveRatesService } from "@/lib/services/aaveRatesService";
 
 interface SaveMoneyModalProps {
@@ -365,7 +376,10 @@ export function SaveMoneyModal({
     }
   };
 
-  const handleTransactionSent = (_result: any, _isApproval: boolean = false) => {};
+  const handleTransactionSent = (
+    _result: any,
+    _isApproval: boolean = false
+  ) => {};
 
   const handleSave = async () => {
     if (!form.token || !form.amount || !form.lockPeriod) return;
@@ -417,24 +431,31 @@ export function SaveMoneyModal({
       }
 
       setTransactionStatus("Completing your deposit...");
-      
+
       // Generate Divvi referral tag
       let referralTag = "";
       try {
         referralTag = getReferralTag({
           user: account.address as `0x${string}`,
-          consumer: '0xc022BD0b6005Cae66a468f9a20897aDecDE04e95' as `0x${string}`,
+          consumer:
+            "0xc022BD0b6005Cae66a468f9a20897aDecDE04e95" as `0x${string}`,
         });
-        referralTag = referralTag.startsWith('0x') ? referralTag.slice(2) : referralTag;
+        referralTag = referralTag.startsWith("0x")
+          ? referralTag.slice(2)
+          : referralTag;
       } catch (error) {
-        console.log('[SaveMoneyModal] Divvi tag generation skipped:', error);
+        console.log("[SaveMoneyModal] Divvi tag generation skipped:", error);
       }
-      
+
       // Resolve the data function and append referral tag
-      const depositTxWithTag = referralTag && typeof depositTx.data === 'function'
-        ? { ...depositTx, data: async () => (await depositTx.data()) + referralTag }
-        : depositTx;
-      
+      const depositTxWithTag =
+        referralTag && typeof depositTx.data === "function"
+          ? {
+              ...depositTx,
+              data: async () => (await depositTx.data()) + referralTag,
+            }
+          : depositTx;
+
       const depositResult = await sendTransaction(depositTxWithTag);
       handleTransactionSent(depositResult, false);
 
@@ -447,7 +468,7 @@ export function SaveMoneyModal({
         });
         setTransactionStatus("Success!");
         handleTransactionSuccess(depositReceipt, false);
-        
+
         // Report to Divvi after successful transaction
         reportTransactionToDivvi(depositResult.transactionHash, chain.id);
       }
@@ -585,9 +606,9 @@ export function SaveMoneyModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-md mx-auto bg-[#162013] border-0 shadow-lg p-0 overflow-hidden [&>button]:text-white [&>button]:hover:text-[#a2c398]">
-        <div className="flex h-5 w-full items-center justify-center bg-[#162013]">
-          <div className="h-1 w-9 rounded-full bg-[#426039]"></div>
+      <DialogContent className="w-full max-w-md mx-auto bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 shadow-lg p-0 overflow-hidden [&>button]:text-white [&>button]:hover:text-gray-300">
+        <div className="flex h-5 w-full items-center justify-center bg-gray-800/20 backdrop-blur-sm">
+          <div className="h-1 w-9 rounded-full bg-gray-600/50"></div>
         </div>
 
         <div className="px-4 pb-5">
@@ -620,10 +641,10 @@ export function SaveMoneyModal({
                     key={step}
                     className={`min-w-8 h-7 px-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors ${
                       step === currentStep
-                        ? "bg-[#54d22d] text-[#162013]"
+                        ? "bg-green-500/80 text-white"
                         : step < currentStep
-                          ? "bg-[#2e4328] text-white"
-                          : "bg-[#21301c] text-[#a2c398] border border-[#426039]"
+                          ? "bg-gray-700/50 text-white"
+                          : "bg-gray-800/20 backdrop-blur-sm text-gray-400 border border-gray-700/30"
                     }`}
                   >
                     {step === 5 ? <Check className="w-4 h-4" /> : step + 1}
@@ -659,8 +680,8 @@ export function SaveMoneyModal({
                     }}
                     className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all border ${
                       depositMethod === "mpesa"
-                        ? "bg-[#8DA33B] text-[#162013] border-[#54d22d] scale-[0.98]"
-                        : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                        ? "bg-green-500/80 text-white border-green-400 scale-[0.98]"
+                        : "bg-gray-800/20 backdrop-blur-sm text-white border-gray-700/30 hover:border-green-400 hover:bg-green-500/20"
                     }`}
                   >
                     <img
@@ -687,8 +708,8 @@ export function SaveMoneyModal({
                     }}
                     className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all border ${
                       depositMethod === "wallet"
-                        ? "bg-[#54d22d] text-[#162013] border-[#54d22d] scale-[0.98]"
-                        : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                        ? "bg-green-500/80 text-white border-green-400 scale-[0.98]"
+                        : "bg-gray-800/20 backdrop-blur-sm text-white border-gray-700/30 hover:border-green-400 hover:bg-green-500/20"
                     }`}
                   >
                     <img
@@ -728,8 +749,8 @@ export function SaveMoneyModal({
                         <div
                           className={`w-full rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-[#54d22d] text-[#162013] border-[#54d22d]"
-                              : "bg-[#21301c] text-white border-[#426039] hover:border-[#54d22d] hover:bg-[#2a3d24]"
+                              ? "bg-green-500/80 text-white border-green-400"
+                              : "bg-gray-800/20 backdrop-blur-sm text-white border-gray-700/30 hover:border-green-400 hover:bg-green-500/20"
                           }`}
                         >
                           <div className="flex items-center gap-3 p-3">
@@ -745,7 +766,7 @@ export function SaveMoneyModal({
                                   className="w-8 h-8 rounded-full"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-[#54d22d] flex items-center justify-center text-[#162013] font-bold">
+                                <div className="w-8 h-8 rounded-full bg-green-500/80 backdrop-blur-sm flex items-center justify-center text-white font-bold">
                                   {symbol.charAt(0)}
                                 </div>
                               )}
@@ -802,14 +823,17 @@ export function SaveMoneyModal({
                               {depositMethod === "mpesa" ? (
                                 <button
                                   onClick={() => {
-                                    console.log("[SaveMoneyModal] Opening onramp modal:", {
-                                      tokenAddress: token,
-                                      tokenSymbol: symbol,
-                                    })
+                                    console.log(
+                                      "[SaveMoneyModal] Opening onramp modal:",
+                                      {
+                                        tokenAddress: token,
+                                        tokenSymbol: symbol,
+                                      }
+                                    );
                                     setSelectedTokenForOnramp(token);
                                     setShowOnrampModal(true);
                                   }}
-                                  className="w-full h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
+                                  className="w-full h-9 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 text-white text-xs font-semibold rounded-lg hover:bg-green-500/20 hover:border-green-400 transition-colors md:h-8"
                                 >
                                   Continue with {symbol}
                                 </button>
@@ -817,7 +841,9 @@ export function SaveMoneyModal({
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => {
-                                      navigator.clipboard.writeText(account?.address || "");
+                                      navigator.clipboard.writeText(
+                                        account?.address || ""
+                                      );
                                       setCopied(true);
                                       setTimeout(() => setCopied(false), 2000);
                                     }}
@@ -831,13 +857,15 @@ export function SaveMoneyModal({
                                     ) : (
                                       <>
                                         <Copy className="w-3 h-3" />
-                                        {account?.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Copy"}
+                                        {account?.address
+                                          ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}`
+                                          : "Copy"}
                                       </>
                                     )}
                                   </button>
                                   <button
                                     onClick={nextStep}
-                                    className="flex-1 h-9 bg-[#162013] text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-colors md:h-8"
+                                    className="flex-1 h-9 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 text-white text-xs font-semibold rounded-lg hover:bg-green-500/20 hover:border-green-400 transition-colors md:h-8"
                                   >
                                     Continue
                                   </button>

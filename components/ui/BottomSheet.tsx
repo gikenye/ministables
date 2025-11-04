@@ -26,15 +26,19 @@ export const BottomSheet = ({
       {/* Modal Content */}
       <div
         className={`
-        relative w-full sm:w-auto sm:min-w-[400px] sm:max-w-lg
-        bg-black sm:bg-gray-900 
+        relative w-full max-w-md mx-auto sm:max-w-lg
+        bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 
         rounded-t-xl sm:rounded-xl 
-        ${maxHeight}
         overflow-hidden
-        animate-in slide-in-from-bottom duration-300 sm:animate-in sm:fade-in sm:slide-in-from-bottom-4
-      `}
+        transform transition-transform duration-300 ease-out
+        ${maxHeight}
+        `}
+        style={{
+          maxHeight:
+            "min(85vh, 100% - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+        }}
       >
-        {children}
+        <div className="w-full h-full overflow-hidden">{children}</div>
       </div>
     </div>
   );

@@ -54,7 +54,7 @@ const BottomSheet = ({
 
       {/* Bottom Sheet */}
       <div
-        className={`relative w-full ${maxHeight} bg-black rounded-t-3xl shadow-2xl transform transition-transform duration-300 ease-out animate-in slide-in-from-bottom`}
+        className={`relative w-full ${maxHeight} bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-t-3xl shadow-2xl transform transition-transform duration-300 ease-out animate-in slide-in-from-bottom`}
       >
         {children}
       </div>
@@ -143,7 +143,7 @@ const ActionButton = ({
     primary:
       "bg-cyan-400 text-black hover:bg-cyan-300 disabled:bg-gray-600 disabled:text-gray-400",
     secondary:
-      "bg-gray-700 text-white hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500",
+      "bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 text-white hover:bg-gray-700/30 disabled:bg-gray-600/20 disabled:text-gray-400",
   };
 
   return (
@@ -168,7 +168,7 @@ const InfoCard = ({
   className?: string;
 }) => (
   <div
-    className={`bg-gray-900 border border-gray-700 rounded-xl p-4 ${className}`}
+    className={`bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4 ${className}`}
   >
     {children}
   </div>
@@ -463,7 +463,7 @@ export function OnrampDepositModal({
         onBack={prevStep}
       />
 
-      <div className="bg-black p-4 space-y-6">
+      <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4 space-y-6">
         {/* Step Indicator */}
         <StepIndicator currentStep={currentStep} totalSteps={4} />
 
@@ -504,16 +504,16 @@ export function OnrampDepositModal({
                       loadExchangeRate(value);
                     }}
                   >
-                    <SelectTrigger className="h-12 bg-gray-800 border-gray-600 text-white focus:border-cyan-400 rounded-xl">
+                    <SelectTrigger className="h-12 bg-gray-800/20 backdrop-blur-sm border border-gray-600/30 text-white focus:border-cyan-400 rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectContent className="bg-gray-800/20 backdrop-blur-sm border border-gray-600/30">
                       {Object.entries(SUPPORTED_COUNTRIES).map(
                         ([code, country]) => (
                           <SelectItem
                             key={code}
                             value={code}
-                            className="text-white hover:bg-gray-700"
+                            className="text-white hover:bg-gray-700/30"
                           >
                             <span className="flex items-center gap-2">
                               <span className="text-lg">{country.flag}</span>
@@ -536,15 +536,15 @@ export function OnrampDepositModal({
                       setForm((prev) => ({ ...prev, mobileNetwork: value }))
                     }
                   >
-                    <SelectTrigger className="h-12 bg-gray-800 border-gray-600 text-white focus:border-cyan-400 rounded-xl">
+                    <SelectTrigger className="h-12 bg-gray-800/20 backdrop-blur-sm border border-gray-600/30 text-white focus:border-cyan-400 rounded-xl">
                       <SelectValue placeholder="Select network" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectContent className="bg-gray-800/20 backdrop-blur-sm border border-gray-600/30">
                       {availableNetworks.map((network) => (
                         <SelectItem
                           key={network}
                           value={network}
-                          className="text-white hover:bg-gray-700"
+                          className="text-white hover:bg-gray-700/30"
                         >
                           {network}
                         </SelectItem>
@@ -594,7 +594,7 @@ export function OnrampDepositModal({
                           phoneNumber: e.target.value,
                         }))
                       }
-                      className="h-12 bg-gray-800 border-gray-600 text-white focus:border-cyan-400 pr-10 rounded-xl"
+                      className="h-12 bg-gray-800/20 backdrop-blur-sm border border-gray-600/30 text-white focus:border-cyan-400 pr-10 rounded-xl"
                     />
                     {validation.isValidating && (
                       <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
@@ -608,7 +608,7 @@ export function OnrampDepositModal({
                   )}
 
                   {validation.isValid && validation.accountName && (
-                    <div className="mt-2 p-3 bg-green-900/20 border border-green-700 rounded-xl">
+                    <div className="mt-2 p-3 bg-green-900/20 backdrop-blur-sm border border-green-700/30 rounded-xl">
                       <p className="text-green-400 text-sm flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />
                         {validation.accountName}
@@ -654,11 +654,11 @@ export function OnrampDepositModal({
                     onChange={(e) =>
                       setForm((prev) => ({ ...prev, amount: e.target.value }))
                     }
-                    className="h-12 bg-gray-800 border-gray-600 text-white focus:border-cyan-400 text-center text-xl rounded-xl"
+                    className="h-12 bg-gray-800/20 backdrop-blur-sm border border-gray-600/30 text-white focus:border-cyan-400 text-center text-xl rounded-xl"
                   />
 
                   {exchangeRate && form.amount && (
-                    <div className="mt-2 p-3 bg-gray-800 rounded-xl">
+                    <div className="mt-2 p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-400">You'll receive:</span>
                         <span className="text-cyan-400 font-medium">

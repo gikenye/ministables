@@ -8,10 +8,10 @@ export const SupportCard = () => {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg mx-4 mt-4 overflow-hidden">
+    <div className="bg-gray-800/20 backdrop-blur-sm rounded-lg mx-4 mt-3 overflow-hidden border border-gray-700/30">
       {/* Section Header */}
-      <div className="px-4 py-3 border-b border-gray-700 bg-gray-900">
-        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+      <div className="px-3 py-2.5 border-b border-gray-700/30 bg-gray-800/20 backdrop-blur-sm">
+        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide">
           Support
         </h3>
       </div>
@@ -19,14 +19,14 @@ export const SupportCard = () => {
       {/* Get Help */}
       <button
         onClick={handleGetHelp}
-        className="w-full px-4 py-3 hover:bg-gray-750 transition-colors"
+        className="w-full px-3 py-2.5 hover:bg-gray-750 transition-colors"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <HelpCircle className="w-5 h-5 text-gray-400" />
-            <span className="text-white">Get Help</span>
+          <div className="flex items-center space-x-2.5">
+            <HelpCircle className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-white">Get Help</span>
           </div>
-          <ExternalLink className="w-5 h-5 text-gray-400" />
+          <ExternalLink className="w-4 h-4 text-gray-400" />
         </div>
       </button>
     </div>

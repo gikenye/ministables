@@ -38,17 +38,17 @@ export const GoalCard = ({
         <div className="p-3 relative">
           <div className="flex items-center justify-between mb-2">
             <div className="flex-1">
-              <h3 className="text-lg font-bold text-white mb-0.5">
+              <h3 className="text-base font-bold text-white mb-0.5">
                 {goal.title}
               </h3>
               <div className="text-xs text-white/70">Current Balance</div>
             </div>
-            <div className="text-2xl opacity-80">🐷</div>
+            <div className="text-xl opacity-80">🐷</div>
           </div>
 
           {/* Balance Display */}
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xl font-bold text-white">
+            <div className="text-lg font-bold text-white">
               KES {formatAmount(goal.currentAmount)}
             </div>
             {onToggleBalance && (
@@ -57,7 +57,7 @@ export const GoalCard = ({
                   e.stopPropagation();
                   onToggleBalance();
                 }}
-                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 min-w-[32px] min-h-[32px] flex items-center justify-center"
+                className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-1.5 py-1 rounded-full text-xs font-medium transition-all duration-200 min-w-[28px] min-h-[28px] flex items-center justify-center"
               >
                 {showBalance ? (
                   <Eye className="w-3 h-3" />
@@ -75,7 +75,7 @@ export const GoalCard = ({
                 e.stopPropagation();
                 onCardClick?.();
               }}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 min-h-[32px] flex items-center justify-center"
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 min-h-[28px] flex items-center justify-center"
             >
               Save Now
             </button>
@@ -84,7 +84,7 @@ export const GoalCard = ({
                 e.stopPropagation();
                 // Handle withdraw action
               }}
-              className="bg-transparent border border-white/40 text-white hover:bg-white/10 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 min-h-[32px] flex items-center justify-center"
+              className="bg-transparent border border-white/40 text-white hover:bg-white/10 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 min-h-[28px] flex items-center justify-center"
             >
               Withdraw
             </button>
@@ -106,17 +106,18 @@ export const GoalCard = ({
   // Regular goal cards
   const getCardBackground = () => {
     if (goal.category === "personal") {
-      return "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700";
+      return "bg-gray-800/20 backdrop-blur-sm border border-gray-700/30";
     }
     if (goal.category === "retirement") {
-      return "bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600";
+      return "bg-gray-800/20 backdrop-blur-sm border border-gray-700/30";
     }
-    return "bg-gray-800 border border-gray-700";
+    return "bg-gray-800/20 backdrop-blur-sm border border-gray-700/30";
   };
 
   return (
     <div
-      className={`rounded-lg overflow-hidden relative ${getCardBackground()}`}
+      className={`rounded-lg overflow-hidden relative cursor-pointer hover:scale-[1.01] transition-transform duration-200 ${getCardBackground()}`}
+      onClick={onCardClick}
     >
       {/* Background pattern for personal goals */}
       {goal.category === "personal" && (
@@ -143,18 +144,18 @@ export const GoalCard = ({
         </div>
       )}
 
-      <div className="p-3 relative z-10">
+      <div className="p-2.5 relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-2">
-            <h3 className="text-base font-semibold text-white flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5">
+            <h3 className="text-sm font-semibold text-white flex items-center space-x-1.5">
               <span>{goal.title}</span>
-              <div className="w-3 h-3 border border-gray-400 rounded-sm flex items-center justify-center">
-                <ChevronRight className="w-2 h-2 text-gray-400" />
+              <div className="w-2.5 h-2.5 border border-gray-400 rounded-sm flex items-center justify-center">
+                <ChevronRight className="w-1.5 h-1.5 text-gray-400" />
               </div>
             </h3>
           </div>
-          <span className="text-sm font-bold text-cyan-400">
+          <span className="text-xs font-bold text-cyan-400">
             {goal.progress.toFixed(1)}%
           </span>
         </div>

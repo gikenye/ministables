@@ -68,6 +68,7 @@ import {
   SupportCard,
   StatsCard,
   GoalCard,
+  NewProfile,
   type SaveOption,
   type FrontendGoal,
   type GoalCategory,
@@ -172,7 +173,7 @@ const SaveActionsModal = ({
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[50vh]">
       <ModalHeader title="Where to Save?" onClose={onClose} />
 
-      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-3">
+      <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3">
         {/* Header Section */}
         <div className="text-center py-0.5">
           <div className="text-2xl mb-1.5">🐷</div>
@@ -267,7 +268,7 @@ const QuickSaveDetailsModal = ({
       </div>
 
       {/* Content */}
-      <div className="bg-black/90 backdrop-blur-sm p-2 space-y-2 overflow-y-auto">
+      <div className="bg-gray-800/20 backdrop-blur-sm p-2 space-y-2 overflow-y-auto">
         {/* Balance Overview */}
         <InfoCard variant="stats">
           <div className="grid grid-cols-2 gap-3">
@@ -331,18 +332,6 @@ const QuickSaveDetailsModal = ({
             </div>
           </InfoCard>
         </div>
-
-        {/* Timeline (Compact) */}
-        <InfoCard>
-          <div className="flex items-center justify-between text-xs">
-            <div>
-              <div className="text-white font-medium">Started</div>
-              <div className="text-xs text-gray-400">2 years ago</div>
-            </div>
-            <div className="text-cyan-400">25th Dec 2023</div>
-          </div>
-        </InfoCard>
-
         {/* Bottom spacing for safe area */}
         <div className="h-2"></div>
       </div>
@@ -400,7 +389,7 @@ const CustomGoalModal = ({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[95vh]">
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[85vh]">
       <ModalHeader
         title="Create Custom Goal"
         onClose={onClose}
@@ -411,7 +400,7 @@ const CustomGoalModal = ({
         }}
       />
 
-      <div className="bg-black/90 backdrop-blur-sm p-3 space-y-3">
+      <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3 overflow-y-auto pb-8">
         {/* Header */}
         <div className="text-center py-0.5">
           <div className="text-2xl mb-1.5">🎯</div>
@@ -431,7 +420,7 @@ const CustomGoalModal = ({
             value={form.name}
             onChange={(e) => handleInputChange("name", e.target.value)}
             placeholder="e.g., New Car, Vacation, Emergency Fund"
-            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-sm"
+            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-sm"
             maxLength={50}
           />
           <div className="text-xs text-gray-500 text-right">
@@ -449,7 +438,7 @@ const CustomGoalModal = ({
             value={form.amount}
             onChange={(e) => handleAmountChange(e.target.value)}
             placeholder="0"
-            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-base font-semibold"
+            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-base font-semibold"
           />
           <div className="text-xs text-gray-500">
             Enter your target savings amount
@@ -462,7 +451,7 @@ const CustomGoalModal = ({
           <select
             value={form.timeline}
             onChange={(e) => handleInputChange("timeline", e.target.value)}
-            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
+            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
           >
             <option value="3">3 months</option>
             <option value="6">6 months</option>
@@ -483,7 +472,7 @@ const CustomGoalModal = ({
           <select
             value={form.category}
             onChange={(e) => handleInputChange("category", e.target.value)}
-            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
+            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
           >
             <option value="personal">Personal</option>
             <option value="emergency">Emergency Fund</option>
@@ -549,6 +538,237 @@ const CustomGoalModal = ({
   );
 };
 
+// Quick Save Card Skeleton Component
+const QuickSaveCardSkeleton = () => {
+  return (
+    <div className="relative">
+      <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-3 text-white shadow-lg animate-pulse">
+        {/* Header Section */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="bg-white/20 h-3 w-20 rounded mb-2"></div>
+            <div className="bg-white/30 h-6 w-32 rounded"></div>
+            <div className="bg-white/20 h-3 w-24 rounded mt-1"></div>
+          </div>
+
+          {/* Currency Toggle Skeleton */}
+          <div className="flex items-center gap-1">
+            <div className="bg-white/20 h-3 w-8 rounded"></div>
+            <div className="w-8 h-4 bg-white/20 rounded-full"></div>
+            <div className="bg-white/20 h-3 w-8 rounded"></div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-1.5 mb-3">
+          <div className="flex-1 bg-white/20 h-8 rounded-full"></div>
+          <div className="flex-1 bg-white/20 h-8 rounded-full"></div>
+        </div>
+
+        {/* Balance visibility toggle */}
+        <div className="flex justify-end">
+          <div className="w-4 h-4 bg-white/20 rounded"></div>
+        </div>
+      </div>
+
+      {/* Expand/Collapse Button */}
+      <div className="flex justify-center">
+        <div className="bg-gray-600 rounded-full p-1 shadow-lg mt-1.5 w-6 h-6"></div>
+      </div>
+    </div>
+  );
+};
+
+// Goal Card Skeleton Component
+const GoalCardSkeleton = () => {
+  return (
+    <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4 animate-pulse">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="bg-gray-600 h-4 w-24 rounded"></div>
+        <div className="bg-gray-600 h-4 w-16 rounded"></div>
+      </div>
+
+      {/* Amount */}
+      <div className="mb-4">
+        <div className="bg-gray-600 h-8 w-32 rounded mb-2"></div>
+        <div className="bg-gray-600 h-3 w-20 rounded"></div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-4">
+        <div className="bg-gray-700 h-2 w-full rounded-full">
+          <div className="bg-gray-600 h-2 w-1/3 rounded-full"></div>
+        </div>
+        <div className="flex justify-between mt-2">
+          <div className="bg-gray-600 h-3 w-16 rounded"></div>
+          <div className="bg-gray-600 h-3 w-20 rounded"></div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <div className="flex-1 bg-gray-600 h-8 rounded-lg"></div>
+        <div className="flex-1 bg-gray-600 h-8 rounded-lg"></div>
+      </div>
+    </div>
+  );
+};
+
+// Goal Details Modal Component - Following PWA Design Pattern
+const GoalDetailsModal = ({
+  isOpen,
+  onClose,
+  onSaveNow,
+  goal,
+  showBalance = true,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSaveNow: () => void;
+  goal?: any;
+  showBalance?: boolean;
+}) => {
+  if (!goal) return null;
+
+  const formatAmount = (amount: string) => {
+    if (!showBalance) return "****";
+    return new Intl.NumberFormat("en-KE").format(Number(amount));
+  };
+
+  const getGoalEmoji = (category: string) => {
+    switch (category) {
+      case "personal":
+        return "🎯";
+      case "retirement":
+        return "🏦";
+      case "emergency":
+        return "🚨";
+      case "travel":
+        return "✈️";
+      case "education":
+        return "🎓";
+      case "business":
+        return "💼";
+      case "health":
+        return "🏥";
+      case "home":
+        return "🏠";
+      default:
+        return "💰";
+    }
+  };
+
+  const getGoalGradient = (category: string) => {
+    switch (category) {
+      case "personal":
+        return "from-blue-500 to-blue-600";
+      case "retirement":
+        return "from-purple-500 to-purple-600";
+      case "emergency":
+        return "from-red-500 to-red-600";
+      case "travel":
+        return "from-green-500 to-green-600";
+      case "education":
+        return "from-yellow-500 to-yellow-600";
+      case "business":
+        return "from-indigo-500 to-indigo-600";
+      case "health":
+        return "from-pink-500 to-pink-600";
+      case "home":
+        return "from-orange-500 to-orange-600";
+      default:
+        return "from-gray-500 to-gray-600";
+    }
+  };
+
+  return (
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[85vh]">
+      <ModalHeader
+        title={goal.title}
+        onClose={onClose}
+        rightAction={{
+          label: "Save now",
+          onClick: onSaveNow,
+          variant: "secondary",
+        }}
+      />
+
+      {/* Goal Card Header */}
+      <div
+        className={`bg-gradient-to-r ${getGoalGradient(goal.category)} p-2 flex items-center justify-between`}
+      >
+        <div className="flex-1">
+          <div className="text-xs text-white/80">Current Balance</div>
+          <div className="text-xl font-bold text-white">
+            KES {showBalance ? formatAmount(goal.currentAmount) : "****"}
+          </div>
+        </div>
+        <div className="text-3xl opacity-80">{getGoalEmoji(goal.category)}</div>
+      </div>
+
+      {/* Content */}
+      <div className="bg-gray-800/20 backdrop-blur-sm p-2 space-y-2 overflow-y-auto">
+        {/* Balance Overview */}
+        <InfoCard variant="stats">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="text-center">
+              <div className="text-xs text-gray-400 mb-0.5">Saved</div>
+              <div className="text-base font-semibold text-white">
+                {showBalance ? formatAmount(goal.currentAmount) : "****"}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-400 mb-0.5">Target</div>
+              <div className="text-base font-semibold text-cyan-400">
+                {showBalance ? formatAmount(goal.targetAmount) : "****"}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-600 rounded-full h-1 mt-2">
+            <div
+              className="bg-cyan-400 h-1 rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(goal.progress || 0, 100)}%` }}
+            ></div>
+          </div>
+          <div className="text-center mt-1">
+            <span className="text-xs text-gray-400">
+              {(goal.progress || 0).toFixed(1)}% complete
+            </span>
+          </div>
+        </InfoCard>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <ActionButton onClick={onSaveNow} variant="primary" size="sm">
+            Save Money
+          </ActionButton>
+          <ActionButton onClick={() => {}} variant="outline" size="sm">
+            Withdraw
+          </ActionButton>
+        </div>
+
+        {/* Goal Information */}
+        {goal.description && (
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-medium text-white">About this goal</h3>
+            <InfoCard variant="action">
+              <p className="text-xs text-gray-300 leading-relaxed">
+                {goal.description}
+              </p>
+            </InfoCard>
+          </div>
+        )}
+
+        {/* Bottom spacing for safe area */}
+        <div className="h-2"></div>
+      </div>
+    </BottomSheet>
+  );
+};
+
 // Quick Save Confirmation Modal - Mobile-First
 const QuickSaveConfirmationModal = ({
   isOpen,
@@ -593,7 +813,7 @@ const QuickSaveConfirmationModal = ({
       <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
         <ModalHeader title="Deposit Successful!" onClose={onClose} />
 
-        <div className="bg-black/90 backdrop-blur-sm p-3 space-y-4">
+        <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-4">
           <div className="text-center py-3">
             <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
               <span className="text-xl">✓</span>
@@ -631,7 +851,7 @@ const QuickSaveConfirmationModal = ({
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
       <ModalHeader title="Confirm Deposit" onClose={onClose} />
 
-      <div className="bg-black/90 backdrop-blur-sm p-4 space-y-6">
+      <div className="bg-gray-800/20 backdrop-blur-sm p-4 space-y-6">
         {/* Error Display */}
         {error && (
           <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm">
@@ -702,17 +922,12 @@ const QuickSaveConfirmationModal = ({
           <>
             {/* Confirmation Details */}
             <div className="text-center py-3">
-              <div className="text-xs text-white mb-1.5">
-                Is the following correct?
-              </div>
               <div className="text-xs text-cyan-400 mb-3">
-                You wish to deposit to Quick Save
+                deposit{" "}
+                <div className="text-2xl font-bold text-cyan-400 mb-1.5">
+                  KES {amount}
+                </div>
               </div>
-
-              <div className="text-2xl font-bold text-cyan-400 mb-1.5">
-                KES {amount}
-              </div>
-
               <div className="text-gray-400 mb-1.5 text-xs">to your</div>
               <div className="text-base font-bold text-cyan-400">
                 Quick Save Goal
@@ -757,81 +972,6 @@ const QuickSaveConfirmationModal = ({
         <div className="h-2"></div>
       </div>
     </BottomSheet>
-  );
-};
-
-// Profile Screen Component - Mobile-First with Separated Cards
-const ProfileScreen = ({
-  showBalance,
-  onToggleBalance,
-  user,
-  goalStats,
-  groupSavings,
-}: {
-  showBalance: boolean;
-  onToggleBalance: () => void;
-  user: any; // User from API
-  goalStats: any; // Goal stats from API
-  groupSavings: string; // Group savings amount
-}) => {
-  const account = useActiveAccount();
-  const address = account?.address;
-
-  const getUserName = () => {
-    if (user?.username) {
-      return user.username;
-    }
-    if (address) {
-      // Fallback to shortened address
-      return `${address.slice(0, 6)}...${address.slice(-4)}`;
-    }
-    return "Guest User";
-  };
-
-  const getMemberSince = () => {
-    if (user?.createdAt) {
-      const date = new Date(user.createdAt);
-      return `Member since ${date.toLocaleDateString("en-US", {
-        month: "long",
-        year: "numeric",
-      })}`;
-    }
-    return "New Member";
-  };
-
-  // Calculate savings data for display
-  const allTimeSavings = goalStats?.totalSaved || "0";
-  const currentSavings = goalStats?.totalSaved || "0";
-
-  return (
-    <div className="min-h-screen bg-black/20 pb-20">
-      {/* Profile Header Card */}
-      <ProfileHeaderCard
-        username={getUserName()}
-        memberSince={getMemberSince()}
-      />
-
-      {/* Savings Statistics Card */}
-      <SavingsStatsCard
-        allTimeSavings={allTimeSavings}
-        currentSavings={currentSavings}
-        groupSavings={groupSavings}
-        showBalance={showBalance}
-        onToggleBalance={onToggleBalance}
-      />
-
-      {/* Invite Friends Card */}
-      <InviteFriendsCard />
-
-      {/* Account Settings Card */}
-      <AccountSettingsCard />
-
-      {/* Support Card */}
-      <SupportCard />
-
-      {/* Bottom spacing for footer */}
-      <div className="h-2"></div>
-    </div>
   );
 };
 
@@ -1034,7 +1174,7 @@ const ExpandableQuickSaveCard = ({
 
   return (
     <div className="relative">
-      <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-3 text-white shadow-lg">
+      <div className="bg-gray-800/20 backdrop-blur-sm rounded-xl p-3 text-white shadow-lg border border-gray-700/30">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -1412,6 +1552,13 @@ export default function AppPage() {
   const [vaultPositions, setVaultPositions] = useState<any[]>([]);
   const [vaultPositionsLoading, setVaultPositionsLoading] = useState(false);
 
+  // Goal modal states (following same pattern as Quick Save)
+  const [goalDetailsOpen, setGoalDetailsOpen] = useState(false);
+  const [goalAmountOpen, setGoalAmountOpen] = useState(false);
+  const [goalConfirmationOpen, setGoalConfirmationOpen] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<any>(null);
+  const [goalAmount, setGoalAmount] = useState("100");
+
   // Quick Save deposit transaction states
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [depositError, setDepositError] = useState<string | null>(null);
@@ -1478,6 +1625,32 @@ export default function AppPage() {
         // Unknown save action selected
         break;
     }
+  };
+
+  const handleGoalCardClick = (goal: any) => {
+    // Open goal details modal following PWA design pattern
+    setSelectedGoal(goal);
+    setGoalDetailsOpen(true);
+  };
+
+  // Goal modal handlers (following Quick Save pattern)
+  const handleGoalSaveNow = () => {
+    setGoalDetailsOpen(false);
+    setGoalAmountOpen(true);
+  };
+
+  const handleGoalAmountContinue = (amount: string) => {
+    setGoalAmount(amount);
+    setGoalAmountOpen(false);
+    setGoalConfirmationOpen(true);
+  };
+
+  const closeAllGoalModals = () => {
+    setGoalDetailsOpen(false);
+    setGoalAmountOpen(false);
+    setGoalConfirmationOpen(false);
+    setSelectedGoal(null);
+    // Reset any goal-specific states if needed
   };
 
   const handleCreateCustomGoal = async () => {
@@ -1573,6 +1746,18 @@ export default function AppPage() {
 
   const toggleBalanceVisibility = () => {
     setShowBalances(!showBalances);
+  };
+
+  // Smart handler for "Create Your First Goal" button
+  const handleCreateFirstGoal = () => {
+    // Check if user is authenticated (has connected wallet)
+    if (!account || !isConnected) {
+      // User is not authenticated - redirect to profile tab to sign in
+      setActiveTab("profile");
+    } else {
+      // User is authenticated - proceed to goal creation
+      setCustomGoalModalOpen(true);
+    }
   };
 
   // Quick Save modal handlers
@@ -2012,7 +2197,7 @@ export default function AppPage() {
       }}
     >
       {/* Background overlay for better text readability */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"></div>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none"></div>
 
       {/* AutoConnect for silent wallet connection */}
       <AutoConnect
@@ -2206,20 +2391,10 @@ export default function AppPage() {
 
           {/* Conditional Content based on active tab */}
           {activeTab === "goals" && (
-            <div className="py-6">
-              {/* Loading State */}
-              {goalsLoading && (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-                    <p className="text-gray-400">Loading your goals...</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Error State */}
+            <div className="py-4">
+              {/* Error State - only show when there's an error and not loading */}
               {goalsError && !goalsLoading && (
-                <div className="text-center py-12">
+                <div className="text-center py-8">
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
                     <p className="text-red-400 mb-2">Failed to load goals</p>
                     <p className="text-gray-400 text-sm">{goalsError}</p>
@@ -2234,12 +2409,16 @@ export default function AppPage() {
                 </div>
               )}
 
-              {/* Goals Content */}
-              {!goalsLoading && !goalsError && (
+              {/* Goals Content - Always show, with loading states */}
+              {!goalsError && (
                 <>
-                  {/* Quick Save Section */}
-                  {goals.find((g) => g.category === "quick") && (
-                    <div className="mb-8">
+                  {/* Quick Save Section - Always visible */}
+                  <div className="mb-4">
+                    {goalsLoading ||
+                    !goals.find((g) => g.category === "quick") ? (
+                      // Skeleton for Quick Save card
+                      <QuickSaveCardSkeleton />
+                    ) : (
                       <ExpandableQuickSaveCard
                         goal={goals.find((g) => g.category === "quick")!}
                         goals={goals}
@@ -2256,12 +2435,24 @@ export default function AppPage() {
                         exchangeRate={getKESRate() || undefined}
                         onGoalsRefetch={refetchGoals}
                       />
+                    )}
+                  </div>
+
+                  {/* Loading indicator for goals data */}
+                  {goalsLoading && (
+                    <div className="flex items-center justify-center py-2 mb-3">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-400 mx-auto mb-2"></div>
+                        <p className="text-gray-400 text-sm">
+                          Loading your goals...
+                        </p>
+                      </div>
                     </div>
                   )}
 
                   {/* User Goals Section */}
-                  <div className="mb-32 pb-4">
-                    <div className="flex items-center space-x-2 mb-6">
+                  <div className="mb-20 pb-4">
+                    <div className="flex items-center space-x-2 mb-4">
                       <TrendingUp className="w-5 h-5 text-gray-400" />
                       <h2 className="text-lg font-semibold text-white">
                         My Goals
@@ -2269,31 +2460,43 @@ export default function AppPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                      {goals
-                        .filter((g) => g.category !== "quick")
-                        .map((goal) => (
-                          <GoalCard
-                            key={goal.id}
-                            goal={goal}
-                            showBalance={showBalances}
-                          />
-                        ))}
+                      {goalsLoading ? (
+                        // Show skeleton cards while loading
+                        <>
+                          <GoalCardSkeleton />
+                          <GoalCardSkeleton />
+                          <GoalCardSkeleton />
+                        </>
+                      ) : (
+                        <>
+                          {goals
+                            .filter((g) => g.category !== "quick")
+                            .map((goal) => (
+                              <GoalCard
+                                key={goal.id}
+                                goal={goal}
+                                showBalance={showBalances}
+                                onCardClick={() => handleGoalCardClick(goal)}
+                              />
+                            ))}
 
-                      {/* Show empty state if no user goals exist */}
-                      {goals.filter((g) => g.category !== "quick").length ===
-                        0 && (
-                        <div className="col-span-full text-center py-8">
-                          <p className="text-gray-400 mb-4">
-                            No goals created yet
-                          </p>
-                          <ActionButton
-                            onClick={() => setCustomGoalModalOpen(true)}
-                            variant="primary"
-                            size="sm"
-                          >
-                            Create Your First Goal
-                          </ActionButton>
-                        </div>
+                          {/* Show empty state if no user goals exist */}
+                          {goals.filter((g) => g.category !== "quick")
+                            .length === 0 && (
+                            <div className="col-span-full text-center py-8">
+                              <p className="text-gray-400 mb-4">
+                                No goals created yet
+                              </p>
+                              <ActionButton
+                                onClick={handleCreateFirstGoal}
+                                variant="primary"
+                                size="sm"
+                              >
+                                Create Your First Goal
+                              </ActionButton>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -2331,12 +2534,9 @@ export default function AppPage() {
           )}
 
           {activeTab === "profile" && (
-            <ProfileScreen
+            <NewProfile
               showBalance={showBalances}
               onToggleBalance={toggleBalanceVisibility}
-              user={user}
-              goalStats={goalStats}
-              groupSavings={groupSavingsAmount}
             />
           )}
         </main>
@@ -2409,6 +2609,64 @@ export default function AppPage() {
           transactionStatus={transactionStatus}
           tokenSymbol={defaultToken?.symbol || "USDC"}
           depositSuccess={depositSuccess}
+          account={account}
+          tokens={tokens}
+          tokenInfos={tokenInfos}
+          supportedStablecoins={supportedStablecoins}
+          copied={copied}
+          setCopied={setCopied}
+          setSelectedTokenForOnramp={setSelectedTokenForOnramp}
+          setShowOnrampModal={setShowOnrampModal}
+        />
+
+        {/* Goal Modals (following same pattern as Quick Save) */}
+        <GoalDetailsModal
+          isOpen={goalDetailsOpen}
+          onClose={closeAllGoalModals}
+          onSaveNow={handleGoalSaveNow}
+          goal={selectedGoal}
+          showBalance={showBalances}
+        />
+
+        <AmountInputModal
+          isOpen={goalAmountOpen}
+          onClose={closeAllGoalModals}
+          onContinue={handleGoalAmountContinue}
+          title={`Save to ${selectedGoal?.title || "Goal"}`}
+          initialAmount="100"
+          currency="KES"
+          icon={
+            selectedGoal?.category === "personal"
+              ? "🎯"
+              : selectedGoal?.category === "retirement"
+                ? "🏦"
+                : selectedGoal?.category === "emergency"
+                  ? "🚨"
+                  : selectedGoal?.category === "travel"
+                    ? "✈️"
+                    : selectedGoal?.category === "education"
+                      ? "🎓"
+                      : selectedGoal?.category === "business"
+                        ? "💼"
+                        : selectedGoal?.category === "health"
+                          ? "🏥"
+                          : selectedGoal?.category === "home"
+                            ? "🏠"
+                            : "💰"
+          }
+        />
+
+        {/* Goal Confirmation Modal - TODO: Create dedicated modal */}
+        <QuickSaveConfirmationModal
+          isOpen={goalConfirmationOpen}
+          onClose={closeAllGoalModals}
+          amount={goalAmount}
+          onDeposit={() => {}} // TODO: Implement goal deposit
+          isLoading={false}
+          error={null}
+          transactionStatus={null}
+          tokenSymbol={defaultToken?.symbol || "USDC"}
+          depositSuccess={null}
           account={account}
           tokens={tokens}
           tokenInfos={tokenInfos}

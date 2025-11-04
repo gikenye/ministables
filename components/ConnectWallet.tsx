@@ -50,14 +50,14 @@ export function ConnectWallet({ className }: { className?: string }) {
         showThirdwebBranding: false,
         size: "compact",
         title: "Minilend",
-        titleIcon: "https://www.minilend.xyz/static/new-logo.png",
+        titleIcon: "/minilend-pwa.png",
       }}
       theme={darkTheme({
         colors: {
-          modalBg: "hsl(148, 19%, 15%)",
-          borderColor: "hsl(147, 25%, 25%)",
-          accentText: "hsl(193, 100%, 55%)",
-          primaryButtonBg: "hsl(150, 75%, 22%)",
+          modalBg: "hsla(44, 68%, 12%, 1.00)",
+          borderColor: "hsla(0, 0%, 0%, 1.00)",
+          accentText: "hsla(26, 24%, 32%, 1.00)",
+          primaryButtonBg: "hsla(197, 75%, 22%, 1.00)",
           primaryButtonText: "hsl(0, 0%, 100%)",
         },
       })}
