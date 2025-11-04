@@ -12113,6 +12113,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "minilend@workspace:."
   dependencies:
+    "@anon-aadhaar/core": "https://gitpkg.vercel.app/selfxyz/anon-aadhaar/packages/core?1b9efa501cff3cf25dc260b060bf611229e316a4"
     "@auth/core": "npm:^0.40.0"
     "@divvi/referral-sdk": "npm:^2.3.0"
     "@hookform/resolvers": "npm:^3.9.1"

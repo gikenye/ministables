@@ -3,7 +3,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { useMiniApp } from "@/hooks/useMiniApp";
-import { getMemberSinceDate } from "@/lib/utils/profileUtils";
 import Link from "next/link";
 import Image from "next/image";
 import {

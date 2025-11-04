@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ProofOfHuman } from "../src/ProofOfHuman.sol";
-import { BaseScript } from "./Base.s.sol";
-import { CountryCodes } from "@selfxyz/contracts/contracts/libraries/CountryCode.sol";
-import { console } from "forge-std/console.sol";
-import { SelfUtils } from "@selfxyz/contracts/contracts/libraries/SelfUtils.sol";
+import {ProofOfHuman} from "./ProofOfHuman.sol";
+import {BaseScript} from "./Base.s.sol";
+import {CountryCodes} from "@selfxyz/contracts/contracts/libraries/CountryCode.sol";
+import {console} from "forge-std/console.sol";
+import {SelfUtils} from "@selfxyz/contracts/contracts/libraries/SelfUtils.sol";
 
 /// @title DeployProofOfHuman
 /// @notice Deployment script for ProofOfHuman contract using standard deployment
@@ -23,17 +23,23 @@ contract DeployProofOfHuman is BaseScript {
         address hubAddress = vm.envAddress("IDENTITY_VERIFICATION_HUB_ADDRESS");
         string memory scopeSeed = vm.envString("SCOPE_SEED");
         string[] memory forbiddenCountries = new string[](1);
-        
+
         // Make sure this is the same as frontend config
         forbiddenCountries[0] = CountryCodes.NORTH_KOREA;
-        SelfUtils.UnformattedVerificationConfigV2 memory verificationConfig = SelfUtils.UnformattedVerificationConfigV2({
-            olderThan: 18,
-            forbiddenCountries: forbiddenCountries,
-            ofacEnabled: true
-        });
+        SelfUtils.UnformattedVerificationConfigV2
+            memory verificationConfig = SelfUtils
+                .UnformattedVerificationConfigV2({
+                    olderThan: 18,
+                    forbiddenCountries: forbiddenCountries,
+                    ofacEnabled: true
+                });
 
         // Deploy the contract using SCOPE_SEED from environment
-        proofOfHuman = new ProofOfHuman(hubAddress, scopeSeed, verificationConfig);
+        proofOfHuman = new ProofOfHuman(
+            hubAddress,
+            scopeSeed,
+            verificationConfig
+        );
 
         // Log deployment information
         console.log("ProofOfHuman deployed to:", address(proofOfHuman));
@@ -45,6 +51,9 @@ contract DeployProofOfHuman is BaseScript {
         if (address(proofOfHuman) == address(0)) revert DeploymentFailed();
 
         console.log("Deployment verification completed successfully!");
-        console.log("Scope automatically generated from SCOPE_SEED:", scopeSeed);
+        console.log(
+            "Scope automatically generated from SCOPE_SEED:",
+            scopeSeed
+        );
     }
 }

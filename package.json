@@ -26,6 +26,7 @@
     "pwa:test": "pnpm build && pnpm start"
   },
   "dependencies": {
+    "@anon-aadhaar/core": "https://gitpkg.vercel.app/selfxyz/anon-aadhaar/packages/core?1b9efa501cff3cf25dc260b060bf611229e316a4",
     "@auth/core": "^0.40.0",
     "@divvi/referral-sdk": "^2.3.0",
     "@hookform/resolvers": "^3.9.1",

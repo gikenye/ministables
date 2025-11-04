@@ -147,7 +147,12 @@ export function getAvatarUrl(
  * Get member since date from wallet address creation estimate
  * For demo purposes, we'll use a fixed date but this could be enhanced
  */
-export function getMemberSinceDate(walletAddress: string): string {
+export function getMemberSinceDate(walletAddress?: string): string {
+  // Guard against falsy inputs
+  if (!walletAddress) {
+    return "";
+  }
+
   // For now, return a consistent date based on the address
   // In a real app, you'd track actual user registration dates
   const hash = walletAddress.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
