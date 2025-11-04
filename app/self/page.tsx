@@ -46,9 +46,9 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      // Use the contract address from .env or fallback to the verified Self endpoint
+      // Use the contract address
       const endpoint =
-        process.env.NEXT_PUBLIC_SELF_ENDPOINT || "https://selfda1.vercel.app";
+        process.env.NEXT_PUBLIC_SELF_ENDPOINT || "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
 
       const app = new SelfAppBuilder({
         version: 2,

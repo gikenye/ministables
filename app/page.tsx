@@ -40,6 +40,7 @@ import {
   Trophy,
   Banknote,
   Mail,
+  Check,
   type LucideIcon,
 } from "lucide-react";
 
@@ -117,6 +118,18 @@ import { SaveMoneyModal } from "@/components/SaveMoneyModal";
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
 import { vaultService } from "@/lib/services/vaultService";
+import type { VaultPosition, VaultDeposit } from "@/lib/services/vaultService";
+
+interface WithdrawableDeposit {
+  depositId: number;
+  tokenAddress: string;
+  tokenSymbol: string;
+  amount: string;
+  withdrawableAmount: string;
+  lockTier: number;
+  depositTime: number;
+  unlockTime: number;
+}
 import { getReferralTag } from "@divvi/referral-sdk";
 
 const vaultABI = [
@@ -135,7 +148,7 @@ const vaultABI = [
 import { useChain } from "@/components/ChainProvider";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
-import { FundsWithdrawalModal } from "@/components/FundsWithdrawalModal";
+import { WithdrawModal } from "@/components/WithdrawModal";
 import { ChainDebug } from "@/components/ChainDebug";
 import {
   getTransactionUrl,
@@ -1419,6 +1432,25 @@ export default function AppPage() {
   const { isSDKLoaded, context } = useMiniApp();
   const { chain, tokens, tokenInfos } = useChain();
 
+  // Utility function to format token amounts from raw decimals
+  const formatTokenAmount = (amount: string, decimals: number): string => {
+    const value = BigInt(amount);
+    const divisor = BigInt(10 ** decimals);
+    const wholePart = value / divisor;
+    const fractionalPart = value % divisor;
+
+    if (fractionalPart === 0n) {
+      return wholePart.toString();
+    }
+
+    const fractionalStr = fractionalPart.toString().padStart(decimals, "0");
+    const trimmedFractional = fractionalStr.replace(/0+$/, "");
+
+    return trimmedFractional
+      ? `${wholePart}.${trimmedFractional}`
+      : wholePart.toString();
+  };
+
   const defaultToken = useMemo(() => {
     if (!tokens || tokens.length === 0) return null;
 
@@ -1549,7 +1581,9 @@ export default function AppPage() {
     useState(false);
   const [quickSaveAmount, setQuickSaveAmount] = useState("100");
   const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
-  const [vaultPositions, setVaultPositions] = useState<any[]>([]);
+  const [vaultPositions, setVaultPositions] = useState<WithdrawableDeposit[]>(
+    []
+  );
   const [vaultPositionsLoading, setVaultPositionsLoading] = useState(false);
 
   // Goal modal states (following same pattern as Quick Save)
@@ -2010,9 +2044,25 @@ export default function AppPage() {
     tokenSymbol: string,
     depositIds: number[]
   ) => {
-    if (!account?.address || !user?.address || !chain?.id) {
-      throw new Error("Missing required data for withdrawal");
+    // Check wallet connection - this is the primary requirement
+    if (!account?.address) {
+      throw new Error(
+        "Wallet not connected. Please connect your wallet to withdraw."
+      );
     }
+
+    if (!chain?.id) {
+      throw new Error(
+        "Network not detected. Please ensure you're connected to a supported network."
+      );
+    }
+
+    if (!depositIds || depositIds.length === 0) {
+      throw new Error("No deposits selected for withdrawal.");
+    }
+
+    // Use connected wallet address - this is what matters for the blockchain transaction
+    const userAddress = account.address;
 
     const withdrawMethodABI = {
       inputs: [{ internalType: "uint256", name: "depositId", type: "uint256" }],
@@ -2065,7 +2115,7 @@ export default function AppPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            userId: user.address,
+            userId: userAddress,
             chainId: chain.id,
             depositId,
             transactionHash: result.transactionHash,
@@ -2104,7 +2154,59 @@ export default function AppPage() {
         tokenSymbols
       );
 
-      setVaultPositions(positions);
+      // Transform service VaultPosition[] to WithdrawableDeposit[]
+      const withdrawableDeposits: WithdrawableDeposit[] = [];
+
+      positions.forEach((position: VaultPosition) => {
+        position.deposits.forEach((deposit: VaultDeposit) => {
+          // Convert raw amounts to human-readable using token decimals
+          const formattedPrincipal = formatTokenAmount(
+            deposit.principal,
+            position.decimals
+          );
+          const formattedCurrentValue = formatTokenAmount(
+            deposit.currentValue,
+            position.decimals
+          );
+
+          const withdrawableAmount = deposit.canWithdraw
+            ? formattedCurrentValue
+            : "0";
+
+          // Debug logging
+          console.log("Processing deposit:", {
+            depositId: deposit.depositId,
+            principal: deposit.principal,
+            formattedPrincipal,
+            currentValue: deposit.currentValue,
+            formattedCurrentValue,
+            canWithdraw: deposit.canWithdraw,
+            withdrawableAmount,
+            tokenSymbol: position.tokenSymbol,
+            decimals: position.decimals,
+          });
+
+          withdrawableDeposits.push({
+            depositId: deposit.depositId,
+            tokenAddress: position.tokenAddress,
+            tokenSymbol: position.tokenSymbol,
+            amount: formattedPrincipal,
+            withdrawableAmount,
+            lockTier: 0, // Default value since not in service interface
+            depositTime: Date.now() - 30 * 24 * 60 * 60 * 1000, // Default to 30 days ago
+            unlockTime: deposit.lockEnd * 1000, // Convert to milliseconds
+          });
+        });
+      });
+
+      console.log("Final withdrawableDeposits:", withdrawableDeposits);
+      console.log(
+        "Withdrawable count:",
+        withdrawableDeposits.filter((d) => parseFloat(d.withdrawableAmount) > 0)
+          .length
+      );
+
+      setVaultPositions(withdrawableDeposits);
     } catch (error) {
       reportError("Failed to fetch vault positions", {
         component: "AppPage",
@@ -2328,7 +2430,7 @@ export default function AppPage() {
                 <h1 className="text-xl lg:text-2xl font-bold text-cyan-400">
                   {activeTab === "goals" && "Goals"}
                   {activeTab === "groups" && "Groups"}
-                  {activeTab === "leaderboard" && "LeaderBoard"}
+                  {activeTab === "leaderboard" && "Leaderboard"}
                   {activeTab === "profile" && "Profile"}
                 </h1>
                 <p className="text-sm lg:text-base text-gray-400">
@@ -2524,7 +2626,7 @@ export default function AppPage() {
               <div className="text-center py-20">
                 <BarChart3 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-white mb-2">
-                  LeaderBoard coming soon
+                  Leaderboard coming soon
                 </h3>
                 <p className="text-gray-400">
                   See how you rank among other savers
@@ -2706,12 +2808,11 @@ export default function AppPage() {
         />
 
         {/* Funds Withdrawal Modal */}
-        <FundsWithdrawalModal
+        <WithdrawModal
           isOpen={withdrawalModalOpen}
           onClose={() => setWithdrawalModalOpen(false)}
           onWithdraw={handleVaultWithdrawal}
           vaultPositions={vaultPositions}
-          tokenInfos={tokenInfos}
           loading={vaultPositionsLoading}
         />
       </div>
