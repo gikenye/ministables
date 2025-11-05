@@ -26,18 +26,24 @@ export default function Home() {
   // Early return if user is not connected
   if (!userId) {
     return (
-      <div className="min-h-screen w-full bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8">
-        <div className="mb-6 md:mb-8 text-center">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-gray-800">
-            {process.env.NEXT_PUBLIC_SELF_APP_NAME || "Self Workshop"}
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600 px-2">
-            Please connect your wallet to proceed with identity verification
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 w-full max-w-xs sm:max-w-sm md:max-w-md mx-auto">
-          <div className="text-center text-gray-500">
-            Wallet connection required
+      <div
+        className="min-h-screen relative overflow-hidden bg-cover bg-center bg-no-repeat flex flex-col items-center justify-center p-4"
+        style={{
+          backgroundImage: "url('/african-safari-scene-2005.jpg')",
+        }}
+      >
+        {/* Background overlay for better text readability */}
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none"></div>
+
+        {/* Content Container */}
+        <div className="relative z-10 w-full max-w-md mx-auto">
+          <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-6 shadow-lg text-center">
+            <h2 className="text-white font-semibold text-lg mb-3">
+              Wallet Required
+            </h2>
+            <p className="text-white/70 text-sm">
+              Please connect your wallet to proceed with identity verification
+            </p>
           </div>
         </div>
       </div>
@@ -48,7 +54,8 @@ export default function Home() {
     try {
       // Use the contract address
       const endpoint =
-        process.env.NEXT_PUBLIC_SELF_ENDPOINT || "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
+        process.env.NEXT_PUBLIC_SELF_ENDPOINT ||
+        "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
 
       const app = new SelfAppBuilder({
         version: 2,
@@ -155,70 +162,78 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8">
-      <div className="mb-6 md:mb-8 text-center">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-gray-800">
-          {process.env.NEXT_PUBLIC_SELF_APP_NAME || "Self Workshop"}
-        </h1>
-        <p className="text-sm sm:text-base text-gray-600 px-2">
-          Scan QR code with Self Protocol App to verify your identity
-        </p>
-      </div>
+    <div
+      className="min-h-screen relative overflow-hidden bg-cover bg-center bg-no-repeat flex flex-col items-center justify-center p-4"
+      style={{
+        backgroundImage: "url('/african-safari-scene-2005.jpg')",
+      }}
+    >
+      {/* Background overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none"></div>
 
-      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 w-full max-w-xs sm:max-w-sm md:max-w-md mx-auto">
-        <div className="flex justify-center mb-4 sm:mb-6">
-          {selfApp ? (
-            <SelfQRcodeWrapper
-              selfApp={selfApp}
-              onSuccess={handleSuccessfulVerification}
-              onError={() => displayToast("Error: Failed to verify identity")}
-            />
-          ) : (
-            <div className="w-[256px] h-[256px] bg-gray-200 animate-pulse flex items-center justify-center">
-              <p className="text-gray-500 text-sm">Loading QR Code...</p>
+      {/* Compact Content Container */}
+      <div className="relative z-10 w-full max-w-sm mx-auto">
+        <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4 shadow-lg">
+          <div className="flex flex-col items-center gap-4">
+            {/* QR Code Section */}
+            <div className="flex-shrink-0">
+              <div className="bg-white rounded-lg p-2 shadow-lg">
+                {selfApp ? (
+                  <SelfQRcodeWrapper
+                    selfApp={selfApp}
+                    type="deeplink"
+                    onSuccess={handleSuccessfulVerification}
+                    onError={() =>
+                      displayToast("Error: Failed to verify identity")
+                    }
+                  />
+                ) : (
+                  <div className="w-[160px] h-[160px] bg-gray-100 animate-pulse flex items-center justify-center rounded-lg">
+                    <p className="text-gray-500 text-sm">Loading...</p>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2 mb-4 sm:mb-6">
-          <button
-            type="button"
-            onClick={copyToClipboard}
-            disabled={!universalLink || !userId || isVerifying}
-            className="flex-1 bg-gray-800 hover:bg-gray-700 transition-colors text-white p-2 rounded-md text-sm sm:text-base disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {linkCopied ? "Copied!" : "Copy Universal Link"}
-          </button>
+            {/* Action Buttons */}
+            <div className="flex flex-row gap-2 w-full">
+              <button
+                type="button"
+                onClick={copyToClipboard}
+                disabled={!universalLink || !userId || isVerifying}
+                className="flex-1 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 disabled:from-gray-500 disabled:to-gray-500 transition-all duration-200 text-white font-medium py-2 px-3 rounded-lg text-xs disabled:cursor-not-allowed shadow-lg"
+              >
+                {linkCopied ? "Copied!" : "Copy Link"}
+              </button>
 
-          <button
-            type="button"
-            onClick={openSelfApp}
-            disabled={!universalLink || !userId || isVerifying}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 transition-colors text-white p-2 rounded-md text-sm sm:text-base mt-2 sm:mt-0 disabled:bg-blue-300 disabled:cursor-not-allowed"
-          >
-            {isVerifying ? "Verifying..." : "Open Self App"}
-          </button>
-        </div>
-
-        <div className="flex flex-col items-center gap-2 mt-2">
-          <span className="text-gray-500 text-xs uppercase tracking-wide">
-            User Address
-          </span>
-          <div className="bg-gray-100 rounded-md px-3 py-2 w-full text-center break-all text-sm font-mono text-gray-800 border border-gray-200">
-            {userId ? (
-              userId
-            ) : (
-              <span className="text-gray-400">Not connected</span>
-            )}
+              <button
+                type="button"
+                onClick={openSelfApp}
+                disabled={!universalLink || !userId || isVerifying}
+                className="flex-1 bg-white/10 hover:bg-white/20 disabled:bg-gray-500/20 backdrop-blur-sm border border-white/20 transition-all duration-200 text-white font-medium py-2 px-3 rounded-lg text-xs disabled:cursor-not-allowed"
+              >
+                {isVerifying ? (
+                  <span className="flex items-center justify-center gap-1">
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Verifying...
+                  </span>
+                ) : (
+                  "Open Self App"
+                )}
+              </button>
+            </div>
           </div>
         </div>
-
-        {showToast && (
-          <div className="fixed bottom-4 right-4 bg-gray-800 text-white py-2 px-4 rounded shadow-lg animate-fade-in text-sm">
-            {toastMessage}
-          </div>
-        )}
       </div>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed bottom-6 left-4 right-4 z-50 flex justify-center">
+          <div className="bg-gray-800/90 backdrop-blur-sm text-white py-3 px-6 rounded-lg shadow-lg border border-gray-600/30 max-w-sm text-center">
+            <div className="text-sm font-medium">{toastMessage}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
