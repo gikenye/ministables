@@ -8,7 +8,75 @@
       name="description"
       content="A dollar savings wallet that allows you to convert your local currency to dollars and earn up to 10% APY on your savings."
     />
-    <meta name="theme-color" content="#07110a" />
+    <meta name="theme-color" content="#0e6037" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="./manifest.json" />
+
+    <!-- Apple PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Minilend" />
+    <link rel="apple-touch-icon" href="./static/icon-180x180.png" />
+    <link
+      rel="apple-touch-icon"
+      sizes="152x152"
+      href="./static/icon-152x152.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="./static/icon-180x180.png"
+    />
+
+    <!-- Standard PWA Icons -->
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="./static/icon-192x192.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="./static/icon-192x192.png"
+    />
+    <link rel="shortcut icon" href="./static/icon-192x192.png" />
+
+    <!-- Windows Tiles -->
+    <meta name="msapplication-TileColor" content="#0e6037" />
+    <meta name="msapplication-TileImage" content="./static/icon-144x144.png" />
+
+    <!-- Android Chrome Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-title" content="Minilend" />
+
+    <!-- Android Specific Viewport and Performance -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, user-scalable=yes, viewport-fit=cover"
+    />
+    <meta name="screen-orientation" content="portrait" />
+    <meta name="full-screen" content="yes" />
+    <meta name="browsermode" content="application" />
+
+    <!-- Android Performance Optimizations -->
+    <meta name="renderer" content="webkit" />
+    <meta name="force-rendering" content="webkit" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+
+    <!-- Samsung Internet Support -->
+    <meta name="samsung-internet-bookmark-color" content="#0e6037" />
+
+    <!-- Additional PWA Meta Tags -->
+    <meta name="application-name" content="Minilend" />
+    <meta name="format-detection" content="telephone=no" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -72,7 +140,7 @@
                   src="https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png"
                   style="width: 30px; height: 40px; vertical-align: middle"
                 /> -->
-                   <br/>& use your savings as security.
+                <br />& use your savings as security.
               </p>
             </div>
 
@@ -729,6 +797,148 @@
             });
           });
       });
+    </script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+      // Detect Android device
+      const isAndroid = () => /android/i.test(navigator.userAgent);
+      const isAndroidWebView = () =>
+        /android/i.test(navigator.userAgent) &&
+        /wv\)/i.test(navigator.userAgent);
+
+      // Service Worker Registration for PWA with Android optimizations
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          // For Android devices, add additional error handling
+          const swOptions = isAndroid() ? { scope: "/landing/" } : {};
+
+          navigator.serviceWorker
+            .register("./sw.js", swOptions)
+            .then(function (registration) {
+              // Android-specific: Check for updates more frequently
+              if (isAndroid()) {
+                setInterval(() => {
+                  registration.update();
+                }, 30000); // Check every 30 seconds for Android
+              }
+            })
+            .catch(function (error) {
+              console.log("ServiceWorker registration failed: ", error);
+
+              // Android WebView has limited PWA support
+              if (isAndroidWebView()) {
+                // PWA features may be limited in WebView
+              }
+            });
+        });
+      }
+
+      // PWA Install Prompt with Android optimizations
+      let deferredPrompt;
+      const installButton = document.createElement("button");
+
+      // Android-specific install text
+      const getInstallText = () => {
+        if (isAndroid()) {
+          return "Add to Home Screen";
+        }
+        return "Install App";
+      };
+
+      installButton.textContent = getInstallText();
+      // Android-specific styling
+      const getInstallButtonStyles = () => {
+        const baseStyles = `
+          position: fixed;
+          background: #0e6037;
+          color: white;
+          border: none;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(14, 96, 55, 0.3);
+          z-index: 1000;
+          display: none;
+          font-family: 'Inter', sans-serif;
+          transition: all 0.3s ease;
+        `;
+
+        if (isAndroid()) {
+          // Android devices: full-width bottom bar for easier tapping
+          return (
+            baseStyles +
+            `
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 20px;
+            border-radius: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 16px;
+          `
+          );
+        } else {
+          // Desktop/iOS: floating button
+          return (
+            baseStyles +
+            `
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 25px;
+          `
+          );
+        }
+      };
+
+      installButton.style.cssText = getInstallButtonStyles();
+      installButton.addEventListener("mouseenter", function () {
+        this.style.transform = "translateY(-2px)";
+        this.style.boxShadow = "0 6px 16px rgba(14, 96, 55, 0.4)";
+      });
+      installButton.addEventListener("mouseleave", function () {
+        this.style.transform = "translateY(0)";
+        this.style.boxShadow = "0 4px 12px rgba(14, 96, 55, 0.3)";
+      });
+
+      window.addEventListener("beforeinstallprompt", (e) => {
+        // Prevent the mini-infobar from appearing on mobile
+        e.preventDefault();
+        // Stash the event so it can be triggered later
+        deferredPrompt = e;
+        // Show the install button
+        installButton.style.display = "block";
+        document.body.appendChild(installButton);
+      });
+
+      installButton.addEventListener("click", async () => {
+        if (deferredPrompt) {
+          // Show the install prompt
+          deferredPrompt.prompt();
+          // Wait for the user to respond to the prompt
+          const { outcome } = await deferredPrompt.userChoice;
+          // Clear the deferredPrompt variable
+          deferredPrompt = null;
+          // Hide the install button
+          installButton.style.display = "none";
+        }
+      });
+
+      // Hide install button if app is already installed
+      window.addEventListener("appinstalled", () => {
+        installButton.style.display = "none";
+        deferredPrompt = null;
+      });
+
+      // Check if app is running in standalone mode (installed)
+      if (
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true
+      ) {
+        // App is installed, hide install button
+        installButton.style.display = "none";
+      }
     </script>
   </body>
 </html>
