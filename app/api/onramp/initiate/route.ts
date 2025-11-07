@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       mobile_network,
       chain: pretiumChain,
       asset,
-      address: vaultAddr,
+      address: vaultAddr, // Funds go to vault contract
       callback_url,
     };
 
@@ -174,7 +174,8 @@ export async function POST(request: NextRequest) {
           currency_code,
           address,
           vaultAddr,
-          asset
+          asset,
+          chain
         ),
       5000
     );
@@ -197,7 +198,8 @@ async function pollAndAllocate(
   currencyCode: string,
   userAddress: string,
   vaultAddress: string,
-  asset: string
+  asset: string,
+  chain: string
 ) {
   let attempts = 0;
   const maxAttempts = 60;
@@ -343,6 +345,16 @@ async function pollAndAllocate(
                   },
                   updatedAt: new Date(),
                 },
+              }
+            );
+
+            console.error(
+              "❌ Allocation failed - transaction requires manual retry via /api/onramp/retry-allocation:",
+              {
+                transactionCode,
+                userAddress,
+                amount: amountInWei,
+                txHash: txData.transaction_hash,
               }
             );
           }

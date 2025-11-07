@@ -32,11 +32,12 @@ export function useUser(): UseUserResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/users?userId=${userId}`);
+      // The /api/users endpoint expects NextAuth session, not query params
+      const response = await fetch("/api/users");
 
       if (!response.ok) {
-        if (response.status === 404) {
-          // User not found, this might be a new user
+        if (response.status === 404 || response.status === 401) {
+          // User not found or not authenticated, this might be a new user
           setUser(null);
           setLoading(false);
           return;

@@ -54,6 +54,11 @@ export interface Goal {
   // Metadata
   icon?: string; // Optional emoji or icon for the goal
   tags?: string[]; // Optional tags for categorization
+  
+  // Blockchain integration
+  blockchainGoalId?: string; // Goal ID on the smart contract
+  blockchainSynced?: boolean; // Whether this goal is synced with blockchain
+  lastBlockchainSync?: Date; // Last time blockchain data was synced
 }
 
 // Define a type for goal updates

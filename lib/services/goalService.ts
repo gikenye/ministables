@@ -47,7 +47,11 @@ export const GoalService = {
     };
 
     const result = await collection.insertOne(goal);
-    return { ...goal, _id: result.insertedId };
+    const createdGoal = { ...goal, _id: result.insertedId };
+
+    // Blockchain sync removed for production deployment
+
+    return createdGoal;
   },
 
   /**
@@ -239,6 +243,8 @@ export const GoalService = {
       currentAmount: newAmount,
       progress: newProgress,
     });
+
+    // Blockchain sync removed for production deployment
 
     return {
       goal: updatedGoal!,
@@ -683,6 +689,8 @@ export const GoalService = {
       currentAmount: newAmount,
       progress: newProgress,
     });
+
+    // Blockchain sync removed for production deployment
 
     return {
       goal: updatedGoal!,
