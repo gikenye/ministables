@@ -64,9 +64,13 @@ export function useGoals(category?: string): UseGoalsResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        `/api/goals?userId=${userAddress}${category ? `&category=${category}` : ""}`
-      );
+      const params = new URLSearchParams();
+      params.append("userId", userAddress);
+      if (category) {
+        params.append("category", category);
+      }
+
+      const response = await fetch(`/api/goals?${params.toString()}`);
 
       if (!response.ok) {
         if (response.status === 404) {
