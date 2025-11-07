@@ -78,11 +78,15 @@ import {
 // Import custom hooks for API integration
 import { useGoals } from "@/hooks/useGoals";
 import { useUser } from "@/hooks/useUser";
+import { useAllocate } from "@/hooks/useAllocate";
+import { useBackendGoals, useQuicksaveGoal } from "@/hooks/useBackendGoals";
+import { useLeaderboard, useBackendLeaderboard } from "@/hooks/useLeaderboard";
 import { useCreateGoal } from "@/hooks/useCreateGoal";
 import { useInitializeUserGoals } from "@/hooks/useInitializeUserGoals";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { useGroupSavingsAmount } from "@/hooks/useGroupGoals";
 import { useInterestRates } from "@/hooks/useInterestRates";
+// import { useBlockchainGoals } from "@/hooks/useBlockchainGoals"; // Removed for production deployment
 import {
   reportError,
   reportWarning,
@@ -112,13 +116,14 @@ import { Logo } from "@/components/Logo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // thirdweb handles transaction modals; no custom tx modal
-import { SaveMoneyModal } from "@/components/SaveMoneyModal";
+import SaveMoneyModal from "@/components/SaveMoneyModal";
 
 // Import chain configuration utilities
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
 import { vaultService } from "@/lib/services/vaultService";
 import type { VaultPosition, VaultDeposit } from "@/lib/services/vaultService";
+import { formatAmount } from "@/lib/utils";
 
 interface WithdrawableDeposit {
   depositId: number;
@@ -149,7 +154,6 @@ import { useChain } from "@/components/ChainProvider";
 import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
 import { PayBackModal } from "@/components/PayBackModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
-import { ChainDebug } from "@/components/ChainDebug";
 import {
   getTransactionUrl,
   getTokens,
@@ -312,7 +316,7 @@ const QuickSaveDetailsModal = ({
         </div>
 
         {/* Key Information */}
-        <div className="space-y-1.5">
+        {/* <div className="space-y-1.5">
           <h3 className="text-xs font-medium text-white">Key Info</h3>
 
           <InfoCard variant="action">
@@ -344,7 +348,7 @@ const QuickSaveDetailsModal = ({
               <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </div>
           </InfoCard>
-        </div>
+        </div> */}
         {/* Bottom spacing for safe area */}
         <div className="h-2"></div>
       </div>
@@ -416,7 +420,7 @@ const CustomGoalModal = ({
       <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3 overflow-y-auto pb-8">
         {/* Header */}
         <div className="text-center py-0.5">
-          <div className="text-2xl mb-1.5">🎯</div>
+          <div className="text-2xl mb-1.5"></div>
           <h3 className="text-base font-semibold text-white mb-0.5">
             Set Your Goal
           </h3>
@@ -466,13 +470,9 @@ const CustomGoalModal = ({
             onChange={(e) => handleInputChange("timeline", e.target.value)}
             className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
           >
-            <option value="3">3 months</option>
-            <option value="6">6 months</option>
-            <option value="12">1 year</option>
-            <option value="18">1.5 years</option>
-            <option value="24">2 years</option>
-            <option value="36">3 years</option>
-            <option value="60">5 years</option>
+            <option value="3">1 month</option>
+            <option value="6">2 months </option>
+            <option value="12">3 months</option>
           </select>
           <div className="text-xs text-gray-500">
             How long do you want to save for this goal?
@@ -652,7 +652,7 @@ const GoalDetailsModal = ({
   const getGoalEmoji = (category: string) => {
     switch (category) {
       case "personal":
-        return "🎯";
+        return "";
       case "retirement":
         return "🏦";
       case "emergency":
@@ -1004,6 +1004,7 @@ interface ExpandableQuickSaveCardProps {
   tokenInfo?: any;
   exchangeRate?: number;
   onGoalsRefetch?: () => void; // Function to refresh goals after transfer
+  sendTransaction?: any; // Function for blockchain transactions
 }
 
 const ExpandableQuickSaveCard = ({
@@ -1021,7 +1022,9 @@ const ExpandableQuickSaveCard = ({
   tokenInfo,
   exchangeRate,
   onGoalsRefetch,
+  sendTransaction,
 }: ExpandableQuickSaveCardProps) => {
+  // const blockchainGoals = useBlockchainGoals(); // Removed for production deployment
   const [isExpanded, setIsExpanded] = useState(false);
   const [currencyMode, setCurrencyMode] = useState<"LOCAL" | "USD">("USD");
   const [isDragging, setIsDragging] = useState(false);
@@ -1030,11 +1033,19 @@ const ExpandableQuickSaveCard = ({
 
   // Calculate total savings across all goals
   const totalSavingsNum = goals.reduce((total, goalItem) => {
-    return total + parseFloat(goalItem?.currentAmount || "0");
+    // Format the raw blockchain amount before parsing
+    const rawAmount = goalItem?.currentAmount || "0";
+    const formattedAmount = formatAmount(
+      rawAmount,
+      goalItem?.tokenDecimals || 6
+    );
+    return total + parseFloat(formattedAmount);
   }, 0);
 
   // Parse Quick Save goal amounts (for the expanded view)
-  const quickSaveAmountNum = parseFloat(goal?.currentAmount || "0");
+  const quickSaveAmountNum = parseFloat(
+    formatAmount(goal?.currentAmount || "0", goal?.tokenDecimals || 6)
+  );
   const tokenSymbol = defaultToken?.symbol || "USDC";
   const tokenDecimals = defaultToken?.decimals || 6;
 
@@ -1114,11 +1125,40 @@ const ExpandableQuickSaveCard = ({
     }
 
     try {
-      // For now, transfer all available Quick Save funds
-      // In a full implementation, you might want to show a modal to let user choose amount
-      const transferAmount = quickSaveAmount.toString();
+      // 1. First, get available deposits from quicksave goal
+      const prepareResponse = await fetch(
+        `/api/goals/transfer-production/prepare?userId=${user.address}&fromGoalId=${goal.id}`
+      );
 
-      const response = await fetch("/api/goals/transfer", {
+      if (!prepareResponse.ok) {
+        const errorData = await prepareResponse.json();
+        throw new Error(errorData.error || "Failed to prepare transfer");
+      }
+
+      const prepareData = await prepareResponse.json();
+
+      if (
+        !prepareData.availableDeposits ||
+        prepareData.availableDeposits.length === 0
+      ) {
+        reportWarning(
+          "No blockchain deposits available to transfer. Please ensure your deposits are properly synced.",
+          {
+            component: "ExpandableQuickSaveCard",
+            operation: "handleTransferFunds",
+            userId: user?.address,
+          }
+        );
+        return;
+      }
+
+      // 2. Select the first available deposit for transfer
+      // In a more sophisticated implementation, you might want to let users choose
+      // or automatically select the best deposits based on amount
+      const selectedDeposit = prepareData.availableDeposits[0];
+
+      // 3. Execute production transfer with blockchain transaction
+      const transferResponse = await fetch("/api/goals/transfer-production", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1127,25 +1167,32 @@ const ExpandableQuickSaveCard = ({
           userId: user.address,
           fromGoalId: goal.id,
           toGoalId: targetGoalId,
-          amount: transferAmount,
+          depositId: selectedDeposit.depositId,
+          sendTransaction: sendTransaction, // Pass the sendTransaction function
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Transfer failed");
+      if (!transferResponse.ok) {
+        const errorData = await transferResponse.json();
+        throw new Error(errorData.error || "Blockchain transfer failed");
       }
 
-      const result = await response.json();
-      // Transfer successful - refresh goals data
+      const transferResult = await transferResponse.json();
 
-      // Refresh goals data to reflect the transfer
+      // 4. Success - refresh goals data to reflect the blockchain state
       if (onGoalsRefetch) {
         onGoalsRefetch();
       }
 
-      // Optionally show success feedback
-      // You could add a toast notification here
+      // Show success feedback
+      reportInfo(
+        `Successfully transferred deposit ${transferResult.transferredDepositId} to target goal`,
+        {
+          component: "ExpandableQuickSaveCard",
+          operation: "handleTransferFunds",
+          transactionHash: transferResult.blockchainTransactionHash,
+        }
+      );
     } catch (error) {
       reportError("Failed to transfer funds", {
         component: "ExpandableQuickSaveCard",
@@ -1153,7 +1200,6 @@ const ExpandableQuickSaveCard = ({
         userId: user?.address,
         additional: { error },
       });
-      // You could show an error toast here
     }
   };
 
@@ -1332,7 +1378,7 @@ const ExpandableQuickSaveCard = ({
                         className={`absolute top-0 left-0 w-8 h-full bg-gradient-to-br from-${colorSet.from} to-${colorSet.to} rounded-l-lg flex items-center justify-center`}
                       >
                         <div className="w-4 h-4 bg-white/30 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs">🎯</span>
+                          <span className="text-white text-xs"></span>
                         </div>
                       </div>
 
@@ -1432,6 +1478,9 @@ export default function AppPage() {
   const { isSDKLoaded, context } = useMiniApp();
   const { chain, tokens, tokenInfos } = useChain();
 
+  // Blockchain goals integration removed for production deployment
+  // const blockchainGoals = useBlockchainGoals();
+
   // Utility function to format token amounts from raw decimals
   const formatTokenAmount = (amount: string, decimals: number): string => {
     const value = BigInt(amount);
@@ -1439,7 +1488,7 @@ export default function AppPage() {
     const wholePart = value / divisor;
     const fractionalPart = value % divisor;
 
-    if (fractionalPart === 0n) {
+    if (fractionalPart === BigInt(0)) {
       return wholePart.toString();
     }
 
@@ -1458,7 +1507,7 @@ export default function AppPage() {
     if (usdc) return usdc;
 
     const stablecoins = tokens.filter((t) =>
-      ["USDT", "CUSD", "DAI"].includes(t.symbol.toUpperCase())
+      ["USDT", "CUSD", "USDC"].includes(t.symbol.toUpperCase())
     );
     if (stablecoins.length > 0) return stablecoins[0];
 
@@ -1498,6 +1547,16 @@ export default function AppPage() {
     error: goalsError,
     refetch: refetchGoals,
   } = useGoals();
+
+  // Backend goals hook for quicksave goal
+  const {
+    goals: backendGoals,
+    quicksaveGoal,
+    loading: backendGoalsLoading,
+    error: backendGoalsError,
+    refetch: refetchBackendGoals,
+  } = useBackendGoals(defaultToken?.symbol);
+
   const {
     user,
     loading: userLoading,
@@ -1510,8 +1569,20 @@ export default function AppPage() {
     error: createGoalError,
   } = useCreateGoal();
 
-  // Initialize user goals (create Quick Save goal for new users)
-  useInitializeUserGoals(defaultToken, chain);
+  // Backend allocation hook for deposit allocation
+  const { allocateDeposit } = useAllocate();
+
+  // Backend leaderboard hook
+  const {
+    leaderboard,
+    userScore,
+    loading: leaderboardLoading,
+    error: leaderboardError,
+    refetch: refetchLeaderboard,
+  } = useBackendLeaderboard({ initialLimit: 10, autoFetch: true });
+
+  // Initialize user goals (monitor backend quicksave goal initialization)
+  const { isInitialized } = useInitializeUserGoals(defaultToken, chain);
 
   // Exchange rates hook
   const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
@@ -1706,8 +1777,8 @@ export default function AppPage() {
       return;
     }
 
-    if (!defaultToken || !chain) {
-      reportError("Chain or token information not available", {
+    if (!defaultToken || !chain || !account?.address) {
+      reportError("Wallet, chain or token information not available", {
         component: "AppPage",
         operation: "handleCreateCustomGoal",
         chainId: chain?.id,
@@ -1726,6 +1797,7 @@ export default function AppPage() {
 
     // Create goal using API
     const newGoalData = {
+      userId: account.address,
       title: customGoalForm.name,
       description: `Custom goal for ${customGoalForm.name}`,
       category: customGoalForm.category as GoalCategory,
@@ -1736,6 +1808,7 @@ export default function AppPage() {
       tokenSymbol: defaultToken.symbol,
       tokenDecimals: defaultToken.decimals,
       interestRate: getTokenRate(defaultToken.symbol),
+      totalInterestEarned: "0",
       isPublic: false,
       allowContributions: false,
       isQuickSave: false,
@@ -1749,24 +1822,39 @@ export default function AppPage() {
     };
 
     try {
-      const createdGoal = await createGoal(newGoalData);
+      // Create goal directly via API to avoid client-side MongoDB imports
+      const response = await fetch("/api/goals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...newGoalData,
+          userId: account.address,
+          // API will handle blockchain creation with proper transaction signing
+        }),
+      });
 
-      if (createdGoal) {
-        // Goal created successfully - update UI
+      if (response.ok) {
+        const result = await response.json();
 
-        // Refresh goals list
-        await refetchGoals();
+        // Goal created and synced to database
+        await Promise.all([refetchGoals(), refetchBackendGoals()]);
 
-        // Reset form
+        // Reset form and close modal
         setCustomGoalForm({
           name: "",
           amount: "",
           timeline: "12",
           category: "custom",
         });
-
-        // Close modal
         setCustomGoalModalOpen(false);
+      } else {
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        console.error("API Error:", response.status, errorData);
+        throw new Error(errorData.error || "Failed to create goal");
       }
     } catch (error) {
       reportError("Failed to create goal", {
@@ -1774,7 +1862,6 @@ export default function AppPage() {
         operation: "handleCreateCustomGoal",
         additional: { error, goalData: customGoalForm },
       });
-      // You might want to show an error message to the user here
     }
   };
 
@@ -1902,15 +1989,58 @@ export default function AppPage() {
       transactionHash: receipt.transactionHash,
     });
 
-    // Refresh goals to show updated balances
+    // Call backend allocation API to properly allocate the deposit
     try {
-      await refetchGoals();
+      if (user?.address && defaultToken && receipt?.transactionHash) {
+        // Convert quickSaveAmount to wei for the backend API
+        const amountWei = parseUnits(
+          quickSaveAmount,
+          defaultToken.decimals || 6
+        );
+
+        // Call the backend allocation API
+        const allocationResult = await allocateDeposit({
+          tokenSymbol: defaultToken.symbol,
+          amount: amountWei.toString(),
+          txHash: receipt.transactionHash,
+        });
+
+        if (allocationResult) {
+          reportInfo("Backend allocation completed successfully", {
+            component: "AppPage",
+            operation: "handleDepositSuccess",
+            transactionHash: receipt.transactionHash,
+            additional: {
+              quicksaveGoalId: allocationResult.quicksaveGoalId,
+              depositId: allocationResult.depositId,
+              allocationTxHash: allocationResult.allocationTxHash,
+            },
+          });
+        }
+      }
     } catch (error) {
-      reportError("Failed to refresh goals after deposit", {
+      // Don't fail the whole process if backend allocation fails
+      reportError(error as Error, {
         component: "AppPage",
         operation: "handleDepositSuccess",
         transactionHash: receipt?.transactionHash,
-        additional: { error },
+        amount: quickSaveAmount,
+        tokenSymbol: defaultToken?.symbol,
+      });
+      console.warn(
+        "Backend allocation failed (deposit still successful):",
+        error
+      );
+    }
+
+    // Refresh goals to show updated balances
+    try {
+      await Promise.all([refetchGoals(), refetchBackendGoals()]);
+    } catch (error) {
+      reportError(error as Error, {
+        component: "AppPage",
+        operation: "handleDepositSuccess",
+        transactionHash: receipt?.transactionHash,
       });
     }
 
@@ -2126,7 +2256,7 @@ export default function AppPage() {
       }
 
       // Refresh goals after successful withdrawal
-      await refetchGoals();
+      await Promise.all([refetchGoals(), refetchBackendGoals()]);
     } catch (error) {
       reportError("Vault withdrawal failed", {
         component: "AppPage",
@@ -2173,19 +2303,6 @@ export default function AppPage() {
             ? formattedCurrentValue
             : "0";
 
-          // Debug logging
-          console.log("Processing deposit:", {
-            depositId: deposit.depositId,
-            principal: deposit.principal,
-            formattedPrincipal,
-            currentValue: deposit.currentValue,
-            formattedCurrentValue,
-            canWithdraw: deposit.canWithdraw,
-            withdrawableAmount,
-            tokenSymbol: position.tokenSymbol,
-            decimals: position.decimals,
-          });
-
           withdrawableDeposits.push({
             depositId: deposit.depositId,
             tokenAddress: position.tokenAddress,
@@ -2198,13 +2315,6 @@ export default function AppPage() {
           });
         });
       });
-
-      console.log("Final withdrawableDeposits:", withdrawableDeposits);
-      console.log(
-        "Withdrawable count:",
-        withdrawableDeposits.filter((d) => parseFloat(d.withdrawableAmount) > 0)
-          .length
-      );
 
       setVaultPositions(withdrawableDeposits);
     } catch (error) {
@@ -2226,6 +2336,51 @@ export default function AppPage() {
       fetchVaultPositions();
     }
   }, [withdrawalModalOpen, account?.address, chain?.id]);
+
+  // Combine local goals with backend quicksave goal
+  const combinedGoals = useMemo(() => {
+    const combined = [...goals];
+
+    // Remove any local quicksave goals to avoid duplicates
+    const nonQuickSaveGoals = combined.filter((goal) => !goal.isQuickSave);
+
+    // Add backend quicksave goal if available
+    if (quicksaveGoal) {
+      // Convert backend goal to frontend format
+      const quicksaveGoalFormatted = {
+        id: quicksaveGoal.id,
+        title: quicksaveGoal.title || "Quick Save",
+        description:
+          quicksaveGoal.description || "Save without a specific goal",
+        currentAmount: quicksaveGoal.totalValue || "0",
+        targetAmount: quicksaveGoal.targetAmount || "0",
+        progress: quicksaveGoal.progress || 0,
+        category: "quick" as const,
+        status: quicksaveGoal.status,
+        tokenSymbol: defaultToken?.symbol || "USDC",
+        tokenAddress: defaultToken?.address || "",
+        tokenDecimals: defaultToken?.decimals || 6,
+        interestRate: quicksaveGoal.interestRate || 0,
+        totalInterestEarned: quicksaveGoal.totalInterestEarned || "0",
+        createdAt: quicksaveGoal.createdAt,
+        updatedAt: quicksaveGoal.createdAt, // Use createdAt as fallback
+        targetDate: quicksaveGoal.targetDate,
+        completedAt: undefined,
+        isPublic: quicksaveGoal.isPublic || false,
+        allowContributions: quicksaveGoal.allowContributions || false,
+        isQuickSave: true,
+        blockchainGoalId: quicksaveGoal.id,
+      };
+
+      return [quicksaveGoalFormatted, ...nonQuickSaveGoals];
+    }
+
+    return nonQuickSaveGoals;
+  }, [goals, quicksaveGoal, defaultToken]);
+
+  // Combined loading and error states
+  const combinedLoading = goalsLoading || backendGoalsLoading;
+  const combinedError = goalsError || backendGoalsError;
 
   // Calculate dynamic savings data based on goals
   const calculateSavingsStats = () => {
@@ -2340,7 +2495,7 @@ export default function AppPage() {
                 {
                   id: "goals",
                   label: "Goals",
-                  icon: "🎯",
+                  icon: "",
                   description: "Manage your savings goals",
                 },
                 {
@@ -2352,7 +2507,7 @@ export default function AppPage() {
                 {
                   id: "leaderboard",
                   label: "Leaderboard",
-                  icon: "🏆",
+                  icon: "",
                   description: "Community rankings",
                 },
                 {
@@ -2393,7 +2548,7 @@ export default function AppPage() {
                   size="lg"
                   className="w-full"
                 >
-                  🎯 Quick Save
+                  Quick Save
                 </ActionButton>
                 <ActionButton
                   onClick={() => setCustomGoalModalOpen(true)}
@@ -2512,21 +2667,23 @@ export default function AppPage() {
               )}
 
               {/* Goals Content - Always show, with loading states */}
-              {!goalsError && (
+              {!combinedError && (
                 <>
                   {/* Quick Save Section - Always visible */}
                   <div className="mb-4">
-                    {goalsLoading ||
-                    !goals.find((g) => g.category === "quick") ? (
+                    {combinedLoading ||
+                    !combinedGoals.find((g) => g.category === "quick") ? (
                       // Skeleton for Quick Save card
                       <QuickSaveCardSkeleton />
                     ) : (
                       <ExpandableQuickSaveCard
-                        goal={goals.find((g) => g.category === "quick")!}
-                        goals={goals}
+                        goal={
+                          combinedGoals.find((g) => g.category === "quick")!
+                        }
+                        goals={combinedGoals}
                         account={account}
                         user={user}
-                        isLoading={goalsLoading}
+                        isLoading={combinedLoading}
                         showBalance={showBalances}
                         onToggleBalance={toggleBalanceVisibility}
                         onDeposit={() => setQuickSaveDetailsOpen(true)}
@@ -2535,13 +2692,17 @@ export default function AppPage() {
                         chain={chain}
                         tokenInfo={tokenInfos}
                         exchangeRate={getKESRate() || undefined}
-                        onGoalsRefetch={refetchGoals}
+                        onGoalsRefetch={() => {
+                          refetchGoals();
+                          refetchBackendGoals();
+                        }}
+                        sendTransaction={sendTransaction}
                       />
                     )}
                   </div>
 
                   {/* Loading indicator for goals data */}
-                  {goalsLoading && (
+                  {combinedLoading && (
                     <div className="flex items-center justify-center py-2 mb-3">
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-400 mx-auto mb-2"></div>
@@ -2583,7 +2744,7 @@ export default function AppPage() {
                             ))}
 
                           {/* Show empty state if no user goals exist */}
-                          {goals.filter((g) => g.category !== "quick")
+                          {combinedGoals.filter((g) => g.category !== "quick")
                             .length === 0 && (
                             <div className="col-span-full text-center py-8">
                               <p className="text-gray-400 mb-4">
@@ -2622,16 +2783,154 @@ export default function AppPage() {
           )}
 
           {activeTab === "leaderboard" && (
-            <div className="px-4 py-6">
-              <div className="text-center py-20">
-                <BarChart3 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">
-                  Leaderboard coming soon
-                </h3>
-                <p className="text-gray-400">
-                  See how you rank among other savers
-                </p>
+            <div className="px-4 py-6 space-y-4">
+              {/* User Score Card - Compact Version */}
+              {userScore && (
+                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-3 text-white">
+                  <div className="flex items-center justify-between">
+                    {/* Rank Section */}
+                    <div className="flex items-center gap-2">
+                      <div className="text-2xl"></div>
+                      <div>
+                        <div className="text-xs opacity-75">Rank</div>
+                        <div className="text-lg font-bold">
+                          {userScore.rank != null &&
+                          userScore.rank !== undefined
+                            ? `#${userScore.rank}`
+                            : "Not ranked"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Score Section */}
+                    <div className="text-right">
+                      <div className="text-xs opacity-75">Score</div>
+                      <div className="text-lg font-bold">
+                        ${userScore.formattedScore}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Leaderboard List */}
+              <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    Top Savers
+                  </h3>
+                  <button
+                    onClick={refetchLeaderboard}
+                    className="text-cyan-400 hover:text-cyan-300 text-sm"
+                    disabled={leaderboardLoading}
+                  >
+                    {leaderboardLoading ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+
+                {leaderboardLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 animate-pulse"
+                      >
+                        <div className="w-8 h-8 bg-gray-600 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-600 rounded w-24 mb-1"></div>
+                          <div className="h-3 bg-gray-600 rounded w-32"></div>
+                        </div>
+                        <div className="h-4 bg-gray-600 rounded w-16"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : leaderboardError ? (
+                  <div className="text-center py-8">
+                    <div className="text-red-400 mb-2">
+                      Failed to load leaderboard
+                    </div>
+                    <button
+                      onClick={refetchLeaderboard}
+                      className="text-cyan-400 hover:text-cyan-300 text-sm"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : leaderboard.length === 0 ? (
+                  <div className="text-center py-8">
+                    <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <div className="text-gray-400">No rankings yet</div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {leaderboard.map((entry, index) => (
+                      <div
+                        key={entry.address}
+                        className={`flex items-center gap-3 p-3 rounded-lg ${
+                          entry.isCurrentUser
+                            ? "bg-cyan-500/10 border border-cyan-500/20"
+                            : "bg-gray-700/20"
+                        }`}
+                      >
+                        {/* Rank */}
+                        <div className="flex items-center justify-center w-8 h-8">
+                          {entry.rank <= 3 ? (
+                            <div className="text-xl">
+                              {entry.rank === 1
+                                ? "🥇"
+                                : entry.rank === 2
+                                  ? "🥈"
+                                  : "🥉"}
+                            </div>
+                          ) : (
+                            <div className="text-sm font-semibold text-gray-400">
+                              #{entry.rank}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* User Info */}
+                        <div className="flex-1">
+                          <div className="text-white font-medium">
+                            {entry.isCurrentUser
+                              ? "You"
+                              : `${entry.address.slice(0, 6)}...${entry.address.slice(-4)}`}
+                          </div>
+                          {entry.isCurrentUser && (
+                            <div className="text-xs text-cyan-400">
+                              Your account
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Score */}
+                        <div className="text-right">
+                          <div className="text-white font-semibold">
+                            {entry.formattedScore}
+                          </div>
+                          <div className="text-xs text-gray-400">USD</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Load More Button */}
+              {leaderboard.length > 0 && (
+                <div className="text-center">
+                  <button
+                    onClick={() => {
+                      /* Load more functionality can be added here */
+                    }}
+                    className="text-cyan-400 hover:text-cyan-300 text-sm"
+                    disabled={leaderboardLoading}
+                  >
+                    View more rankings
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -2739,7 +3038,7 @@ export default function AppPage() {
           currency="KES"
           icon={
             selectedGoal?.category === "personal"
-              ? "🎯"
+              ? ""
               : selectedGoal?.category === "retirement"
                 ? "🏦"
                 : selectedGoal?.category === "emergency"
@@ -2758,12 +3057,15 @@ export default function AppPage() {
           }
         />
 
-        {/* Goal Confirmation Modal - TODO: Create dedicated modal */}
+        {/* Goal Confirmation Modal */}
         <QuickSaveConfirmationModal
           isOpen={goalConfirmationOpen}
           onClose={closeAllGoalModals}
           amount={goalAmount}
-          onDeposit={() => {}} // TODO: Implement goal deposit
+          onDeposit={() => {
+            setGoalConfirmationOpen(false);
+            setActiveModal("save");
+          }}
           isLoading={false}
           error={null}
           transactionStatus={null}
@@ -2794,8 +3096,22 @@ export default function AppPage() {
         <SaveMoneyModal
           isOpen={activeModal === "save"}
           onClose={() => setActiveModal(null)}
-          loading={false}
-          requiresAuth={!isConnected}
+          amount={quickSaveAmount || "100"}
+          onDeposit={handleQuickSaveDeposit}
+          isLoading={isDepositLoading}
+          error={depositError}
+          transactionStatus={transactionStatus}
+          tokenSymbol={defaultToken?.symbol || "USDC"}
+          depositSuccess={depositSuccess}
+          account={account}
+          tokens={tokens || []}
+          tokenInfos={tokenInfos || {}}
+          supportedStablecoins={supportedStablecoins}
+          copied={copied}
+          setCopied={setCopied}
+          setSelectedTokenForOnramp={setSelectedTokenForOnramp}
+          setShowOnrampModal={setShowOnrampModal}
+          goal={selectedGoal}
         />
 
         {/* Onramp Modal for Mobile Money Deposits */}

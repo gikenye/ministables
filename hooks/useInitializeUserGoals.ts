@@ -1,58 +1,78 @@
 import { useEffect } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useSession } from "next-auth/react";
-import { useCreateGoal } from "./useCreateGoal";
-import { useGoals } from "./useGoals";
+import { useQuicksaveGoal } from "./useBackendGoals";
+import { reportInfo, reportError } from "@/lib/services/errorReportingService";
 
 /**
- * Hook to automatically create a Quick Save goal for new users
+ * Hook to initialize user goals with the backend API
+ * The backend automatically creates quicksave goals when users make their first deposit
+ * This hook just monitors and reports on the initialization status
  */
 export function useInitializeUserGoals(defaultToken: any, chain: any) {
   const { data: session } = useSession();
   const account = useActiveAccount();
-  const { goals, loading: goalsLoading } = useGoals();
-  const { createGoal } = useCreateGoal();
+  const {
+    quicksaveGoal,
+    loading: quicksaveLoading,
+    error,
+  } = useQuicksaveGoal(defaultToken?.symbol);
 
   const userId = account?.address || session?.user?.address;
 
   useEffect(() => {
-    const initializeQuickSaveGoal = async () => {
+    const checkInitializationStatus = async () => {
       // Only proceed if we have all required data
-      if (!userId || !defaultToken || !chain || goalsLoading) {
+      if (!userId || !defaultToken || !chain) {
         return;
       }
 
-      // Check if user already has a Quick Save goal
-      const hasQuickSaveGoal = goals.some((goal) => goal.isQuickSave);
+      // Skip if still loading
+      if (quicksaveLoading) {
+        return;
+      }
 
-      if (!hasQuickSaveGoal) {
-        console.log("Creating Quick Save goal for new user...");
-
-        try {
-          await createGoal({
-            title: "Quick Save",
-            description:
-              "*Quick save is automatically created and enables you to save when you don't have a goal in mind. Money saved on quick save is transferrable to any goal.",
-            category: "quick",
-            status: "active",
-            currentAmount: "0",
-            targetAmount: "0", // No specific target for quick save
-            tokenAddress: defaultToken.address,
-            tokenSymbol: defaultToken.symbol,
-            tokenDecimals: defaultToken.decimals,
-            interestRate: 5.0, // 5% annual interest
-            isPublic: false,
-            allowContributions: false,
-            isQuickSave: true,
-          });
-
-          console.log("Quick Save goal created successfully");
-        } catch (error) {
-          console.error("Failed to create Quick Save goal:", error);
-        }
+      if (quicksaveGoal) {
+        // User has a quicksave goal from the backend
+        reportInfo("User quicksave goal found", {
+          component: "useInitializeUserGoals",
+          operation: "checkInitializationStatus",
+          userId,
+          tokenSymbol: defaultToken?.symbol,
+          additional: {
+            goalId: quicksaveGoal.id,
+            currentAmount: quicksaveGoal.totalValue,
+          },
+        });
+      } else if (!error) {
+        // No quicksave goal yet, but no error - this is normal for new users
+        reportInfo(
+          "No quicksave goal found for user (will be created on first deposit)",
+          {
+            component: "useInitializeUserGoals",
+            operation: "checkInitializationStatus",
+            userId,
+            tokenSymbol: defaultToken?.symbol,
+          }
+        );
+      } else {
+        // There was an error fetching the quicksave goal
+        reportError(new Error(error), {
+          component: "useInitializeUserGoals",
+          operation: "checkInitializationStatus",
+          userId,
+          tokenSymbol: defaultToken?.symbol,
+        });
       }
     };
 
-    initializeQuickSaveGoal();
-  }, [userId, defaultToken, chain, goals, goalsLoading]);
+    checkInitializationStatus();
+  }, [userId, defaultToken, chain, quicksaveGoal, quicksaveLoading, error]);
+
+  return {
+    quicksaveGoal,
+    loading: quicksaveLoading,
+    error,
+    isInitialized: !!quicksaveGoal,
+  };
 }

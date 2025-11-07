@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       mobile_network,
       chain: pretiumChain,
       asset,
-      address: vaultAddr,
+      address: vaultAddr, // Funds go to vault contract
       callback_url,
     };
 
@@ -174,7 +174,8 @@ export async function POST(request: NextRequest) {
           currency_code,
           address,
           vaultAddr,
-          asset
+          asset,
+          chain
         ),
       5000
     );
@@ -197,7 +198,8 @@ async function pollAndAllocate(
   currencyCode: string,
   userAddress: string,
   vaultAddress: string,
-  asset: string
+  asset: string,
+  chain: string
 ) {
   let attempts = 0;
   const maxAttempts = 60;
@@ -345,6 +347,69 @@ async function pollAndAllocate(
                 },
               }
             );
+
+            // Fallback: Call vault deposit notification API directly
+            console.log(
+              "🔄 Attempting fallback: calling vault deposit notification API..."
+            );
+            try {
+              // Get the correct chain ID for the asset
+              const chainId = CHAIN_ID_MAPPING[chain] || celo.id;
+              const vaultAddr = getVaultAddress(chainId, asset);
+
+              const vaultNotifyResponse = await fetch(
+                `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/vault/deposit-notify`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    userId: userAddress,
+                    vaultAddress: vaultAddr,
+                    depositId: 1, // This should be retrieved from vault contract
+                    amount: amountInWei,
+                    tokenSymbol: asset.toUpperCase(),
+                    tokenDecimals: ASSET_DECIMALS[asset.toUpperCase()] || 6,
+                    transactionHash: txData.transaction_hash,
+                  }),
+                }
+              );
+
+              const vaultResult = await vaultNotifyResponse.json();
+
+              if (vaultNotifyResponse.ok && vaultResult.success) {
+                console.log(
+                  "✅ Fallback vault notification succeeded:",
+                  vaultResult
+                );
+
+                await onrampCollection.updateOne(
+                  { transactionCode },
+                  {
+                    $set: {
+                      allocation: {
+                        success: true,
+                        method: "vault-notification-fallback",
+                        quicksaveGoalId: vaultResult.quicksaveGoalId,
+                        timestamp: new Date(),
+                      },
+                      updatedAt: new Date(),
+                    },
+                  }
+                );
+              } else {
+                console.error(
+                  "❌ Fallback vault notification also failed:",
+                  vaultResult
+                );
+              }
+            } catch (fallbackError: any) {
+              console.error(
+                "❌ Fallback vault notification error:",
+                fallbackError.message
+              );
+            }
           }
         } else {
           console.log(

@@ -29,7 +29,7 @@ export const SaveOptionsModal = ({
   options,
   title = "Goal Categories",
   subtitle = "Ready for a challenge?",
-  headerIcon = "🏆",
+  headerIcon = "",
 }: SaveOptionsModalProps) => {
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">

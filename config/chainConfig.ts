@@ -2,6 +2,15 @@ import { base, celo, scroll } from "thirdweb/chains";
 
 export const CHAINS = [celo, scroll, base];
 
+// goal management and leaderboard contracts
+export const GOAL_CONTRACTS = {
+  [celo.id]: "0x449095A0e1f16D8Bcc2D140b9284F8006b931231",
+};
+
+export const LEADERBOARD_CONTRACTS = {
+  [celo.id]: "0x184196a6b0719c3A9d8F15c912467D7836baf50D",
+};
+
 // Vault contracts for Aave integration
 export const VAULT_CONTRACTS = {
   [celo.id]: {
@@ -9,10 +18,10 @@ export const VAULT_CONTRACTS = {
     USDT: "0x90FF972CC2d12Ba495C8aC0887d6E9FD25B032c4",
     CUSD: "0x1077E075c879E8C95E7d0545b106B1448d035F37",
   },
-  [base.id]:{
+  [base.id]: {
     USDC: "0xc9E71bf55860E2Fc6DE3Fa856D11eDBa910Ac64b",
     USDT: "0x6f61982e10cbC3C80AB6FC6fB91eb7a60eB93C6E",
-  }
+  },
 };
 
 // Additional Aave integration contracts
@@ -22,13 +31,12 @@ export const AAVE_CONTRACTS = {
     USDC_STRATEGY: "0x89401f1aC84e1012e294074f6e0C5C5B54f287b6",
     USDT_STRATEGY: "0xc031F072AB12A0D26Ed513E727352Ee281B5A559",
     CUSD_STRATEGY: "0xa97bA56C318694E1C08EdE9D8e2f0BDf16cebE21",
-    
+
     // Other contracts
     BORROWER_VAULT: "0x775263BE35Bf0673279AE083bA9206cDac31c9e8",
     SAVINGS_BRIDGE: "0x9c7523EE4E9ceD985D248eF9f7d2502F2435bc9f",
     AAVE_POOL: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
   },
-  
 };
 
 export const EXPLORERS = {
@@ -103,7 +111,7 @@ export const TOKENS = {
       decimals: 6,
       icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/825.png",
     },
-  ]
+  ],
 };
 
 // Helper functions for config-driven lookups
@@ -184,19 +192,35 @@ export const getVaultAddress = (
   return vaultAddress;
 };
 
-export const getAaveContract = (chainId: number, contractName: string): string => {
+export const getAaveContract = (
+  chainId: number,
+  contractName: string
+): string => {
   const contracts = AAVE_CONTRACTS[chainId];
-  if (!contracts) throw new Error(`No Aave contracts configured for chain ${chainId}`);
-  const contractAddress = contracts[contractName.toUpperCase() as keyof typeof contracts];
-  if (!contractAddress) throw new Error(`No Aave contract ${contractName} found for chain ${chainId}`);
+  if (!contracts)
+    throw new Error(`No Aave contracts configured for chain ${chainId}`);
+  const contractAddress =
+    contracts[contractName.toUpperCase() as keyof typeof contracts];
+  if (!contractAddress)
+    throw new Error(
+      `No Aave contract ${contractName} found for chain ${chainId}`
+    );
   return contractAddress;
 };
 
-export const getStrategyAddress = (chainId: number, tokenSymbol: string): string => {
+export const getStrategyAddress = (
+  chainId: number,
+  tokenSymbol: string
+): string => {
   const contracts = AAVE_CONTRACTS[chainId];
-  if (!contracts) throw new Error(`No Aave contracts configured for chain ${chainId}`);
-  const strategyAddress = contracts[`${tokenSymbol.toUpperCase()}_STRATEGY` as keyof typeof contracts];
-  if (!strategyAddress) throw new Error(`No strategy found for ${tokenSymbol} on chain ${chainId}`);
+  if (!contracts)
+    throw new Error(`No Aave contracts configured for chain ${chainId}`);
+  const strategyAddress =
+    contracts[
+      `${tokenSymbol.toUpperCase()}_STRATEGY` as keyof typeof contracts
+    ];
+  if (!strategyAddress)
+    throw new Error(`No strategy found for ${tokenSymbol} on chain ${chainId}`);
   return strategyAddress;
 };
 

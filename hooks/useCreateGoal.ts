@@ -10,7 +10,7 @@ interface UseCreateGoalResult {
 }
 
 /**
- * Custom hook to create goals via the API
+ * Custom hook to create goals via the API (with blockchain sync in background)
  */
 export function useCreateGoal(): UseCreateGoalResult {
   const { data: session } = useSession();
