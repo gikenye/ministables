@@ -810,8 +810,8 @@
       // Service Worker Registration for PWA with Android optimizations
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          // For Android devices, add additional error handling
-          const swOptions = isAndroid() ? { scope: "/landing/" } : {};
+          // Use relative scope for better compatibility
+          const swOptions = { scope: "./" };
 
           navigator.serviceWorker
             .register("./sw.js", swOptions)
