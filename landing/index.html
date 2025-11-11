@@ -801,6 +801,46 @@
 
     <!-- PWA Service Worker Registration -->
     <script>
+      // PWA Launch Detection and Redirect
+      const isPWAStandalone = () => {
+        return (
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone === true ||
+          document.referrer.includes("android-app://")
+        );
+      };
+
+      // Redirect PWA launches to the main app (environment-aware)
+      if (isPWAStandalone()) {
+        // Derive app URL from current domain
+        const currentOrigin = window.location.origin;
+        let appOrigin;
+
+        // Handle different deployment patterns
+        if (currentOrigin.includes("localhost")) {
+          // Local development - redirect to localhost app port or same origin
+          appOrigin = currentOrigin;
+        } else if (currentOrigin.includes("minilend.xyz")) {
+          // Production - minilend.xyz -> app.minilend.xyz
+          appOrigin = currentOrigin.replace("minilend.xyz", "app.minilend.xyz");
+        } else {
+          // Generic pattern: landing.domain.com -> app.domain.com
+          // or domain.com -> app.domain.com
+          const hostname = window.location.hostname;
+          if (hostname.startsWith("www.")) {
+            appOrigin = currentOrigin.replace("www.", "app.");
+          } else if (!hostname.startsWith("app.")) {
+            // If it's a bare domain or different subdomain, prepend 'app.'
+            appOrigin = `${window.location.protocol}//app.${hostname}${window.location.port ? ":" + window.location.port : ""}`;
+          } else {
+            // Fallback to same origin
+            appOrigin = currentOrigin;
+          }
+        }
+
+        window.location.href = `${appOrigin}/?source=pwa_landing`;
+      }
+
       // Detect Android device
       const isAndroid = () => /android/i.test(navigator.userAgent);
       const isAndroidWebView = () =>
