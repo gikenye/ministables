@@ -2,12 +2,12 @@
   "name": "Minilend - Grow Your Money",
   "short_name": "Minilend",
   "description": "A dollar savings wallet that allows you to convert your local currency to dollars and earn up to 10% APY on your savings.",
-  "start_url": "/landing/?source=pwa",
+  "start_url": "./?source=pwa",
   "display": "standalone",
   "background_color": "#07110a",
   "theme_color": "#0e6037",
   "orientation": "portrait-primary",
-  "scope": "/landing/",
+  "scope": "./",
   "prefer_related_applications": false,
   "lang": "en-US",
   "dir": "ltr",
@@ -99,7 +99,7 @@
       "name": "Launch App",
       "short_name": "Launch",
       "description": "Launch the Minilend application",
-      "url": "/?source=pwa_landing",
+      "url": "./?source=pwa_landing",
       "icons": [
         {
           "src": "./static/icon-96x96.png",
