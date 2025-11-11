@@ -801,6 +801,20 @@
 
     <!-- PWA Service Worker Registration -->
     <script>
+      // PWA Launch Detection and Redirect
+      const isPWAStandalone = () => {
+        return (
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone === true ||
+          document.referrer.includes("android-app://")
+        );
+      };
+
+      // Redirect PWA launches to the main app
+      if (isPWAStandalone()) {
+        window.location.href = "https://app.minilend.xyz/?source=pwa_landing";
+      }
+
       // Detect Android device
       const isAndroid = () => /android/i.test(navigator.userAgent);
       const isAndroidWebView = () =>
