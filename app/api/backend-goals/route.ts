@@ -13,6 +13,17 @@ export async function GET(request: NextRequest) {
 
     // If goalId is provided, fetch specific goal details
     if (goalId) {
+      // Validate goalId - must be a positive integer (goal IDs start from 1 in the contract)
+      const goalIdNum = parseInt(goalId, 10);
+      if (isNaN(goalIdNum) || goalIdNum <= 0) {
+        return NextResponse.json(
+          {
+            error: `Invalid goal ID: ${goalId}. Goal ID must be a positive integer.`,
+          },
+          { status: 400 }
+        );
+      }
+
       try {
         const goal = await backendApiClient.getGoalDetails(goalId);
         return NextResponse.json(goal);
