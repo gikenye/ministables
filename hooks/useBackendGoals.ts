@@ -185,6 +185,16 @@ export function useBackendGoals(
         }
 
         const data = (await response.json()) as QuicksaveGoalResponse;
+
+        // Treat goalId "0" or empty as null (no quicksave goal exists)
+        if (
+          !data.quicksaveGoalId ||
+          data.quicksaveGoalId === "0" ||
+          String(data.quicksaveGoalId) === "0"
+        ) {
+          return null;
+        }
+
         return data.quicksaveGoalId;
       } catch (err) {
         reportError(err as Error, {

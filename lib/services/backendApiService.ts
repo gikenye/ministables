@@ -155,6 +155,14 @@ export class BackendApiClient {
 
   // Goals API methods
   async getGoalDetails(goalId: string): Promise<GoalDetailsResponse> {
+    // Validate goalId - must be a positive integer (goal IDs start from 1 in the contract)
+    const goalIdNum = parseInt(goalId, 10);
+    if (isNaN(goalIdNum) || goalIdNum <= 0) {
+      throw new Error(
+        `Invalid goal ID: ${goalId}. Goal ID must be a positive integer.`
+      );
+    }
+
     const params = new URLSearchParams({ goalId });
     return this.request<GoalDetailsResponse>(
       `${API_ENDPOINTS.GOALS}?${params}`
