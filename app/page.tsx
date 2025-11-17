@@ -41,6 +41,7 @@ import {
   Banknote,
   Mail,
   Check,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -356,7 +357,7 @@ const QuickSaveDetailsModal = ({
   );
 };
 
-// Custom Goal Modal - Create user-defined goals
+// Custom Goal Modal - Mobile-First Step-by-Step Wizard
 const CustomGoalModal = ({
   isOpen,
   onClose,
@@ -379,173 +380,158 @@ const CustomGoalModal = ({
   isLoading?: boolean;
   error?: string | null;
 }) => {
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const steps = [
+    { key: 'name', label: 'Goal Name', required: true },
+    { key: 'amount', label: 'Target Amount', required: true },
+    { key: 'timeline', label: 'Timeline', required: false },
+    { key: 'category', label: 'Category', required: false },
+  ];
+
+  const currentField = steps[currentStep];
+  const isLastStep = currentStep === steps.length - 1;
+  const canProceed = !currentField.required || (form[currentField.key as keyof typeof form] && form[currentField.key as keyof typeof form].trim() !== '');
+
+  const handleNext = () => {
+    if (isLastStep) {
+      onCreateGoal();
+    } else {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    } else {
+      onClose();
+    }
+  };
+
   const handleInputChange = (field: string, value: string) => {
     setForm((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  const formatAmount = (value: string) => {
-    // Remove non-numeric characters except decimal point
-    const numericValue = value.replace(/[^0-9.]/g, "");
-    // Format with commas
-    const parts = numericValue.split(".");
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    return parts.join(".");
-  };
-
-  const handleAmountChange = (value: string) => {
-    const formatted = formatAmount(value);
-    handleInputChange("amount", formatted);
-  };
-
-  const isFormValid = () => {
-    return (
-      form.name.trim() !== "" &&
-      form.amount.trim() !== "" &&
-      parseFloat(form.amount.replace(/,/g, "")) > 0
-    );
-  };
-
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[85vh]">
-      <ModalHeader
-        title="Create Custom Goal"
-        onClose={onClose}
-        rightAction={{
-          label: "Create",
-          onClick: onCreateGoal,
-          variant: "primary",
-        }}
-      />
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[95vh]">
+      <div className="bg-gray-800/20 backdrop-blur-sm min-h-full p-2 space-y-3 overflow-y-auto">
+        {/* Progress Indicator */}
+        <div className="flex items-center justify-center space-x-1 py-1">
+          {steps.map((_, index) => (
+            <div
+              key={index}
+              className={`w-2 h-2 rounded-full transition-colors ${
+                index <= currentStep ? 'bg-cyan-400' : 'bg-gray-600'
+              }`}
+            />
+          ))}
+        </div>
 
-      <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3 overflow-y-auto pb-8">
-        {/* Header */}
-        <div className="text-center py-0.5">
-          <div className="text-2xl mb-1.5"></div>
-          <h3 className="text-base font-semibold text-white mb-0.5">
-            Set Your Goal
-          </h3>
-          <p className="text-xs text-gray-400">
-            Create a personalized savings goal with your own target and timeline
+        {/* Step Header */}
+        <div className="text-center py-2">
+          <div className="text-2xl mb-2">🎯</div>
+          <h2 className="text-lg font-bold text-white mb-1">
+            {currentField.label}
+          </h2>
+          <p className="text-sm text-gray-400">
+            Step {currentStep + 1} of {steps.length}
           </p>
         </div>
 
-        {/* Goal Name */}
-        <div className="space-y-0.5">
-          <label className="text-white font-medium text-xs">Goal Name</label>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => handleInputChange("name", e.target.value)}
-            placeholder="e.g., New Car, Vacation, Emergency Fund"
-            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-sm"
-            maxLength={50}
-          />
-          <div className="text-xs text-gray-500 text-right">
-            {form.name.length}/50
-          </div>
-        </div>
-
-        {/* Target Amount */}
-        <div className="space-y-0.5">
-          <label className="text-white font-medium text-xs">
-            Target Amount (KES)
-          </label>
-          <input
-            type="text"
-            value={form.amount}
-            onChange={(e) => handleAmountChange(e.target.value)}
-            placeholder="0"
-            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-right text-base font-semibold"
-          />
-          <div className="text-xs text-gray-500">
-            Enter your target savings amount
-          </div>
-        </div>
-
-        {/* Timeline */}
-        <div className="space-y-0.5">
-          <label className="text-white font-medium text-xs">Timeline</label>
-          <select
-            value={form.timeline}
-            onChange={(e) => handleInputChange("timeline", e.target.value)}
-            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
-          >
-            <option value="3">1 month</option>
-            <option value="6">2 months </option>
-            <option value="12">3 months</option>
-          </select>
-          <div className="text-xs text-gray-500">
-            How long do you want to save for this goal?
-          </div>
-        </div>
-
-        {/* Goal Category */}
-        <div className="space-y-0.5">
-          <label className="text-white font-medium text-xs">Category</label>
-          <select
-            value={form.category}
-            onChange={(e) => handleInputChange("category", e.target.value)}
-            className="w-full p-2 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-sm"
-          >
-            <option value="personal">Personal</option>
-            <option value="emergency">Emergency Fund</option>
-            <option value="travel">Travel</option>
-            <option value="education">Education</option>
-            <option value="business">Business</option>
-            <option value="health">Health</option>
-            <option value="home">Home & Family</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        {/* Goal Summary */}
-        {isFormValid() && (
-          <InfoCard variant="stats">
-            <div className="space-y-0.5">
-              <h4 className="text-white font-semibold text-xs">Goal Summary</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="text-gray-400 text-xs">Monthly Target</div>
-                  <div className="text-cyan-400 font-semibold">
-                    KES{" "}
-                    {Math.ceil(
-                      parseFloat(form.amount.replace(/,/g, "")) /
-                        parseInt(form.timeline)
-                    ).toLocaleString()}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-gray-400 text-xs">Weekly Target</div>
-                  <div className="text-cyan-400 font-semibold">
-                    KES{" "}
-                    {Math.ceil(
-                      parseFloat(form.amount.replace(/,/g, "")) /
-                        (parseInt(form.timeline) * 4.33)
-                    ).toLocaleString()}
-                  </div>
-                </div>
+        {/* Dynamic Form Field */}
+        <div className="space-y-2">
+          {currentField.key === 'name' && (
+            <div>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => handleInputChange("name", e.target.value)}
+                placeholder="e.g., New Car, Vacation"
+                className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-base font-medium"
+                maxLength={50}
+                autoFocus
+              />
+              <div className="text-xs text-gray-500 text-right mt-1">
+                {form.name.length}/50
               </div>
             </div>
-          </InfoCard>
-        )}
+          )}
+
+          {currentField.key === 'amount' && (
+            <div>
+              <div className="text-center mb-2">
+                <span className="text-2xl font-bold text-cyan-400">KES</span>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={form.amount}
+                onChange={(e) => handleInputChange("amount", e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="0"
+                className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-center text-xl font-bold"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {currentField.key === 'timeline' && (
+            <select
+              value={form.timeline}
+              onChange={(e) => handleInputChange("timeline", e.target.value)}
+              className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-base"
+            >
+              <option value="3">3 months</option>
+              <option value="6">6 months</option>
+              <option value="12">12 months</option>
+            </select>
+          )}
+
+          {currentField.key === 'category' && (
+            <select
+              value={form.category}
+              onChange={(e) => handleInputChange("category", e.target.value)}
+              className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-base"
+            >
+              <option value="personal">Personal</option>
+              <option value="emergency">Emergency Fund</option>
+              <option value="travel">Travel</option>
+              <option value="education">Education</option>
+              <option value="business">Business</option>
+              <option value="health">Health</option>
+              <option value="home">Home</option>
+              <option value="other">Other</option>
+            </select>
+          )}
+        </div>
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2">
-            <p className="text-red-400 text-xs">{error}</p>
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
 
-        {/* Create Button */}
-        <ActionButton
-          onClick={onCreateGoal}
-          variant="primary"
-          size="md"
-          className="w-full"
-          disabled={!isFormValid() || isLoading}
-        >
-          {isLoading ? "Creating Goal..." : "Create Goal"}
-        </ActionButton>
+        {/* Navigation Buttons */}
+        <div className="flex gap-2 pt-2">
+          <ActionButton
+            onClick={handleBack}
+            variant="outline"
+            size="lg"
+            className="flex-1"
+          >
+            {currentStep === 0 ? 'Cancel' : 'Back'}
+          </ActionButton>
+          <ActionButton
+            onClick={handleNext}
+            variant="primary"
+            size="lg"
+            className="flex-1"
+            disabled={!canProceed || isLoading}
+          >
+            {isLoading ? 'Creating...' : isLastStep ? 'Create Goal' : 'Next'}
+          </ActionButton>
+        </div>
       </div>
     </BottomSheet>
   );
@@ -1478,6 +1464,9 @@ export default function AppPage() {
   const { isSDKLoaded, context } = useMiniApp();
   const { chain, tokens, tokenInfos } = useChain();
 
+  // Accessibility: Announce dynamic content changes
+  const [announcements, setAnnouncements] = useState<string[]>([]);
+
   // Blockchain goals integration removed for production deployment
   // const blockchainGoals = useBlockchainGoals();
 
@@ -1696,6 +1685,30 @@ export default function AppPage() {
   const chainConfigValid = useMemo(() => {
     return chain && tokens && tokens.length > 0 && tokenInfos;
   }, [chain, tokens, tokenInfos]);
+
+  // Chain-aware messaging
+  const getChainDisplayName = () => {
+    if (!chain) return "Unknown Network";
+    return chain.name;
+  };
+
+  // Keyboard navigation handler
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    // Handle keyboard shortcuts
+    if (event.key === "g" && event.ctrlKey) {
+      event.preventDefault();
+      setActiveTab("goals");
+      setAnnouncements(["Switched to Goals tab"]);
+    } else if (event.key === "l" && event.ctrlKey) {
+      event.preventDefault();
+      setActiveTab("leaderboard");
+      setAnnouncements(["Switched to Leaderboard tab"]);
+    } else if (event.key === "p" && event.ctrlKey) {
+      event.preventDefault();
+      setActiveTab("profile");
+      setAnnouncements(["Switched to Profile tab"]);
+    }
+  };
 
   useEffect(() => {
     const updateStatus = () => setIsOnline(navigator.onLine);
@@ -2429,17 +2442,24 @@ export default function AppPage() {
   // Show error if chain configuration is invalid
   if (!chainConfigValid) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
-        <div className="text-center space-y-4 p-8">
-          <div className="text-red-400 text-xl font-semibold">
+      <div
+        className="min-h-screen flex items-center justify-center bg-gray-900"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div className="text-center space-y-4 p-8 max-w-md mx-auto">
+          <div className="text-red-400 text-xl font-semibold" role="heading" aria-level={1}>
             Chain Configuration Error
           </div>
-          <div className="text-gray-300 max-w-md">
-            The current chain is not properly configured. Please check the chain
-            configuration or switch to a supported network.
+          <div className="text-gray-300">
+            The current network is not properly configured. Please check your network
+            connection or switch to a supported blockchain network.
           </div>
-          <div className="text-sm text-gray-400">
-            Chain: {chain?.name || "Unknown"}
+          <div className="text-sm text-gray-400 bg-gray-800/50 rounded-lg p-3">
+            <strong>Current Network:</strong> {getChainDisplayName()}
+          </div>
+          <div className="text-xs text-gray-500 mt-4">
+            Supported networks: Celo, Scroll, Base
           </div>
         </div>
       </div>
@@ -2452,9 +2472,28 @@ export default function AppPage() {
       style={{
         backgroundImage: "url('/african-safari-scene-2005.jpg')",
       }}
+      role="application"
+      aria-label="Minilend Savings Application"
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
     >
+      {/* Skip link for accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-cyan-600 text-white px-4 py-2 rounded z-50"
+      >
+        Skip to main content
+      </a>
+
       {/* Background overlay for better text readability */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" aria-hidden="true"></div>
+
+      {/* Screen reader announcements */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcements.map((announcement, index) => (
+          <div key={index}>{announcement}</div>
+        ))}
+      </div>
 
       {/* AutoConnect for silent wallet connection */}
       <AutoConnect
@@ -2567,7 +2606,11 @@ export default function AppPage() {
       {/* Main Content Container - Adjusted for sidebar on desktop */}
       <div className="lg:pl-72 relative z-10">
         {/* Header */}
-        <header className="bg-black/60 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4 sticky top-0 z-40 relative">
+        <header
+          className="bg-black/60 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 lg:px-8 py-4 sticky top-0 z-40 relative"
+          role="banner"
+          aria-label="Application header"
+        >
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             {/* Dynamic Header based on active tab */}
             <div className="flex items-center space-x-3">
@@ -2575,25 +2618,36 @@ export default function AppPage() {
               <div className="lg:hidden">
                 <Image
                   src="/minilend-pwa.png"
-                  alt="Minilend"
+                  alt="Minilend - Decentralized Savings Platform"
                   width={24}
                   height={24}
                   className="rounded"
+                  priority
                 />
               </div>
               <div>
-                <h1 className="text-xl lg:text-2xl font-bold text-cyan-400">
+                <h1
+                  className="text-xl lg:text-2xl font-bold text-cyan-400"
+                  id="page-title"
+                >
                   {activeTab === "goals" && "Goals"}
                   {activeTab === "groups" && "Groups"}
                   {activeTab === "leaderboard" && "Leaderboard"}
                   {activeTab === "profile" && "Profile"}
                 </h1>
-                <p className="text-sm lg:text-base text-gray-400">
+                <p
+                  className="text-sm lg:text-base text-gray-400"
+                  aria-describedby="page-title"
+                >
                   {activeTab === "goals" && "Home"}
                   {activeTab === "groups" && "Save with friends"}
                   {activeTab === "leaderboard" && "Community rankings"}
                   {activeTab === "profile" && "Account & Settings"}
                 </p>
+                {/* Keyboard shortcuts hint for screen readers */}
+                <div className="sr-only">
+                  Keyboard shortcuts: Ctrl+G for Goals, Ctrl+L for Leaderboard, Ctrl+P for Profile
+                </div>
               </div>
             </div>
 
@@ -2638,10 +2692,19 @@ export default function AppPage() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8">
+        <main
+          id="main-content"
+          className="max-w-7xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8"
+          role="main"
+          aria-labelledby="page-title"
+        >
           {!isOnline && (
-            <div className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm">
-              <WifiOff className="w-4 h-4 mr-2" />
+            <div
+              className="bg-red-900/60 border border-red-500/30 text-red-200 rounded-lg p-3 mb-4 text-sm flex items-center backdrop-blur-sm"
+              role="alert"
+              aria-live="assertive"
+            >
+              <WifiOff className="w-4 h-4 mr-2" aria-hidden="true" />
               <p>You are currently offline. Some features may be limited.</p>
             </div>
           )}
@@ -2714,15 +2777,22 @@ export default function AppPage() {
                   )}
 
                   {/* User Goals Section */}
-                  <div className="mb-20 pb-4">
+                  <section className="mb-20 pb-4" aria-labelledby="goals-heading">
                     <div className="flex items-center space-x-2 mb-4">
-                      <TrendingUp className="w-5 h-5 text-gray-400" />
-                      <h2 className="text-lg font-semibold text-white">
+                      <TrendingUp className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                      <h2
+                        id="goals-heading"
+                        className="text-lg font-semibold text-white"
+                      >
                         My Goals
                       </h2>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                    <div
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"
+                      role="grid"
+                      aria-label="Savings goals"
+                    >
                       {goalsLoading ? (
                         // Show skeleton cards while loading
                         <>
@@ -2734,63 +2804,93 @@ export default function AppPage() {
                         <>
                           {goals
                             .filter((g) => g.category !== "quick")
-                            .map((goal) => (
-                              <GoalCard
+                            .map((goal, index) => (
+                              <div
                                 key={goal.id}
-                                goal={goal}
-                                showBalance={showBalances}
-                                onCardClick={() => handleGoalCardClick(goal)}
-                              />
+                                role="gridcell"
+                                aria-label={`Goal ${index + 1}: ${goal.title}`}
+                              >
+                                <GoalCard
+                                  goal={goal}
+                                  showBalance={showBalances}
+                                  onCardClick={() => handleGoalCardClick(goal)}
+                                />
+                              </div>
                             ))}
 
                           {/* Show empty state if no user goals exist */}
                           {combinedGoals.filter((g) => g.category !== "quick")
                             .length === 0 && (
-                            <div className="col-span-full text-center py-8">
+                            <div
+                              className="col-span-full text-center py-8"
+                              role="region"
+                              aria-label="No goals available"
+                            >
                               <p className="text-gray-400 mb-4">
                                 No goals created yet
                               </p>
                               <ActionButton
                                 onClick={handleCreateFirstGoal}
                                 variant="primary"
-                                size="sm"
+                                size="lg"
+                                className="w-full max-w-xs mx-auto"
+                                aria-describedby="create-goal-description"
                               >
+                                <Plus className="w-5 h-5 mr-2" />
                                 Create Your First Goal
                               </ActionButton>
+                              <div id="create-goal-description" className="sr-only">
+                                Opens a form to create your first savings goal
+                              </div>
                             </div>
                           )}
                         </>
                       )}
                     </div>
-                  </div>
+                  </section>
                 </>
               )}
             </div>
           )}
 
           {activeTab === "groups" && (
-            <div className="px-4 py-6">
+            <section
+              className="px-4 py-6"
+              role="region"
+              aria-labelledby="groups-heading"
+            >
               <div className="text-center py-20">
-                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">
+                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+                <h3
+                  id="groups-heading"
+                  className="text-lg font-medium text-white mb-2"
+                >
                   Groups coming soon
                 </h3>
                 <p className="text-gray-400">
                   Save together with friends and family
                 </p>
               </div>
-            </div>
+            </section>
           )}
 
           {activeTab === "leaderboard" && (
-            <div className="px-4 py-6 space-y-4">
+            <section
+              className="px-4 py-6 space-y-4"
+              role="region"
+              aria-labelledby="leaderboard-heading"
+            >
               {/* User Score Card - Compact Version */}
               {userScore && (
-                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-3 text-white">
+                <div
+                  className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-3 text-white"
+                  role="region"
+                  aria-label="Your leaderboard ranking"
+                >
                   <div className="flex items-center justify-between">
                     {/* Rank Section */}
                     <div className="flex items-center gap-2">
-                      <div className="text-2xl"></div>
+                      <div className="text-2xl" aria-hidden="true"></div>
                       <div>
                         <div className="text-xs opacity-75">Rank</div>
                         <div className="text-lg font-bold">
@@ -2814,27 +2914,36 @@ export default function AppPage() {
               )}
 
               {/* Leaderboard List */}
-              <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4">
+              <div
+                className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4"
+                role="region"
+                aria-labelledby="leaderboard-table-heading"
+              >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5" />
+                  <h3
+                    id="leaderboard-table-heading"
+                    className="text-lg font-semibold text-white flex items-center gap-2"
+                  >
+                    <BarChart3 className="w-5 h-5" aria-hidden="true" />
                     Top Savers
                   </h3>
                   <button
                     onClick={refetchLeaderboard}
-                    className="text-cyan-400 hover:text-cyan-300 text-sm"
+                    className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded"
                     disabled={leaderboardLoading}
+                    aria-label={leaderboardLoading ? "Refreshing leaderboard" : "Refresh leaderboard"}
                   >
                     {leaderboardLoading ? "Refreshing..." : "Refresh"}
                   </button>
                 </div>
 
                 {leaderboardLoading ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3" aria-label="Loading leaderboard">
                     {[...Array(5)].map((_, i) => (
                       <div
                         key={i}
                         className="flex items-center gap-3 animate-pulse"
+                        aria-hidden="true"
                       >
                         <div className="w-8 h-8 bg-gray-600 rounded-full"></div>
                         <div className="flex-1">
@@ -2846,73 +2955,85 @@ export default function AppPage() {
                     ))}
                   </div>
                 ) : leaderboardError ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-8" role="alert">
                     <div className="text-red-400 mb-2">
                       Failed to load leaderboard
                     </div>
                     <button
                       onClick={refetchLeaderboard}
-                      className="text-cyan-400 hover:text-cyan-300 text-sm"
+                      className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 rounded px-2 py-1"
                     >
                       Try again
                     </button>
                   </div>
                 ) : leaderboard.length === 0 ? (
-                  <div className="text-center py-8">
-                    <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <div className="text-center py-8" role="status">
+                    <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-3" aria-hidden="true" />
                     <div className="text-gray-400">No rankings yet</div>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {leaderboard.map((entry, index) => (
-                      <div
-                        key={entry.address}
-                        className={`flex items-center gap-3 p-3 rounded-lg ${
-                          entry.isCurrentUser
-                            ? "bg-cyan-500/10 border border-cyan-500/20"
-                            : "bg-gray-700/20"
-                        }`}
-                      >
-                        {/* Rank */}
-                        <div className="flex items-center justify-center w-8 h-8">
-                          {entry.rank <= 3 ? (
-                            <div className="text-xl">
-                              {entry.rank === 1
-                                ? "🥇"
-                                : entry.rank === 2
-                                  ? "🥈"
-                                  : "🥉"}
-                            </div>
-                          ) : (
-                            <div className="text-sm font-semibold text-gray-400">
-                              #{entry.rank}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* User Info */}
-                        <div className="flex-1">
-                          <div className="text-white font-medium">
-                            {entry.isCurrentUser
-                              ? "You"
-                              : `${entry.address.slice(0, 6)}...${entry.address.slice(-4)}`}
+                  <div
+                    className="space-y-2"
+                    role="table"
+                    aria-label="Leaderboard rankings"
+                  >
+                    <div role="rowgroup">
+                      {leaderboard.map((entry, index) => (
+                        <div
+                          key={entry.address}
+                          role="row"
+                          className={`flex items-center gap-3 p-3 rounded-lg ${
+                            entry.isCurrentUser
+                              ? "bg-cyan-500/10 border border-cyan-500/20"
+                              : "bg-gray-700/20"
+                          }`}
+                          aria-label={`Rank ${entry.rank}: ${entry.isCurrentUser ? 'You' : 'User'} with score ${entry.formattedScore} USD`}
+                        >
+                          {/* Rank */}
+                          <div
+                            role="cell"
+                            className="flex items-center justify-center w-8 h-8"
+                            aria-label={`Rank ${entry.rank}`}
+                          >
+                            {entry.rank <= 3 ? (
+                              <div className="text-xl" aria-hidden="true">
+                                {entry.rank === 1
+                                  ? "🥇"
+                                  : entry.rank === 2
+                                    ? "🥈"
+                                    : "🥉"}
+                              </div>
+                            ) : (
+                              <div className="text-sm font-semibold text-gray-400">
+                                #{entry.rank}
+                              </div>
+                            )}
                           </div>
-                          {entry.isCurrentUser && (
-                            <div className="text-xs text-cyan-400">
-                              Your account
-                            </div>
-                          )}
-                        </div>
 
-                        {/* Score */}
-                        <div className="text-right">
-                          <div className="text-white font-semibold">
-                            {entry.formattedScore}
+                          {/* User Info */}
+                          <div role="cell" className="flex-1">
+                            <div className="text-white font-medium">
+                              {entry.isCurrentUser
+                                ? "You"
+                                : `${entry.address.slice(0, 6)}...${entry.address.slice(-4)}`}
+                            </div>
+                            {entry.isCurrentUser && (
+                              <div className="text-xs text-cyan-400">
+                                Your account
+                              </div>
+                            )}
                           </div>
-                          <div className="text-xs text-gray-400">USD</div>
+
+                          {/* Score */}
+                          <div role="cell" className="text-right">
+                            <div className="text-white font-semibold">
+                              {entry.formattedScore}
+                            </div>
+                            <div className="text-xs text-gray-400">USD</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -2924,14 +3045,15 @@ export default function AppPage() {
                     onClick={() => {
                       /* Load more functionality can be added here */
                     }}
-                    className="text-cyan-400 hover:text-cyan-300 text-sm"
+                    className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded px-2 py-1"
                     disabled={leaderboardLoading}
+                    aria-label="Load more leaderboard rankings"
                   >
                     View more rankings
                   </button>
                 </div>
               )}
-            </div>
+            </section>
           )}
 
           {activeTab === "profile" && (
@@ -2943,14 +3065,14 @@ export default function AppPage() {
         </main>
 
         {/* Bottom Navigation Bar - Mobile Only */}
-        <div className="lg:hidden">
+        <nav className="lg:hidden" role="navigation" aria-label="Main navigation">
           <TabNavigation
             activeTab={activeTab}
-            onTabChange={(tab) =>
-              setActiveTab(
-                tab as "goals" | "groups" | "leaderboard" | "profile"
-              )
-            }
+            onTabChange={(tab) => {
+              setActiveTab(tab as "goals" | "groups" | "leaderboard" | "profile");
+              // Announce tab change for screen readers
+              setAnnouncements([`Switched to ${tab} tab`]);
+            }}
             tabs={[
               {
                 id: "goals",
@@ -2958,6 +3080,7 @@ export default function AppPage() {
                 icon: ({ className }) => (
                   <div
                     className={`w-5 h-5 flex items-center justify-center ${className}`}
+                    aria-hidden="true"
                   >
                     <div className="w-3 h-3 border-2 border-current rounded-full flex items-center justify-center">
                       <div className="w-1 h-1 bg-current rounded-full"></div>
@@ -2971,10 +3094,13 @@ export default function AppPage() {
             ]}
             centerAction={{
               label: "SAVE",
-              onClick: () => setSaveActionsModalOpen(true),
+              onClick: () => {
+                setSaveActionsModalOpen(true);
+                setAnnouncements(["Save options opened"]);
+              },
             }}
           />
-        </div>
+        </nav>
 
         {/* Modals */}
         <SaveActionsModal
