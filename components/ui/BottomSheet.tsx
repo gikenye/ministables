@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -13,6 +13,29 @@ export const BottomSheet = ({
   children,
   maxHeight = "max-h-[90vh]",
 }: BottomSheetProps) => {
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Store the current scroll position
+      const scrollY = window.scrollY;
+
+      // Prevent scrolling on body
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+
+      // Restore scroll position when modal closes
+      return () => {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -26,13 +49,13 @@ export const BottomSheet = ({
       {/* Modal Content */}
       <div
         className={`
-        relative w-full max-w-md mx-auto sm:max-w-lg
-        bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 
-        rounded-t-xl sm:rounded-xl 
-        overflow-hidden
-        transform transition-transform duration-300 ease-out
-        ${maxHeight}
-        `}
+          relative w-full max-w-md mx-auto sm:max-w-lg
+          bg-gray-800/20 backdrop-blur-sm border border-gray-700/30
+          rounded-t-xl sm:rounded-xl
+          overflow-hidden
+          transform transition-transform duration-300 ease-out
+          ${maxHeight}
+          `}
         style={{
           maxHeight:
             "min(85vh, 100% - env(safe-area-inset-top) - env(safe-area-inset-bottom))",

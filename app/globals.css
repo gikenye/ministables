@@ -373,6 +373,15 @@ button[aria-label*="Connect"] {
 .stagger-4 { animation-delay: 0.4s; }
 .stagger-5 { animation-delay: 0.5s; }
 
+/* Prevent mobile browser zoom on input focus */
+@media (max-width: 768px) {
+  input:focus,
+  textarea:focus,
+  select:focus {
+    font-size: 16px !important;
+  }
+}
+
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
@@ -390,7 +399,7 @@ button[aria-label*="Connect"] {
     opacity: 1;
     transform: none;
   }
-  
+
   .hover-lift:hover {
     transform: none;
     box-shadow: none;
