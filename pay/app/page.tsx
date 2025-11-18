@@ -22,17 +22,20 @@ const STABLECOINS = [
 ];
 
 export default function PayPage() {
-  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
-  const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
-  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
-  const [txHash, setTxHash] = useState("");
-  const [shortcode, setShortcode] = useState("");
-  const [amount, setAmount] = useState("");
-  const [mobileNetwork, setMobileNetwork] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+   const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
+   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+   const [txHash, setTxHash] = useState("");
+   const [shortcode, setShortcode] = useState("");
+   const [amount, setAmount] = useState("");
+   const [mobileNetwork, setMobileNetwork] = useState("");
+   const [paymentMethod, setPaymentMethod] = useState("Mobile Money");
+   const [paybillNumber, setPaybillNumber] = useState("");
+   const [accountReference, setAccountReference] = useState("");
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchExchangeRate();
@@ -46,11 +49,15 @@ export default function PayPage() {
         body: JSON.stringify({ currency_code: selectedCountry.code }),
       });
       const data = await res.json();
-      if (data.data?.quoted_rate) {
-        setExchangeRate(data.data.quoted_rate);
+      if (data.data?.selling_rate) {
+        setExchangeRate(data.data.selling_rate);
+      } else {
+        console.error("Exchange rate API returned invalid data");
+        setExchangeRate(null);
       }
     } catch (error) {
       console.error("Failed to fetch exchange rate:", error);
+      setExchangeRate(null);
     }
   };
 
@@ -61,15 +68,39 @@ export default function PayPage() {
   };
 
   const handlePay = async () => {
-    if (!txHash || !shortcode || !amount || !mobileNetwork || !exchangeRate) {
-      setError("Please fill all fields");
+    if (!txHash || !amount) {
+      setError("Please fill transaction hash and amount");
       return;
+    }
+
+    if (!exchangeRate) {
+      setError("Exchange rate not available. Please try again later.");
+      return;
+    }
+
+    if (selectedCountry.code === "KES") {
+      if (paymentMethod === "Mobile Money") {
+        if (!shortcode || !mobileNetwork) {
+          setError("Please fill phone number and mobile network");
+          return;
+        }
+      } else if (paymentMethod === "PAYBILL") {
+        if (!paybillNumber) {
+          setError("Please fill paybill number");
+          return;
+        }
+      }
+    } else {
+      if (!shortcode || !mobileNetwork) {
+        setError("Please fill all required fields");
+        return;
+      }
     }
 
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
-    
+
     try {
       const fiatAmount = (parseFloat(amount) * exchangeRate).toFixed(2);
 
@@ -77,16 +108,29 @@ export default function PayPage() {
         transaction_hash: txHash,
         amount: fiatAmount,
         fee: "10",
-        type: "MOBILE",
         chain: "CELO",
-        mobile_network: mobileNetwork,
         callback_url: `${window.location.origin}/api/callback`,
       };
 
-      if (selectedCountry.code === "NGN") {
+      if (selectedCountry.code === "KES") {
+        if (paymentMethod === "PAYBILL") {
+          payload.type = "PAYBILL";
+          payload.shortcode = paybillNumber;
+          if (accountReference) {
+            payload.account_number = accountReference;
+          }
+        } else {
+          payload.type = "MOBILE";
+          payload.mobile_network = mobileNetwork;
+          payload.shortcode = shortcode;
+        }
+      } else if (selectedCountry.code === "NGN") {
+        payload.type = "BANK";
         payload.account_number = shortcode;
         payload.bank_code = mobileNetwork;
       } else {
+        payload.type = "MOBILE";
+        payload.mobile_network = mobileNetwork;
         payload.shortcode = shortcode;
       }
 
@@ -95,14 +139,16 @@ export default function PayPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      
+
       const data = await res.json();
-      
+
       if (data.code === 200) {
         setSuccessMessage(data.message || "Payment processed successfully");
         setTxHash("");
         setShortcode("");
         setAmount("");
+        setPaybillNumber("");
+        setAccountReference("");
       } else {
         setError(data.message || `Error: ${data.code}`);
       }
@@ -212,7 +258,10 @@ export default function PayPage() {
             <label className="text-sm font-medium text-gray-700 mb-2 block">Receive in</label>
             <select
               value={selectedCountry.code}
-              onChange={(e) => setSelectedCountry(COUNTRIES.find(c => c.code === e.target.value)!)}
+              onChange={(e) => {
+                setSelectedCountry(COUNTRIES.find(c => c.code === e.target.value)!);
+                setPaymentMethod("Mobile Money"); // Reset to default when country changes
+              }}
               className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
             >
               {COUNTRIES.map((country) => (
@@ -223,41 +272,127 @@ export default function PayPage() {
             </select>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              {selectedCountry.code === "NGN" ? "Bank Code" : "Mobile Network"}
-            </label>
-            <select
-              value={mobileNetwork}
-              onChange={(e) => setMobileNetwork(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
-            >
-              <option value="">Select network</option>
-              {selectedCountry.networks.map((network) => (
-                <option key={network} value={network}>
-                  {network}
-                </option>
-              ))}
-            </select>
-          </div>
+          {selectedCountry.code === "KES" && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Payment Method</label>
+              <div className="flex gap-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    value="Mobile Money"
+                    checked={paymentMethod === "Mobile Money"}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="mr-2"
+                  />
+                  Mobile Money
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    value="PAYBILL"
+                    checked={paymentMethod === "PAYBILL"}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="mr-2"
+                  />
+                  PAYBILL
+                </label>
+              </div>
+            </div>
+          )}
 
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              {selectedCountry.code === "NGN" ? "Account Number" : "Phone Number / Shortcode"}
-            </label>
-            <input
-              placeholder={selectedCountry.code === "NGN" ? "1234567890" : "0712345678"}
-              value={shortcode}
-              onChange={(e) => setShortcode(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
-            />
-          </div>
+          {selectedCountry.code === "KES" && paymentMethod === "Mobile Money" && (
+            <>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Mobile Network</label>
+                <select
+                  value={mobileNetwork}
+                  onChange={(e) => setMobileNetwork(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                >
+                  <option value="">Select network</option>
+                  {selectedCountry.networks.map((network) => (
+                    <option key={network} value={network}>
+                      {network}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Phone Number</label>
+                <input
+                  placeholder="0712345678"
+                  value={shortcode}
+                  onChange={(e) => setShortcode(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
+
+          {selectedCountry.code === "KES" && paymentMethod === "PAYBILL" && (
+            <>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Paybill Number</label>
+                <input
+                  placeholder="123456"
+                  value={paybillNumber}
+                  onChange={(e) => setPaybillNumber(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Account Reference (Optional)</label>
+                <input
+                  placeholder="Account reference"
+                  value={accountReference}
+                  onChange={(e) => setAccountReference(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
+
+          {selectedCountry.code !== "KES" && (
+            <>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  {selectedCountry.code === "NGN" ? "Bank Code" : "Mobile Network"}
+                </label>
+                <select
+                  value={mobileNetwork}
+                  onChange={(e) => setMobileNetwork(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                >
+                  <option value="">Select network</option>
+                  {selectedCountry.networks.map((network) => (
+                    <option key={network} value={network}>
+                      {network}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  {selectedCountry.code === "NGN" ? "Account Number" : "Phone Number / Shortcode"}
+                </label>
+                <input
+                  placeholder={selectedCountry.code === "NGN" ? "1234567890" : "0712345678"}
+                  value={shortcode}
+                  onChange={(e) => setShortcode(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
         <button
           onClick={handlePay}
-          disabled={loading || !txHash || !shortcode || !amount || !mobileNetwork}
+          disabled={loading || !txHash || !amount || (selectedCountry.code === "KES" && paymentMethod === "Mobile Money" && (!shortcode || !mobileNetwork)) || (selectedCountry.code === "KES" && paymentMethod === "PAYBILL" && !paybillNumber) || (selectedCountry.code !== "KES" && (!shortcode || !mobileNetwork))}
           className="w-full h-14 bg-green-600 hover:bg-green-700 text-white text-lg font-bold rounded-xl disabled:opacity-50 flex items-center justify-center"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Submit Payment"}
