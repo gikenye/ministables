@@ -49,6 +49,20 @@ export interface AllocateResponse {
   allocationTxHash: string;
 }
 
+export interface CreateGoalRequest {
+  userAddress: string;
+  vaultAddress: string;
+  targetAmount: string;
+  targetDate: string;
+  metadataURI: string;
+}
+
+export interface CreateGoalResponse {
+  success: boolean;
+  goalId: string;
+  transactionHash: string;
+}
+
 export interface GoalDetailsResponse {
   id: string;
   creator: string;
@@ -148,6 +162,14 @@ export class BackendApiClient {
   // Allocation API methods
   async allocateDeposit(request: AllocateRequest): Promise<AllocateResponse> {
     return this.request<AllocateResponse>(API_ENDPOINTS.ALLOCATE, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  // Goal creation API methods
+  async createGoal(request: CreateGoalRequest): Promise<CreateGoalResponse> {
+    return this.request<CreateGoalResponse>("/api/create-goal", {
       method: "POST",
       body: JSON.stringify(request),
     });
