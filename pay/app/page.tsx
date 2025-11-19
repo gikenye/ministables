@@ -50,7 +50,7 @@ export default function PayPage() {
       });
       const data = await res.json();
       if (data.data?.selling_rate) {
-        setExchangeRate(data.data.selling_rate);
+        setExchangeRate(data.data.buying_rate);
       } else {
         console.error("Exchange rate API returned invalid data");
         setExchangeRate(null);
