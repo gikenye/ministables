@@ -4,7 +4,7 @@ import type { NextAuthOptions } from "next-auth";
 import { UserService } from "@/lib/services/userService";
 
 export const authOptions: NextAuthOptions = {
-  debug: true, // Enable debug mode for troubleshooting
+  debug: false,
   providers: [
     CredentialsProvider({
       id: "self-protocol",
