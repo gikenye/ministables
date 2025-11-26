@@ -9,7 +9,6 @@ import {
 import { ProfileHero } from "./ProfileHero";
 import { useGoals } from "@/hooks/useGoals";
 import { useUser } from "@/hooks/useUser";
-import { useVerificationStatus } from "@/hooks/useVerificationStatus";
 import { LogOut, Shield, HelpCircle, ExternalLink } from "lucide-react";
 import { ConnectWallet } from "../ConnectWallet";
 import {
@@ -62,27 +61,16 @@ export const NewProfile = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  const [encryptedUserId, setEncryptedUserId] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
+  const [nationality, setNationality] = useState<string | undefined>(undefined);
+  const [useridLoading, setUseridLoading] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+
   // Get real user data
   const { user, loading: userLoading } = useUser();
   const { goals, stats, loading: goalsLoading } = useGoals();
 
-  // Get verification status from our database
-  const {
-    isVerified,
-    nationality,
-    loading: verificationLoading,
-    refetch: refetchVerification,
-  } = useVerificationStatus();
-
-  // Refresh verification status when component regains focus
-  useEffect(() => {
-    const handleFocus = () => {
-      refetchVerification();
-    };
-
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [refetchVerification]);
 
   // Self verification setup
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
@@ -102,7 +90,7 @@ export const NewProfile = ({
         scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-app",
         endpoint: endpoint,
         logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
-        userId: address,
+        userId: encryptedUserId || address,
         endpointType: "celo",
         userIdType: "hex",
         userDefinedData: "Enjoy saving together with Minilend!",
@@ -120,6 +108,60 @@ export const NewProfile = ({
       console.error("Failed to initialize Self app:", error);
     }
   }, [excludedCountries, address, isVerificationModalOpen]);
+
+  useEffect(() => {
+    if (!address) return;
+
+    const fetchUserId = async () => {
+      setUseridLoading(true);
+      try {
+        const response = await fetch('/api/self/userid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress: address }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setEncryptedUserId(data.userId);
+        } else {
+          console.error('Failed to fetch encrypted userId');
+        }
+      } catch (error) {
+        console.error('Error fetching encrypted userId:', error);
+      } finally {
+        setUseridLoading(false);
+      }
+    };
+
+    fetchUserId();
+  }, [address]);
+
+  useEffect(() => {
+    if (!encryptedUserId) return;
+
+    const checkVerification = async () => {
+      setVerificationLoading(true);
+      try {
+        const response = await fetch(`/api/self/verify?userId=${encryptedUserId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setIsVerified(true);
+          setNationality(data.nationality);
+        } else {
+          setIsVerified(false);
+          setNationality(undefined);
+        }
+      } catch (error) {
+        console.error('Error checking verification status:', error);
+        setIsVerified(false);
+        setNationality(undefined);
+      } finally {
+        setVerificationLoading(false);
+      }
+    };
+
+    checkVerification();
+  }, [encryptedUserId]);
 
   // Handle verification click
   const handleVerificationClick = () => {
@@ -175,7 +217,7 @@ export const NewProfile = ({
       const response = await fetch("/api/self/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: address }),
+        body: JSON.stringify({ userId: encryptedUserId }),
       });
 
       if (response.ok) {
@@ -187,7 +229,30 @@ export const NewProfile = ({
         displayToast("Verification saved! Closing modal...");
         setTimeout(() => {
           setIsVerificationModalOpen(false);
-          refetchVerification(); // Refresh verification status
+          // Refresh verification status by re-checking
+          if (encryptedUserId) {
+            const checkVerification = async () => {
+              setVerificationLoading(true);
+              try {
+                const response = await fetch(`/api/self/verify?userId=${encryptedUserId}`);
+                if (response.ok) {
+                  const data = await response.json();
+                  setIsVerified(true);
+                  setNationality(data.nationality);
+                } else {
+                  setIsVerified(false);
+                  setNationality(undefined);
+                }
+              } catch (error) {
+                console.error('Error re-checking verification status:', error);
+                setIsVerified(false);
+                setNationality(undefined);
+              } finally {
+                setVerificationLoading(false);
+              }
+            };
+            checkVerification();
+          }
         }, 1500);
       } else {
         // Parse and show API error message
@@ -273,7 +338,7 @@ export const NewProfile = ({
         </div>
 
         {/* Self Verification CTA - Only show for loading or unverified users */}
-        {(!isVerified || verificationLoading) && (
+        {(!isVerified || verificationLoading || useridLoading) && (
           <div className="px-4 mt-4">
             {verificationLoading ? (
               // Loading state
