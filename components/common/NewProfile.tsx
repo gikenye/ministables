@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRouter } from "next/navigation";
 import {
@@ -12,6 +12,19 @@ import { useUser } from "@/hooks/useUser";
 import { useVerificationStatus } from "@/hooks/useVerificationStatus";
 import { LogOut, Shield, HelpCircle, ExternalLink } from "lucide-react";
 import { ConnectWallet } from "../ConnectWallet";
+import {
+  SelfQRcodeWrapper,
+  SelfAppBuilder,
+  type SelfApp,
+  countries,
+  getUniversalLink,
+} from "@selfxyz/qrcode";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Telegram Icon Component (from Flaticon - Pixel perfect)
 const TelegramIcon = ({ className }: { className?: string }) => (
@@ -40,6 +53,15 @@ export const NewProfile = ({
   const address = account?.address;
   const router = useRouter();
 
+  // Modal and toast state
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [selfApp, setSelfApp] = useState<SelfApp | null>(null);
+  const [universalLink, setUniversalLink] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
   // Get real user data
   const { user, loading: userLoading } = useUser();
   const { goals, stats, loading: goalsLoading } = useGoals();
@@ -62,9 +84,132 @@ export const NewProfile = ({
     return () => window.removeEventListener("focus", handleFocus);
   }, [refetchVerification]);
 
+  // Self verification setup
+  const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
+
+  useEffect(() => {
+    if (!address || !isVerificationModalOpen) return;
+
+    try {
+      // Use the contract address
+      const endpoint =
+        process.env.NEXT_PUBLIC_SELF_ENDPOINT ||
+        "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
+
+      const app = new SelfAppBuilder({
+        version: 2,
+        appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Minilend",
+        scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-app",
+        endpoint: endpoint,
+        logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
+        userId: address,
+        endpointType: "celo",
+        userIdType: "hex",
+        userDefinedData: "Enjoy saving together with Minilend!",
+        deeplinkCallback: `${window.location.origin}/`,
+        disclosures: {
+          minimumAge: 18,
+          ofac: true,
+          excludedCountries: excludedCountries,
+          nationality: true,
+        },
+      }).build();
+      setSelfApp(app);
+      setUniversalLink(getUniversalLink(app));
+    } catch (error) {
+      console.error("Failed to initialize Self app:", error);
+    }
+  }, [excludedCountries, address, isVerificationModalOpen]);
+
   // Handle verification click
   const handleVerificationClick = () => {
-    router.push("/self");
+    setIsVerificationModalOpen(true);
+  };
+
+  // Toast notification function
+  const displayToast = (message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // Copy link to clipboard
+  const copyToClipboard = () => {
+    if (!universalLink || !address) return;
+    navigator.clipboard
+      .writeText(universalLink)
+      .then(() => {
+        setLinkCopied(true);
+        displayToast("Universal link copied to clipboard!");
+        setTimeout(() => setLinkCopied(false), 2000);
+      })
+      .catch((err) => {
+        console.error("Failed to copy text: ", err);
+        displayToast("Failed to copy link");
+      });
+  };
+
+  // Open Self App
+  const openSelfApp = () => {
+    if (!universalLink || !address) return;
+    window.open(universalLink, "_blank");
+    displayToast("Opening Self App...");
+  };
+
+  // Handle successful verification
+  const handleSuccessfulVerification = async () => {
+    // Prevent duplicate submissions
+    if (isVerifying) {
+      return;
+    }
+
+    if (!address) {
+      displayToast("Please connect your wallet to proceed with verification");
+      return;
+    }
+
+    setIsVerifying(true);
+    displayToast("Verification successful! Fetching disclosed data...");
+
+    try {
+      const response = await fetch("/api/self/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Log verification success without PII
+        if (process.env.NODE_ENV === "development") {
+          console.log("Verification data received successfully");
+        }
+        displayToast("Verification saved! Closing modal...");
+        setTimeout(() => {
+          setIsVerificationModalOpen(false);
+          refetchVerification(); // Refresh verification status
+        }, 1500);
+      } else {
+        // Parse and show API error message
+        try {
+          const errorData = await response.json();
+          const errorMessage =
+            errorData.message ||
+            errorData.error ||
+            "Failed to fetch verification data";
+          displayToast(`Verification failed: ${errorMessage}`);
+        } catch {
+          displayToast("Failed to fetch verification data");
+        }
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown verification error";
+      console.error("Failed to save verification:", error);
+      displayToast(`Verification error: ${errorMessage}`);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   if (!address) {
@@ -155,7 +300,7 @@ export const NewProfile = ({
                   <Shield className="w-5 h-5 text-blue-400" />
                   <div className="flex-1 text-left">
                     <h3 className="text-sm font-medium text-blue-400">
-                      Verify Your Identity
+                      Scan qr code with self App
                     </h3>
                     <p className="text-xs text-blue-300">
                       Prove your humanhood with Self Protocol
@@ -173,7 +318,7 @@ export const NewProfile = ({
           <div className="bg-gray-800/20 backdrop-blur-sm rounded-xl border border-gray-700/30 overflow-hidden">
             {/* Join Telegram */}
             <a
-              href="https://t.me/minilendxyz" 
+              href="https://t.me/minilendxyz"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full px-4 py-4 flex items-center justify-between text-left hover:bg-gray-700/30 transition-colors border-b border-gray-700/30 block"
@@ -209,6 +354,79 @@ export const NewProfile = ({
           </div>
         )}
       </div>
+
+      {/* Self Verification Modal */}
+      <Dialog
+        open={isVerificationModalOpen}
+        onOpenChange={setIsVerificationModalOpen}
+      >
+        <DialogContent className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 max-w-sm mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white text-center">
+              scan qr code with self app
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center gap-4">
+            {/* QR Code Section */}
+            <div className="flex-shrink-0">
+              <div className="bg-white rounded-lg p-2 shadow-lg">
+                {selfApp ? (
+                  <SelfQRcodeWrapper
+                    selfApp={selfApp}
+                    type="deeplink"
+                    onSuccess={handleSuccessfulVerification}
+                    onError={() =>
+                      displayToast("Error: Failed to verify identity")
+                    }
+                  />
+                ) : (
+                  <div className="w-[160px] h-[160px] bg-gray-100 animate-pulse flex items-center justify-center rounded-lg">
+                    <p className="text-gray-500 text-sm">Loading...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-row gap-2 w-full">
+              <button
+                type="button"
+                onClick={copyToClipboard}
+                disabled={!universalLink || !address || isVerifying}
+                className="flex-1 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 disabled:from-gray-500 disabled:to-gray-500 transition-all duration-200 text-white font-medium py-2 px-3 rounded-lg text-xs disabled:cursor-not-allowed shadow-lg"
+              >
+                {linkCopied ? "Copied!" : "Copy Link"}
+              </button>
+
+              <button
+                type="button"
+                onClick={openSelfApp}
+                disabled={!universalLink || !address || isVerifying}
+                className="flex-1 bg-white/10 hover:bg-white/20 disabled:bg-gray-500/20 backdrop-blur-sm border border-white/20 transition-all duration-200 text-white font-medium py-2 px-3 rounded-lg text-xs disabled:cursor-not-allowed"
+              >
+                {isVerifying ? (
+                  <span className="flex items-center justify-center gap-1">
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Verifying...
+                  </span>
+                ) : (
+                  "Open Self App"
+                )}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed bottom-6 left-4 right-4 z-50 flex justify-center">
+          <div className="bg-gray-800/90 backdrop-blur-sm text-white py-3 px-6 rounded-lg shadow-lg border border-gray-600/30 max-w-sm text-center">
+            <div className="text-sm font-medium">{toastMessage}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -20,7 +20,9 @@ export default function Home() {
   const [universalLink, setUniversalLink] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const account = useActiveAccount();
-  const userId = account?.address;
+  // const userId = account?.address;
+  const userId = "0xc022BD0b6005Cae66a468f9a20897aDecDE04e95";
+
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
 
   // Early return if user is not connected
@@ -58,6 +60,7 @@ export default function Home() {
         "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
 
       const app = new SelfAppBuilder({
+
         version: 2,
         appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Minilend",
         scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-app",
@@ -67,6 +70,7 @@ export default function Home() {
         endpointType: "celo",
         userIdType: "hex",
         userDefinedData: "Enjoy saving together with Minilend!",
+        deeplinkCallback: `${window.location.origin}/`,
         disclosures: {
           minimumAge: 18,
           ofac: true,
@@ -74,7 +78,6 @@ export default function Home() {
           nationality: true,
         },
       }).build();
-
       setSelfApp(app);
       setUniversalLink(getUniversalLink(app));
     } catch (error) {
