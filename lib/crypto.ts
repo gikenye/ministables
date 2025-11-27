@@ -1,7 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
 
 const algorithm = 'aes-256-cbc';
-const key = createHash('sha256').update(process.env.SELF_SALT!).digest();
+if (!process.env.SELF_SALT) {
+  throw new Error('SELF_SALT environment variable is required for encryption');
+}
+const key = createHash('sha256').update(process.env.SELF_SALT).digest();
 
 export function encrypt(text: string): string {
   const iv = randomBytes(16);
