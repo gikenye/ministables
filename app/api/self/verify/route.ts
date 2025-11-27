@@ -7,13 +7,17 @@ export async function POST(req: NextRequest) {
   const { userId } = await req.json();
 
   if (!userId) {
+    return NextResponse.json({ error: "User ID required" }, { status: 400 });
+  }
+
+  const decrypted = decrypt(userId);
+  const [walletAddress, userIdPart] = decrypted.split(":");
+  if (!walletAddress || !userIdPart) {
     return NextResponse.json(
-      { error: "User ID required" },
+      { error: "Invalid user ID format" },
       { status: 400 }
     );
   }
-
-  const walletAddress = decrypt(userId);
 
   try {
     // First check if verification already exists in database
@@ -95,10 +99,7 @@ export async function GET(request: NextRequest) {
   const userId = searchParams.get("userId");
 
   if (!userId) {
-    return NextResponse.json(
-      { error: "User ID is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "User ID is required" }, { status: 400 });
   }
 
   try {
