@@ -1,116 +1,103 @@
-// Remove ObjectId import since we're using wallet address as UUID
-
 // User preferences for savings goals
 export interface UserGoalPreferences {
-  defaultTokenAddress?: string; // Default token for new goals
-  defaultTokenSymbol?: string; // Default token symbol
-  defaultInterestRate?: number; // Default interest rate for new goals
-  autoCreateQuickSave: boolean; // Whether to auto-create Quick Save on registration
-  goalCreationReminders: boolean; // Whether to send goal creation reminders
-  interestCalculationFrequency: "daily" | "weekly" | "monthly"; // How often to calculate interest
+  defaultTokenAddress?: string;
+  defaultTokenSymbol?: string;
+  defaultInterestRate?: number;
+  autoCreateQuickSave: boolean;
+  goalCreationReminders: boolean;
+  interestCalculationFrequency: "daily" | "weekly" | "monthly";
 
-  // Notification preferences
   notifications: {
-    goalProgress: boolean; // Notify on goal progress milestones
-    interestEarned: boolean; // Notify when interest is earned
-    goalCompleted: boolean; // Notify when goal is completed
-    lowBalance: boolean; // Notify when goal balance is low
-    autoSaveReminders: boolean; // Remind about auto-save opportunities
+    goalProgress: boolean;
+    interestEarned: boolean;
+    goalCompleted: boolean;
+    lowBalance: boolean;
+    autoSaveReminders: boolean;
   };
 
-  // Privacy settings
   privacy: {
-    showGoalsToFriends: boolean; // Whether friends can see your goals
-    allowGoalContributions: boolean; // Whether others can contribute to your goals
-    showProgressPublicly: boolean; // Whether to show progress publicly
+    showGoalsToFriends: boolean;
+    allowGoalContributions: boolean;
+    showProgressPublicly: boolean;
   };
 
-  // Auto-save settings
   autoSave?: {
     enabled: boolean;
-    amount: string; // Default auto-save amount
+    amount: string;
     frequency: "daily" | "weekly" | "monthly";
-    goalId?: string; // Default goal for auto-save
+    goalId?: string;
   };
 }
 
 // User savings statistics
 export interface UserSavingsStats {
-  totalSaved: string; // Total amount saved across all goals
-  totalInterestEarned: string; // Total interest earned
-  totalGoals: number; // Total number of goals created
-  activeGoals: number; // Number of active goals
-  completedGoals: number; // Number of completed goals
-  averageGoalSize: string; // Average goal target amount
-  savingsStreak: number; // Days of consecutive saving activity
-  longestSavingsStreak: number; // Longest savings streak achieved
+  totalSaved: string;
+  totalInterestEarned: string;
+  totalGoals: number;
+  activeGoals: number;
+  completedGoals: number;
+  averageGoalSize: string;
+  savingsStreak: number;
+  longestSavingsStreak: number;
 
-  // Achievement data
   achievements: {
-    firstGoal: boolean; // Created first goal
-    firstDeposit: boolean; // Made first deposit
-    goalCompleted: boolean; // Completed first goal
-    savingsStreak30: boolean; // 30-day savings streak
-    savingsStreak100: boolean; // 100-day savings streak
-    interestMilestone: boolean; // Earned first interest
-    groupGoalCreated: boolean; // Created first group goal
-    referralMade: boolean; // Made first referral
+    firstGoal: boolean;
+    firstDeposit: boolean;
+    goalCompleted: boolean;
+    savingsStreak30: boolean;
+    savingsStreak100: boolean;
+    interestMilestone: boolean;
+    groupGoalCreated: boolean;
+    referralMade: boolean;
   };
 }
 
 // Define the user data structure
 export interface User {
-  // Use wallet address as the primary UUID/identifier (no MongoDB ObjectId)
-  address: string; // Wallet address (primary UUID identifier)
-  username?: string; // Optional username for personalization
-  verified: boolean; // Verification status
+  _id: string;
+  address: string;
+  username?: string;
+  verified: boolean;
   verificationData?: {
-    // Data from zkSelf verification
     attestationId?: string;
     credentialSubject?: any;
     verificationOptions?: any;
     verifiedAt?: Date;
   };
   identityData?: {
-    // Identity data from verification
     name?: string[];
     nationality?: string;
     gender?: string;
     minimumAge?: number;
   };
 
-  // Goal-related data
-  goalPreferences: UserGoalPreferences; // User preferences for goals
-  savingsStats: UserSavingsStats; // User savings statistics
-  quickSaveGoalId?: string; // Reference to Quick Save goal
+  goalPreferences: UserGoalPreferences;
+  savingsStats: UserSavingsStats;
+  quickSaveGoalId?: string;
 
-  // Social features
-  friends: string[]; // Array of friend addresses
-  referralCode?: string; // User's referral code
-  referredBy?: string; // Address of user who referred this user
+  friends: string[];
+  referralCode?: string;
+  referredBy?: string;
 
-  // Compliance and KYC
-  kycLevel: "none" | "basic" | "full"; // KYC verification level
+  kycLevel: "none" | "basic" | "full";
   complianceFlags: {
-    sanctionsCheck: boolean; // Passed sanctions screening
-    pepCheck: boolean; // PEP (Politically Exposed Person) check
-    amlCleared: boolean; // AML clearance status
+    sanctionsCheck: boolean;
+    pepCheck: boolean;
+    amlCleared: boolean;
   };
 
-  // Activity tracking
-  lastActiveAt: Date; // Last activity timestamp
-  loginCount: number; // Number of times user has logged in
+  lastActiveAt: Date;
+  loginCount: number;
 
-  // Settings
   settings: {
-    currency: string; // Preferred fiat currency (e.g., "KES", "USD")
-    language: string; // Preferred language
-    timezone: string; // User's timezone
-    theme: "light" | "dark" | "auto"; // UI theme preference
+    currency: string;
+    language: string;
+    timezone: string;
+    theme: "light" | "dark" | "auto";
   };
 
-  createdAt: Date; // When the user was first created
-  updatedAt: Date; // When the user was last updated
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Define a type for user updates (exclude address since it's the primary key)
@@ -141,7 +128,7 @@ export interface UserProfile {
     progress: number;
     category: string;
   }[];
-  achievements: string[]; // List of earned achievement badges
+  achievements: string[];
 }
 
 // User dashboard summary
