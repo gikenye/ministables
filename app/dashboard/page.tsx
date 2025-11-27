@@ -59,7 +59,7 @@ export default function DashboardPage() {
     }
   }, [address, isConnected, account]);
 
-  const { chain: selectedChain, contract, contractAddress, tokenInfos, tokens } = useChain();
+  const { chain: selectedChain, tokenInfos } = useChain();
 
   const VAULT_TOKENS = useMemo(() => {
     const vaults = VAULT_CONTRACTS[selectedChain.id];

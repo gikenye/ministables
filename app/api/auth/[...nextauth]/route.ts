@@ -4,7 +4,7 @@ import type { NextAuthOptions } from "next-auth";
 import { UserService } from "@/lib/services/userService";
 
 export const authOptions: NextAuthOptions = {
-  debug: true, // Enable debug mode for troubleshooting
+  debug: false,
   providers: [
     CredentialsProvider({
       id: "self-protocol",
@@ -22,14 +22,12 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Get or create the user in the database
           const userData = {
             address: credentials.address,
             verified: !!credentials.verificationData, // Only verified if verification data provided
             identityData: credentials.verificationData ? JSON.parse(credentials.verificationData) : null,
           };
 
-          // Store the user data in MongoDB (optional, graceful failure)
           let user;
           try {
             user = await UserService.upsertUser(credentials.address, userData);

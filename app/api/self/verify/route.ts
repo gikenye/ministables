@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { SelfVerification } from "@/lib/models/selfVerification";
+import { decrypt } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
-  const { walletAddress } = await req.json();
+  const { userId } = await req.json();
 
-  if (!walletAddress) {
+  if (!userId) {
     return NextResponse.json(
-      { error: "Wallet address required" },
+      { error: "User ID required" },
       { status: 400 }
     );
   }
 
+  const walletAddress = decrypt(userId);
+
   try {
     // First check if verification already exists in database
     const collection = await getCollection("selfVerifications");
-    const existingVerification = await collection.findOne({ walletAddress });
+    const existingVerification = await collection.findOne({ userId });
 
     if (existingVerification) {
       return NextResponse.json({
@@ -51,6 +54,7 @@ export async function POST(req: NextRequest) {
     // Save to database
     const now = new Date();
     const verification: SelfVerification = {
+      userId,
       walletAddress,
       sessionId: verificationData.transactionHash,
       attestationId: verificationData.attestationId,
@@ -88,11 +92,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const userAddress = searchParams.get("userAddress");
+  const userId = searchParams.get("userId");
 
-  if (!userAddress) {
+  if (!userId) {
     return NextResponse.json(
-      { error: "User address is required" },
+      { error: "User ID is required" },
       { status: 400 }
     );
   }
@@ -101,7 +105,7 @@ export async function GET(request: NextRequest) {
     // ONLY check database - do not fallback to blockchain
     const collection = await getCollection("selfVerifications");
     const existingVerification = await collection.findOne({
-      walletAddress: userAddress,
+      userId,
     });
 
     if (existingVerification) {
