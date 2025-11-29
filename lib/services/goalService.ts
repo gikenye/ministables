@@ -902,9 +902,9 @@ export const GoalService = {
     chainId: number;
     tokenSymbol: string;
     amount: string;
-    lockPeriod: number;
+    lockPeriod?: number; // Made optional, defaults to 30 days
     userId: string;
-    goalId: string;
+    goalId?: string;
   }): VaultDepositGoalIntegration {
     return vaultService.prepareGoalVaultDeposit(params);
   },

@@ -80,13 +80,13 @@ import {
 import { useGoals } from "@/hooks/useGoals";
 import { useUser } from "@/hooks/useUser";
 import { useAllocate } from "@/hooks/useAllocate";
-import { useBackendGoals, useQuicksaveGoal } from "@/hooks/useBackendGoals";
-import { useLeaderboard, useBackendLeaderboard } from "@/hooks/useLeaderboard";
+
 import { useCreateGoal } from "@/hooks/useCreateGoal";
 import { useInitializeUserGoals } from "@/hooks/useInitializeUserGoals";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { useGroupSavingsAmount } from "@/hooks/useGroupGoals";
 import { useInterestRates } from "@/hooks/useInterestRates";
+import { useLeaderboard } from "@/hooks/useLeaderboard";
 // import { useBlockchainGoals } from "@/hooks/useBlockchainGoals"; // Removed for production deployment
 import {
   reportError,
@@ -125,6 +125,7 @@ import { reportTransactionToDivvi } from "@/lib/services/divviService";
 import { vaultService } from "@/lib/services/vaultService";
 import type { VaultPosition, VaultDeposit } from "@/lib/services/vaultService";
 import { formatAmount } from "@/lib/utils";
+import { getBestStablecoinForDeposit } from "@/lib/services/balanceService";
 
 interface WithdrawableDeposit {
   depositId: number;
@@ -383,15 +384,18 @@ const CustomGoalModal = ({
   const [currentStep, setCurrentStep] = useState(0);
 
   const steps = [
-    { key: 'name', label: 'Goal Name', required: true },
-    { key: 'amount', label: 'Target Amount', required: true },
-    { key: 'timeline', label: 'Timeline', required: false },
-    { key: 'category', label: 'Category', required: false },
+    { key: "name", label: "Goal Name", required: true },
+    { key: "amount", label: "Target Amount", required: true },
+    { key: "timeline", label: "Timeline", required: false },
+    { key: "category", label: "Category", required: false },
   ];
 
   const currentField = steps[currentStep];
   const isLastStep = currentStep === steps.length - 1;
-  const canProceed = !currentField.required || (form[currentField.key as keyof typeof form] && form[currentField.key as keyof typeof form].trim() !== '');
+  const canProceed =
+    !currentField.required ||
+    (form[currentField.key as keyof typeof form] &&
+      form[currentField.key as keyof typeof form].trim() !== "");
 
   const handleNext = () => {
     if (isLastStep) {
@@ -422,7 +426,7 @@ const CustomGoalModal = ({
             <div
               key={index}
               className={`w-2 h-2 rounded-full transition-colors ${
-                index <= currentStep ? 'bg-cyan-400' : 'bg-gray-600'
+                index <= currentStep ? "bg-cyan-400" : "bg-gray-600"
               }`}
             />
           ))}
@@ -441,7 +445,7 @@ const CustomGoalModal = ({
 
         {/* Dynamic Form Field */}
         <div className="space-y-2">
-          {currentField.key === 'name' && (
+          {currentField.key === "name" && (
             <div>
               <input
                 type="text"
@@ -458,7 +462,7 @@ const CustomGoalModal = ({
             </div>
           )}
 
-          {currentField.key === 'amount' && (
+          {currentField.key === "amount" && (
             <div>
               <div className="text-center mb-2">
                 <span className="text-2xl font-bold text-cyan-400">KES</span>
@@ -467,7 +471,12 @@ const CustomGoalModal = ({
                 type="text"
                 inputMode="numeric"
                 value={form.amount}
-                onChange={(e) => handleInputChange("amount", e.target.value.replace(/[^0-9]/g, ''))}
+                onChange={(e) =>
+                  handleInputChange(
+                    "amount",
+                    e.target.value.replace(/[^0-9]/g, "")
+                  )
+                }
                 placeholder="0"
                 className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-center text-xl font-bold"
                 autoFocus
@@ -475,7 +484,7 @@ const CustomGoalModal = ({
             </div>
           )}
 
-          {currentField.key === 'timeline' && (
+          {currentField.key === "timeline" && (
             <select
               value={form.timeline}
               onChange={(e) => handleInputChange("timeline", e.target.value)}
@@ -487,7 +496,7 @@ const CustomGoalModal = ({
             </select>
           )}
 
-          {currentField.key === 'category' && (
+          {currentField.key === "category" && (
             <select
               value={form.category}
               onChange={(e) => handleInputChange("category", e.target.value)}
@@ -520,7 +529,7 @@ const CustomGoalModal = ({
             size="lg"
             className="flex-1"
           >
-            {currentStep === 0 ? 'Cancel' : 'Back'}
+            {currentStep === 0 ? "Cancel" : "Back"}
           </ActionButton>
           <ActionButton
             onClick={handleNext}
@@ -529,7 +538,7 @@ const CustomGoalModal = ({
             className="flex-1"
             disabled={!canProceed || isLoading}
           >
-            {isLoading ? 'Creating...' : isLastStep ? 'Create Goal' : 'Next'}
+            {isLoading ? "Creating..." : isLastStep ? "Create Goal" : "Next"}
           </ActionButton>
         </div>
       </div>
@@ -768,8 +777,8 @@ const GoalDetailsModal = ({
   );
 };
 
-// Quick Save Confirmation Modal - Mobile-First
-const QuickSaveConfirmationModal = ({
+// Universal Deposit Confirmation Modal
+const DepositConfirmationModal = ({
   isOpen,
   onClose,
   amount,
@@ -787,6 +796,8 @@ const QuickSaveConfirmationModal = ({
   setCopied = () => {},
   setSelectedTokenForOnramp = () => {},
   setShowOnrampModal = () => {},
+  goalTitle = "Quick Save Goal",
+  goalIcon = "🐷",
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -805,6 +816,8 @@ const QuickSaveConfirmationModal = ({
   setCopied?: (value: boolean) => void;
   setSelectedTokenForOnramp?: (value: string) => void;
   setShowOnrampModal?: (value: boolean) => void;
+  goalTitle?: string;
+  goalIcon?: string;
 }) => {
   // Show success state if deposit is successful
   if (depositSuccess) {
@@ -821,8 +834,7 @@ const QuickSaveConfirmationModal = ({
               Deposit Successful!
             </h3>
             <p className="text-gray-400 text-xs mb-3">
-              Your KES {depositSuccess.amount} has been deposited to your Quick
-              Save goal.
+              Your KES {depositSuccess.amount} has been deposited to your {goalTitle}.
             </p>
 
             {depositSuccess.transactionHash && (
@@ -929,14 +941,14 @@ const QuickSaveConfirmationModal = ({
               </div>
               <div className="text-gray-400 mb-1.5 text-xs">to your</div>
               <div className="text-base font-bold text-cyan-400">
-                Quick Save Goal
+                {goalTitle}
               </div>
             </div>
 
             {/* Remember Info Card */}
             <InfoCard>
               <div className="text-center">
-                <div className="text-2xl mb-2">🐷</div>
+                <div className="text-2xl mb-2">{goalIcon}</div>
                 <h4 className="text-white text-base font-semibold mb-2">
                   Remember
                 </h4>
@@ -1019,19 +1031,13 @@ const ExpandableQuickSaveCard = ({
 
   // Calculate total savings across all goals
   const totalSavingsNum = goals.reduce((total, goalItem) => {
-    // Format the raw blockchain amount before parsing
-    const rawAmount = goalItem?.currentAmount || "0";
-    const formattedAmount = formatAmount(
-      rawAmount,
-      goalItem?.tokenDecimals || 6
-    );
-    return total + parseFloat(formattedAmount);
+    // The backend API already returns human-readable amounts, no need to format again
+    const amount = goalItem?.currentAmount || "0";
+    return total + parseFloat(amount);
   }, 0);
 
   // Parse Quick Save goal amounts (for the expanded view)
-  const quickSaveAmountNum = parseFloat(
-    formatAmount(goal?.currentAmount || "0", goal?.tokenDecimals || 6)
-  );
+  const quickSaveAmountNum = parseFloat(goal?.currentAmount || "0");
   const tokenSymbol = defaultToken?.symbol || "USDC";
   const tokenDecimals = defaultToken?.decimals || 6;
 
@@ -1528,6 +1534,35 @@ export default function AppPage() {
       tokenAddress: defaultToken?.address,
     });
 
+  // User positions from ALLOCATE_API_URL
+  const [userPositions, setUserPositions] = useState(null);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  
+  const fetchUserPositions = async () => {
+    if (!account?.address) return;
+    
+    setPositionsLoading(true);
+    try {
+      const response = await fetch(`/api/user-balances?userAddress=${account.address}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUserPositions(data);
+      }
+    } catch (error) {
+      reportError('Failed to fetch user positions', {
+        component: 'AppPage',
+        operation: 'fetchUserPositions',
+        additional: { error }
+      });
+    } finally {
+      setPositionsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    fetchUserPositions();
+  }, [account?.address]);
+
   // API hooks for data fetching
   const {
     goals,
@@ -1537,14 +1572,10 @@ export default function AppPage() {
     refetch: refetchGoals,
   } = useGoals();
 
-  // Backend goals hook for quicksave goal
-  const {
-    goals: backendGoals,
-    quicksaveGoal,
-    loading: backendGoalsLoading,
-    error: backendGoalsError,
-    refetch: refetchBackendGoals,
-  } = useBackendGoals(defaultToken?.symbol);
+  // Use user positions data instead of backend goals
+  const backendGoalsLoading = positionsLoading;
+  const backendGoalsError = null;
+  const refetchBackendGoals = () => fetchUserPositions();
 
   const {
     user,
@@ -1561,14 +1592,25 @@ export default function AppPage() {
   // Backend allocation hook for deposit allocation
   const { allocateDeposit } = useAllocate();
 
-  // Backend leaderboard hook
+  // Use leaderboard hook for leaderboard data
   const {
-    leaderboard,
-    userScore,
+    userScore: leaderboardUserScore,
+    userRank,
+    topUsers: leaderboard,
     loading: leaderboardLoading,
     error: leaderboardError,
     refetch: refetchLeaderboard,
-  } = useBackendLeaderboard({ initialLimit: 10, autoFetch: true });
+  } = useLeaderboard();
+
+  // Find current user in leaderboard to get formatted score
+  const currentUserEntry = leaderboard.find(entry => entry.isCurrentUser);
+  const userScore = currentUserEntry ? {
+    rank: currentUserEntry.rank,
+    formattedScore: currentUserEntry.formattedScore
+  } : (userRank ? {
+    rank: userRank,
+    formattedScore: "0.000000"
+  } : null);
 
   // Initialize user goals (monitor backend quicksave goal initialization)
   const { isInitialized } = useInitializeUserGoals(defaultToken, chain);
@@ -1591,48 +1633,6 @@ export default function AppPage() {
   const [activeTab, setActiveTab] = useState<
     "goals" | "groups" | "leaderboard" | "profile"
   >("goals");
-
-  // Save options data
-  const saveOptions: SaveOption[] = [
-    {
-      id: "52-week",
-      title: "52 Week Challenge",
-      icon: Calendar,
-      description: "Save incrementally over 52 weeks",
-    },
-    {
-      id: "superfans",
-      title: "Superfans Challenge",
-      icon: Trophy,
-      description: "Join the superfans saving challenge",
-    },
-    {
-      id: "vault",
-      title: "Akiba Vault",
-      icon: Shield,
-      description: "Secure long-term savings vault",
-    },
-    {
-      id: "mia-kwa-mia",
-      title: "Mia Kwa Mia Challenge",
-      icon: Banknote,
-      description: "Monthly progressive savings challenge",
-    },
-    {
-      id: "envelope",
-      title: "Envelope Challenge",
-      icon: Mail,
-      description: "Digital envelope saving method",
-    },
-    {
-      id: "personal",
-      title: "Personal Goal",
-      icon: User,
-      description: "Set your own custom savings target",
-    },
-  ];
-
-  // Footer is always visible
 
   // Quick Save modal states
   const [quickSaveDetailsOpen, setQuickSaveDetailsOpen] = useState(false);
@@ -1663,6 +1663,7 @@ export default function AppPage() {
     amount: string;
     transactionHash?: string;
   } | null>(null);
+  const [selectedDepositToken, setSelectedDepositToken] = useState<any>(null);
 
   // Mobile money onramp states
   const [showOnrampModal, setShowOnrampModal] = useState(false);
@@ -1730,6 +1731,10 @@ export default function AppPage() {
       handleQuickSaveDeposit();
     }
   }, [account, pendingDeposit]);
+
+  // State for dynamically fetched goals when using non-default tokens
+  const [dynamicQuicksaveGoal, setDynamicQuicksaveGoal] = useState<any>(null);
+  const [dynamicGoalsLoading, setDynamicGoalsLoading] = useState(false);
 
   const handleSaveActionSelect = (actionId: string) => {
     setSaveActionsModalOpen(false);
@@ -1836,21 +1841,9 @@ export default function AppPage() {
 
     try {
       // Create goal directly via API to avoid client-side MongoDB imports
-      const response = await fetch("/api/goals", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...newGoalData,
-          userId: account.address,
-          // API will handle blockchain creation with proper transaction signing
-        }),
-      });
+      const createdGoal = await createGoal(newGoalData);
 
-      if (response.ok) {
-        const result = await response.json();
-
+      if (createdGoal) {
         // Goal created and synced to database
         await Promise.all([refetchGoals(), refetchBackendGoals()]);
 
@@ -1863,11 +1856,7 @@ export default function AppPage() {
         });
         setCustomGoalModalOpen(false);
       } else {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: "Unknown error" }));
-        console.error("API Error:", response.status, errorData);
-        throw new Error(errorData.error || "Failed to create goal");
+        throw new Error(createGoalError || "Failed to create goal");
       }
     } catch (error) {
       reportError("Failed to create goal", {
@@ -1911,8 +1900,12 @@ export default function AppPage() {
   };
 
   // Prepare deposit transaction for Quick Save
-  const prepareQuickSaveDepositTransaction = async (amount: string) => {
-    if (!defaultToken || !account || !chain) {
+  const prepareQuickSaveDepositTransaction = async (
+    amount: string,
+    token?: any
+  ) => {
+    const selectedToken = token || defaultToken;
+    if (!selectedToken || !account || !chain) {
       throw new Error("Missing required parameters");
     }
 
@@ -1923,9 +1916,9 @@ export default function AppPage() {
       throw new Error("This chain is not yet supported for deposits");
     }
 
-    const decimals = defaultToken.decimals || 18;
+    const decimals = selectedToken.decimals || 18;
     const amountWei = parseUnits(amount, decimals);
-    const tokenSymbol = defaultToken.symbol;
+    const tokenSymbol = selectedToken.symbol;
 
     try {
       const vaultAddress = getVaultAddress(chainId, tokenSymbol);
@@ -1937,15 +1930,15 @@ export default function AppPage() {
         abi: vaultABI,
       });
 
-      // Use no lock period for Quick Save (lockTierId = 0)
-      const lockTierId = 0;
+      // Use 30-day lock period for Quick Save (lockTierId = 1)
+      const lockTierId = 1;
 
       const depositTx = prepareContractCall({
         contract: vaultContract,
         method: "deposit",
         params: [amountWei, BigInt(lockTierId)],
         erc20Value: {
-          tokenAddress: defaultToken.address,
+          tokenAddress: selectedToken.address,
           amountWei,
         },
       });
@@ -1956,7 +1949,7 @@ export default function AppPage() {
         component: "AppPage",
         operation: "prepareQuickSaveDepositTransaction",
         chainId: chain?.id,
-        tokenSymbol: defaultToken?.symbol,
+        tokenSymbol: selectedToken.symbol,
         additional: { error },
       });
       throw error;
@@ -1965,64 +1958,96 @@ export default function AppPage() {
 
   // Handle transaction errors with user-friendly messages
   const handleDepositError = (error: Error) => {
+    console.log("🔍 Handling deposit error:", error.message);
     let userMessage = "Transaction failed. Please try again.";
 
     if (
       error.message.includes("user rejected") ||
       error.message.includes("User rejected")
     ) {
+      console.log("📝 Mapped to: Transaction cancelled");
       userMessage = "Transaction was cancelled.";
     } else if (error.message.includes("insufficient funds")) {
+      console.log("📝 Mapped to: Insufficient funds");
       userMessage = "Insufficient funds for this transaction.";
     } else if (error.message.includes("transfer amount exceeds allowance")) {
+      console.log("📝 Mapped to: Token approval failed");
       userMessage = "Token approval failed. Please try again.";
     } else if (error.message.includes("network")) {
+      console.log("📝 Mapped to: Network error");
       userMessage =
         "Network error. Please check your connection and try again.";
+    } else {
+      console.log("📝 Using default error message");
     }
 
+    console.log("📢 Setting error message:", userMessage);
     setDepositError(userMessage);
   };
 
   // Handle successful transaction
-  const handleDepositSuccess = async (receipt: any) => {
+  const handleDepositSuccess = async (
+    receipt: any,
+    usdAmount?: number,
+    selectedToken?: any
+  ) => {
     // Report successful transaction for monitoring
     reportInfo("Quick Save deposit successful", {
       component: "AppPage",
       operation: "handleDepositSuccess",
       transactionHash: receipt?.transactionHash,
       amount: quickSaveAmount,
-      tokenSymbol: defaultToken?.symbol,
+      tokenSymbol: selectedToken?.symbol || defaultToken?.symbol,
       chainId: chain?.id,
     });
 
     // Set the success state
+    const successAmount = goalConfirmationOpen ? goalAmount : quickSaveAmount;
     setDepositSuccess({
-      amount: quickSaveAmount,
+      amount: successAmount,
       transactionHash: receipt.transactionHash,
     });
 
     // Call backend allocation API to properly allocate the deposit
     try {
       if (user?.address && defaultToken && receipt?.transactionHash) {
-        // Convert quickSaveAmount to wei for the backend API
+        // Convert usdAmount to wei for the backend API
         const amountWei = parseUnits(
-          quickSaveAmount,
+          (usdAmount || parseFloat(successAmount)).toString(),
           defaultToken.decimals || 6
         );
 
-        // Call the backend allocation API
-        const allocationResult = await allocateDeposit({
-          tokenSymbol: defaultToken.symbol,
+        // Log what we're sending to the allocate endpoint
+        console.log("🔄 Sending to allocate endpoint:", {
+          tokenSymbol: selectedToken?.symbol || defaultToken.symbol,
           amount: amountWei.toString(),
           txHash: receipt.transactionHash,
+          targetGoalId: goalConfirmationOpen && selectedGoal?.id ? selectedGoal.id : 'quicksave',
+          goalConfirmationOpen,
+          selectedGoalId: selectedGoal?.id,
+          selectedGoalTitle: selectedGoal?.title,
         });
+
+        // Call the backend allocation API with the correct token symbol and goal context
+        const allocationRequest: any = {
+          tokenSymbol: selectedToken?.symbol || defaultToken.symbol,
+          amount: amountWei.toString(),
+          txHash: receipt.transactionHash,
+        };
+        
+        // Add goal context if this is a goal-specific deposit
+        if (goalConfirmationOpen && selectedGoal?.id) {
+          allocationRequest.targetGoalId = selectedGoal.id;
+        }
+        
+        const allocationResult = await allocateDeposit(allocationRequest);
 
         if (allocationResult) {
           reportInfo("Backend allocation completed successfully", {
             component: "AppPage",
             operation: "handleDepositSuccess",
             transactionHash: receipt.transactionHash,
+            tokenSymbol: selectedToken?.symbol || defaultToken?.symbol,
             additional: {
               quicksaveGoalId: allocationResult.quicksaveGoalId,
               depositId: allocationResult.depositId,
@@ -2037,8 +2062,8 @@ export default function AppPage() {
         component: "AppPage",
         operation: "handleDepositSuccess",
         transactionHash: receipt?.transactionHash,
-        amount: quickSaveAmount,
-        tokenSymbol: defaultToken?.symbol,
+        amount: (usdAmount || parseFloat(quickSaveAmount)).toString(),
+        tokenSymbol: selectedToken?.symbol || defaultToken?.symbol,
       });
       console.warn(
         "Backend allocation failed (deposit still successful):",
@@ -2046,15 +2071,26 @@ export default function AppPage() {
       );
     }
 
-    // Refresh goals to show updated balances
+    // Update database immediately with new balance
     try {
-      await Promise.all([refetchGoals(), refetchBackendGoals()]);
+      
+      // Refresh database with fresh data from server
+      await fetch('/api/user-balances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: account.address })
+      });
+      
+      // Refresh UI data
+      await refetchBackendGoals();
+      await refetchGoals();
     } catch (error) {
       reportError(error as Error, {
         component: "AppPage",
         operation: "handleDepositSuccess",
         transactionHash: receipt?.transactionHash,
       });
+      setDynamicGoalsLoading(false);
     }
 
     // Keep confirmation modal open to show success, reset after delay
@@ -2077,86 +2113,191 @@ export default function AppPage() {
   };
 
   const handleQuickSaveDeposit = async () => {
+    const depositAmount = goalConfirmationOpen ? goalAmount : quickSaveAmount;
+    console.log("🚀 Starting deposit process");
+    console.log("Account:", account?.address);
+    console.log("Default token:", defaultToken);
+    console.log("Deposit amount:", depositAmount);
+
     if (!account) {
+      console.log("❌ No account connected");
       setPendingDeposit(true);
       setDepositError("Connecting wallet automatically...");
       return;
     }
 
-    if (!defaultToken) {
-      setDepositError("No supported tokens found for deposit");
+    if (!chain) {
+      console.log("❌ No chain available");
+      setDepositError("Network not available");
       return;
     }
 
-    // Check if balance is still loading
-    if (isBalanceLoading) {
-      setDepositError("Loading wallet balance, please wait...");
+    // Select the best stablecoin for deposit
+    console.log("🔍 Selecting best stablecoin for deposit");
+    let bestToken;
+    try {
+      bestToken = await getBestStablecoinForDeposit(
+        account.address,
+        chain.id
+      );
+      console.log("Selected token:", bestToken);
+    } catch (error) {
+      console.log("❌ Error selecting stablecoin:", error);
+      setDepositError("Failed to check available tokens for deposit");
+      setIsDepositLoading(false);
       return;
     }
 
-    // Validate balance - only proceed if walletBalanceData is available
-    if (!walletBalanceData) {
-      setDepositError("Unable to verify wallet balance. Please try again.");
+    if (!bestToken) {
+      console.log("❌ No stablecoin available");
+      setDepositError("No supported stablecoins found for deposit");
+      setIsDepositLoading(false);
       return;
     }
 
-    const walletBalance = parseFloat(walletBalanceData.displayValue || "0");
-    const inputAmount = parseFloat(quickSaveAmount);
+    // Use the selected token instead of defaultToken
+    const selectedToken = {
+      address: bestToken.address,
+      symbol: bestToken.symbol,
+      decimals: bestToken.decimals,
+    };
 
-    if (inputAmount > walletBalance) {
-      if (walletBalance === 0) {
-        setDepositError(
-          `You have KES 0 in your wallet. To deposit, please add funds using Mobile Money or transfer from another wallet.`
-        );
-      } else {
-        setDepositError(
-          `Amount exceeds available balance of KES ${walletBalance}`
-        );
-      }
-      return;
-    }
+    // Update the component state for the modal
+    setSelectedDepositToken(selectedToken);
+
+    const walletBalance = bestToken.balance;
+    const hasBalanceData = true; // We just fetched it
+    const inputAmountKES = parseFloat(depositAmount);
+
+    console.log(
+      "Wallet balance:",
+      walletBalance,
+      "Has balance data:",
+      hasBalanceData
+    );
+    console.log("Input amount KES:", inputAmountKES);
 
     setIsDepositLoading(true);
     setDepositError(null);
-    setTransactionStatus("Setting up your deposit...");
-
-    // Report transaction start for monitoring
-    reportInfo("Quick Save deposit started", {
-      component: "AppPage",
-      operation: "handleQuickSaveDeposit",
-      amount: quickSaveAmount,
-      tokenSymbol: defaultToken?.symbol,
-      chainId: chain?.id,
-      userId: user?.address,
-    });
+    setTransactionStatus("processing...");
 
     try {
-      const depositTx =
-        await prepareQuickSaveDepositTransaction(quickSaveAmount);
-
-      // Get approval if needed
-      const approveTx = await getApprovalForTransaction({
-        transaction: depositTx as any,
-        account: account!,
+      console.log("🔄 Starting currency conversion");
+      // Convert KES amount to USD equivalent using exchange rate API
+      const exchangeRateResponse = await fetch("/api/onramp/exchange-rate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ currency_code: "KES" }),
       });
 
+      console.log(
+        "Exchange rate response status:",
+        exchangeRateResponse.status
+      );
+
+      if (!exchangeRateResponse.ok) {
+        console.log("❌ Exchange rate API failed");
+        throw new Error(
+          "Failed to get exchange rate for KES to USD conversion"
+        );
+      }
+
+      const exchangeRateData = await exchangeRateResponse.json();
+      console.log("Exchange rate data:", exchangeRateData);
+      console.log("Nested data object:", exchangeRateData.data.data);
+
+      if (!exchangeRateData.success || !exchangeRateData.data) {
+        console.log("❌ Invalid exchange rate response structure");
+        throw new Error("Invalid exchange rate response");
+      }
+
+      // The API returns buying_rate and selling_rate in KES per USD
+      // selling_rate: 130.59 means 1 USD = 130.59 KES, so 1 KES = 1/130.59 USD
+      const sellingRate = exchangeRateData.data.data?.selling_rate;
+      console.log("Selling rate (KES per USD):", sellingRate);
+
+      if (!sellingRate || sellingRate <= 0) {
+        console.log("❌ Invalid selling rate:", sellingRate);
+        throw new Error(
+          "Exchange rate data does not contain valid selling rate"
+        );
+      }
+
+      const usdPerKES = 1 / sellingRate;
+      console.log("Calculated USD per KES:", usdPerKES);
+
+      const usdAmount = inputAmountKES * usdPerKES;
+      console.log(
+        `✅ Converting ${inputAmountKES} KES to ${usdAmount} USD (rate: ${usdPerKES})`
+      );
+
+      // Check if converted USD amount exceeds wallet balance (only if balance data is available)
+      if (hasBalanceData && usdAmount > walletBalance) {
+        if (walletBalance === 0) {
+          setDepositError(
+            `You have $0 in your wallet. To deposit, please add funds using Mobile Money or transfer from another wallet.`
+          );
+        } else {
+          setDepositError(
+            `Amount exceeds available balance of $${walletBalance.toFixed(2)} in ${selectedToken.symbol}`
+          );
+        }
+        setIsDepositLoading(false);
+        return;
+      }
+
+      // Report transaction start for monitoring
+      reportInfo("Deposit started", {
+        component: "AppPage",
+        operation: "handleQuickSaveDeposit",
+        amount: depositAmount,
+        tokenSymbol: selectedToken.symbol,
+        chainId: chain?.id,
+        userId: user?.address,
+      });
+
+      setTransactionStatus("Setting up your deposit...");
+      console.log("📋 Preparing deposit transaction for amount:", usdAmount);
+
+      const depositTx = await prepareQuickSaveDepositTransaction(
+        usdAmount.toString(),
+        selectedToken
+      );
+      console.log("✅ Deposit transaction prepared");
+
+      // Get approval if needed
+      console.log("🔐 Checking for approval transaction");
+      const approveTx = await getApprovalForTransaction({
+        transaction: depositTx as any,
+        account: account,
+      });
+      console.log("Approval needed:", !!approveTx);
+
       if (approveTx) {
+        console.log("🚀 Sending approval transaction");
         setTransactionStatus("Authorizing transaction...");
         const approveResult = await sendTransaction(approveTx);
+        console.log("Approval result:", approveResult);
 
         if (approveResult?.transactionHash) {
+          console.log("⏳ Waiting for approval receipt");
           setTransactionStatus("Processing authorization...");
           await waitForReceipt({
             client,
             chain,
             transactionHash: approveResult.transactionHash,
           });
+          console.log("✅ Approval confirmed");
         }
       }
 
+      console.log("🚀 Sending deposit transaction");
       setTransactionStatus("Completing your deposit...");
 
       const depositResult = await sendTransaction(depositTx);
+      console.log("Deposit result:", depositResult);
 
       if (depositResult?.transactionHash) {
         setTransactionStatus("Almost done...");
@@ -2165,8 +2306,9 @@ export default function AppPage() {
           chain,
           transactionHash: depositResult.transactionHash,
         });
+        console.log("✅ Deposit transaction successful");
         setTransactionStatus("Success!");
-        handleDepositSuccess(depositReceipt);
+        handleDepositSuccess(depositReceipt, usdAmount, selectedToken);
 
         // Report to Divvi after successful transaction
         try {
@@ -2176,9 +2318,13 @@ export default function AppPage() {
         }
       }
     } catch (err: any) {
+      console.log("❌ Deposit failed with error:", err);
+      console.log("Error message:", err.message);
+      console.log("Error stack:", err.stack);
       setTransactionStatus(null);
       handleDepositError(err);
     } finally {
+      console.log("🏁 Deposit process finished");
       setIsDepositLoading(false);
     }
   };
@@ -2350,49 +2496,40 @@ export default function AppPage() {
     }
   }, [withdrawalModalOpen, account?.address, chain?.id]);
 
-  // Combine local goals with backend quicksave goal
+  // Combine goals from user positions API
   const combinedGoals = useMemo(() => {
-    const combined = [...goals];
-
-    // Remove any local quicksave goals to avoid duplicates
-    const nonQuickSaveGoals = combined.filter((goal) => !goal.isQuickSave);
-
-    // Add backend quicksave goal if available
-    if (quicksaveGoal) {
-      // Convert backend goal to frontend format
-      const quicksaveGoalFormatted = {
-        id: quicksaveGoal.id,
-        title: quicksaveGoal.title || "Quick Save",
-        description:
-          quicksaveGoal.description || "Save without a specific goal",
-        currentAmount: quicksaveGoal.totalValue || "0",
-        targetAmount: quicksaveGoal.targetAmount || "0",
-        progress: quicksaveGoal.progress || 0,
+    if (!userPositions) return goals;
+    
+    const quicksaveGoals = userPositions.goals
+      .filter(goal => goal.isQuicksave)
+      .map(goal => ({
+        id: goal.goalId,
+        title: `Quick Save (${goal.asset})`,
+        description: "Save without a specific goal",
+        currentAmount: goal.totalValueUSD,
+        targetAmount: "0",
+        progress: 0,
         category: "quick" as const,
-        status: quicksaveGoal.status,
-        tokenSymbol: defaultToken?.symbol || "USDC",
-        tokenAddress: defaultToken?.address || "",
-        tokenDecimals: defaultToken?.decimals || 6,
-        interestRate: quicksaveGoal.interestRate || 0,
-        totalInterestEarned: quicksaveGoal.totalInterestEarned || "0",
-        createdAt: quicksaveGoal.createdAt,
-        updatedAt: quicksaveGoal.createdAt, // Use createdAt as fallback
-        targetDate: quicksaveGoal.targetDate,
-        completedAt: undefined,
-        isPublic: quicksaveGoal.isPublic || false,
-        allowContributions: quicksaveGoal.allowContributions || false,
+        status: "active" as const,
+        tokenSymbol: goal.asset,
+        tokenAddress: "",
+        tokenDecimals: goal.asset === 'CUSD' ? 18 : 6,
+        interestRate: 4.2,
+        totalInterestEarned: "0",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isPublic: false,
+        allowContributions: false,
         isQuickSave: true,
-        blockchainGoalId: quicksaveGoal.id,
-      };
-
-      return [quicksaveGoalFormatted, ...nonQuickSaveGoals];
-    }
-
-    return nonQuickSaveGoals;
-  }, [goals, quicksaveGoal, defaultToken]);
+        blockchainGoalId: goal.goalId,
+      }));
+    
+    return [...quicksaveGoals, ...goals.filter(g => !g.isQuickSave)];
+  }, [userPositions, goals]);
 
   // Combined loading and error states
-  const combinedLoading = goalsLoading || backendGoalsLoading;
+  const combinedLoading =
+    goalsLoading || backendGoalsLoading || dynamicGoalsLoading || positionsLoading;
   const combinedError = goalsError || backendGoalsError;
 
   // Calculate dynamic savings data based on goals
@@ -2448,12 +2585,16 @@ export default function AppPage() {
         aria-live="assertive"
       >
         <div className="text-center space-y-4 p-8 max-w-md mx-auto">
-          <div className="text-red-400 text-xl font-semibold" role="heading" aria-level={1}>
+          <div
+            className="text-red-400 text-xl font-semibold"
+            role="heading"
+            aria-level={1}
+          >
             Chain Configuration Error
           </div>
           <div className="text-gray-300">
-            The current network is not properly configured. Please check your network
-            connection or switch to a supported blockchain network.
+            The current network is not properly configured. Please check your
+            network connection or switch to a supported blockchain network.
           </div>
           <div className="text-sm text-gray-400 bg-gray-800/50 rounded-lg p-3">
             <strong>Current Network:</strong> {getChainDisplayName()}
@@ -2486,7 +2627,10 @@ export default function AppPage() {
       </a>
 
       {/* Background overlay for better text readability */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" aria-hidden="true"></div>
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none"
+        aria-hidden="true"
+      ></div>
 
       {/* Screen reader announcements */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -2646,7 +2790,8 @@ export default function AppPage() {
                 </p>
                 {/* Keyboard shortcuts hint for screen readers */}
                 <div className="sr-only">
-                  Keyboard shortcuts: Ctrl+G for Goals, Ctrl+L for Leaderboard, Ctrl+P for Profile
+                  Keyboard shortcuts: Ctrl+G for Goals, Ctrl+L for Leaderboard,
+                  Ctrl+P for Profile
                 </div>
               </div>
             </div>
@@ -2756,8 +2901,7 @@ export default function AppPage() {
                         tokenInfo={tokenInfos}
                         exchangeRate={getKESRate() || undefined}
                         onGoalsRefetch={() => {
-                          refetchGoals();
-                          refetchBackendGoals();
+                          fetchUserPositions();
                         }}
                         sendTransaction={sendTransaction}
                       />
@@ -2777,9 +2921,15 @@ export default function AppPage() {
                   )}
 
                   {/* User Goals Section */}
-                  <section className="mb-20 pb-4" aria-labelledby="goals-heading">
+                  <section
+                    className="mb-20 pb-4"
+                    aria-labelledby="goals-heading"
+                  >
                     <div className="flex items-center space-x-2 mb-4">
-                      <TrendingUp className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                      <TrendingUp
+                        className="w-5 h-5 text-gray-400"
+                        aria-hidden="true"
+                      />
                       <h2
                         id="goals-heading"
                         className="text-lg font-semibold text-white"
@@ -2814,6 +2964,7 @@ export default function AppPage() {
                                   goal={goal}
                                   showBalance={showBalances}
                                   onCardClick={() => handleGoalCardClick(goal)}
+                                  exchangeRate={getKESRate() || undefined}
                                 />
                               </div>
                             ))}
@@ -2839,7 +2990,10 @@ export default function AppPage() {
                                 <Plus className="w-5 h-5 mr-2" />
                                 Create Your First Goal
                               </ActionButton>
-                              <div id="create-goal-description" className="sr-only">
+                              <div
+                                id="create-goal-description"
+                                className="sr-only"
+                              >
                                 Opens a form to create your first savings goal
                               </div>
                             </div>
@@ -2860,7 +3014,10 @@ export default function AppPage() {
               aria-labelledby="groups-heading"
             >
               <div className="text-center py-20">
-                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+                <Users
+                  className="w-16 h-16 text-gray-600 mx-auto mb-4"
+                  aria-hidden="true"
+                />
                 <h3
                   id="groups-heading"
                   className="text-lg font-medium text-white mb-2"
@@ -2931,7 +3088,11 @@ export default function AppPage() {
                     onClick={refetchLeaderboard}
                     className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded"
                     disabled={leaderboardLoading}
-                    aria-label={leaderboardLoading ? "Refreshing leaderboard" : "Refresh leaderboard"}
+                    aria-label={
+                      leaderboardLoading
+                        ? "Refreshing leaderboard"
+                        : "Refresh leaderboard"
+                    }
                   >
                     {leaderboardLoading ? "Refreshing..." : "Refresh"}
                   </button>
@@ -2968,7 +3129,10 @@ export default function AppPage() {
                   </div>
                 ) : leaderboard.length === 0 ? (
                   <div className="text-center py-8" role="status">
-                    <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-3" aria-hidden="true" />
+                    <BarChart3
+                      className="w-12 h-12 text-gray-600 mx-auto mb-3"
+                      aria-hidden="true"
+                    />
                     <div className="text-gray-400">No rankings yet</div>
                   </div>
                 ) : (
@@ -2987,7 +3151,7 @@ export default function AppPage() {
                               ? "bg-cyan-500/10 border border-cyan-500/20"
                               : "bg-gray-700/20"
                           }`}
-                          aria-label={`Rank ${entry.rank}: ${entry.isCurrentUser ? 'You' : 'User'} with score ${entry.formattedScore} USD`}
+                          aria-label={`Rank ${entry.rank}: ${entry.isCurrentUser ? "You" : "User"} with score ${entry.formattedScore} USD`}
                         >
                           {/* Rank */}
                           <div
@@ -3065,11 +3229,17 @@ export default function AppPage() {
         </main>
 
         {/* Bottom Navigation Bar - Mobile Only */}
-        <nav className="lg:hidden" role="navigation" aria-label="Main navigation">
+        <nav
+          className="lg:hidden"
+          role="navigation"
+          aria-label="Main navigation"
+        >
           <TabNavigation
             activeTab={activeTab}
             onTabChange={(tab) => {
-              setActiveTab(tab as "goals" | "groups" | "leaderboard" | "profile");
+              setActiveTab(
+                tab as "goals" | "groups" | "leaderboard" | "profile"
+              );
               // Announce tab change for screen readers
               setAnnouncements([`Switched to ${tab} tab`]);
             }}
@@ -3126,7 +3296,7 @@ export default function AppPage() {
           icon="🐷"
         />
 
-        <QuickSaveConfirmationModal
+        <DepositConfirmationModal
           isOpen={quickSaveConfirmationOpen}
           onClose={closeAllQuickSaveModals}
           amount={quickSaveAmount}
@@ -3144,6 +3314,8 @@ export default function AppPage() {
           setCopied={setCopied}
           setSelectedTokenForOnramp={setSelectedTokenForOnramp}
           setShowOnrampModal={setShowOnrampModal}
+          goalTitle="Quick Save Goal"
+          goalIcon="🐷"
         />
 
         {/* Goal Modals (following same pattern as Quick Save) */}
@@ -3184,19 +3356,18 @@ export default function AppPage() {
         />
 
         {/* Goal Confirmation Modal */}
-        <QuickSaveConfirmationModal
+        <DepositConfirmationModal
           isOpen={goalConfirmationOpen}
           onClose={closeAllGoalModals}
           amount={goalAmount}
           onDeposit={() => {
-            setGoalConfirmationOpen(false);
-            setActiveModal("save");
+            handleQuickSaveDeposit();
           }}
-          isLoading={false}
-          error={null}
-          transactionStatus={null}
+          isLoading={isDepositLoading}
+          error={depositError}
+          transactionStatus={transactionStatus}
           tokenSymbol={defaultToken?.symbol || "USDC"}
-          depositSuccess={null}
+          depositSuccess={depositSuccess}
           account={account}
           tokens={tokens}
           tokenInfos={tokenInfos}
@@ -3205,6 +3376,8 @@ export default function AppPage() {
           setCopied={setCopied}
           setSelectedTokenForOnramp={setSelectedTokenForOnramp}
           setShowOnrampModal={setShowOnrampModal}
+          goalTitle={selectedGoal?.title || "Goal"}
+          goalIcon={selectedGoal?.category === "personal" ? "🎯" : selectedGoal?.category === "travel" ? "✈️" : selectedGoal?.category === "education" ? "🎓" : selectedGoal?.category === "business" ? "💼" : selectedGoal?.category === "health" ? "🏥" : selectedGoal?.category === "home" ? "🏠" : "💰"}
         />
 
         {/* Custom Goal Modal */}
@@ -3227,7 +3400,9 @@ export default function AppPage() {
           isLoading={isDepositLoading}
           error={depositError}
           transactionStatus={transactionStatus}
-          tokenSymbol={defaultToken?.symbol || "USDC"}
+          tokenSymbol={
+            selectedDepositToken?.symbol || defaultToken?.symbol || "USDC"
+          }
           depositSuccess={depositSuccess}
           account={account}
           tokens={tokens || []}

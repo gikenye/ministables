@@ -17,13 +17,13 @@ class AaveRatesService {
     const cached = this.rates[cacheKey];
     
     if (cached && Date.now() - cached.lastUpdated < this.CACHE_DURATION) {
-      console.log(`[AaveRates] Using cached APY for ${tokenSymbol}:`, cached.baseAPY);
+      // console.log(`[AaveRates] Using cached APY for ${tokenSymbol}:`, cached.baseAPY);
       return cached.baseAPY;
     }
 
     try {
       const apy = await this.fetchVaultAPY(chainId, tokenSymbol);
-      console.log(`[AaveRates] Raw APY from Aave for ${tokenSymbol}:`, apy);
+      // console.log(`[AaveRates] Raw APY from Aave for ${tokenSymbol}:`, apy);
       this.rates[cacheKey] = {
         baseAPY: apy,
         lastUpdated: Date.now(),
@@ -71,7 +71,7 @@ class AaveRatesService {
     });
 
     const data = await response.json();
-    console.log(`[AaveRates] RPC response for ${tokenSymbol}:`, data);
+    // console.log(`[AaveRates] RPC response for ${tokenSymbol}:`, data);
     
     if (data.result && data.result !== "0x" && data.result.length > 194) {
       const hex = data.result;
@@ -80,7 +80,7 @@ class AaveRatesService {
       const liquidityRate = BigInt(liquidityRateHex);
       const apy = Number(liquidityRate) / 1e25; // Ray to percentage
       
-      console.log(`[AaveRates] ${tokenSymbol} - Raw APY: ${apy.toFixed(4)}%`);
+      // console.log(`[AaveRates] ${tokenSymbol} - Raw APY: ${apy.toFixed(4)}%`);
       return Math.max(0, apy);
     }
     
@@ -98,7 +98,7 @@ class AaveRatesService {
     
     const boost = boosts[lockPeriod] || 0;
     const totalAPY = baseAPY + boost;
-    console.log(`[AaveRates] ${tokenSymbol} - Base: ${baseAPY}%, Boost: ${boost}%, Total: ${totalAPY}%`);
+    // console.log(`[AaveRates] ${tokenSymbol} - Base: ${baseAPY}%, Boost: ${boost}%, Total: ${totalAPY}%`);
     
     return totalAPY.toFixed(2) + '%';
   }

@@ -39,6 +39,7 @@ export interface AllocateRequest {
   userAddress: string;
   amount: string; // Amount in wei as string
   txHash: string; // Transaction hash of the deposit
+  targetGoalId?: string; // Optional target goal ID for goal-specific deposits
 }
 
 export interface AllocateResponse {
@@ -50,17 +51,18 @@ export interface AllocateResponse {
 }
 
 export interface CreateGoalRequest {
-  userAddress: string;
   vaultAddress: string;
   targetAmount: string;
-  targetDate: string;
-  metadataURI: string;
+  name: string;
+  creatorAddress: string;
 }
 
 export interface CreateGoalResponse {
   success: boolean;
   goalId: string;
-  transactionHash: string;
+  creator: string;
+  txHash: string;
+  shareLink: string;
 }
 
 export interface GoalDetailsResponse {
