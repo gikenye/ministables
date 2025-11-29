@@ -37,7 +37,7 @@ export function useCreateGoal(): UseCreateGoalResult {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userAddress: userId,
-          targetAmount: goalData.targetAmount,
+          targetAmount: goalData.targetAmount, // Already converted to USD
           tokenSymbol: goalData.tokenSymbol,
           name: goalData.title,
         })

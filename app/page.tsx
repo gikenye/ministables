@@ -367,6 +367,7 @@ const CustomGoalModal = ({
   setForm,
   isLoading = false,
   error = null,
+  exchangeRate = null,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -380,6 +381,7 @@ const CustomGoalModal = ({
   setForm: (form: any) => void;
   isLoading?: boolean;
   error?: string | null;
+  exchangeRate?: number | null;
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -396,6 +398,14 @@ const CustomGoalModal = ({
     !currentField.required ||
     (form[currentField.key as keyof typeof form] &&
       form[currentField.key as keyof typeof form].trim() !== "");
+
+  // Convert KES amount to USD for contract
+  const convertKESToUSD = (kesAmount: string): string => {
+    if (!exchangeRate || !kesAmount) return "0";
+    const kesValue = parseFloat(kesAmount);
+    const usdValue = kesValue / exchangeRate;
+    return usdValue.toFixed(2);
+  };
 
   const handleNext = () => {
     if (isLastStep) {
@@ -481,6 +491,11 @@ const CustomGoalModal = ({
                 className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-center text-xl font-bold"
                 autoFocus
               />
+              {form.amount && exchangeRate && (
+                <div className="text-center mt-2 text-sm text-gray-400">
+                  ≈ ${convertKESToUSD(form.amount)} USD
+                </div>
+              )}
             </div>
           )}
 
@@ -536,11 +551,17 @@ const CustomGoalModal = ({
             variant="primary"
             size="lg"
             className="flex-1"
-            disabled={!canProceed || isLoading}
+            disabled={!canProceed || isLoading || (currentField.key === "amount" && !exchangeRate)}
           >
             {isLoading ? "Creating..." : isLastStep ? "Create Goal" : "Next"}
           </ActionButton>
         </div>
+        
+        {currentField.key === "amount" && !exchangeRate && (
+          <div className="text-center mt-2">
+            <p className="text-xs text-yellow-400">Loading exchange rate...</p>
+          </div>
+        )}
       </div>
     </BottomSheet>
   );
@@ -1786,14 +1807,29 @@ export default function AppPage() {
       return;
     }
 
-    const targetAmount = parseFloat(customGoalForm.amount.replace(/,/g, ""));
-    if (targetAmount <= 0) {
+    const kesAmount = parseFloat(customGoalForm.amount.replace(/,/g, ""));
+    if (kesAmount <= 0) {
       reportWarning("Target amount must be greater than 0", {
         component: "AppPage",
         operation: "handleCreateCustomGoal",
       });
       return;
     }
+
+    // Convert KES to USD for contract
+    const exchangeRate = getKESRate();
+    if (!exchangeRate) {
+      reportWarning("Exchange rate not available. Please try again.", {
+        component: "AppPage",
+        operation: "handleCreateCustomGoal",
+      });
+      return;
+    }
+
+    const usdAmount = kesAmount / exchangeRate;
+    // Convert to wei format using token decimals
+    const decimals = defaultToken?.decimals || 6;
+    const targetAmount = Math.floor(usdAmount * Math.pow(10, decimals));
 
     if (!defaultToken || !chain || !account?.address) {
       reportError("Wallet, chain or token information not available", {
@@ -1844,9 +1880,9 @@ export default function AppPage() {
       const createdGoal = await createGoal(newGoalData);
 
       if (createdGoal) {
-        // Goal created and synced to database
+        // Refresh data first to ensure new goal appears
         await Promise.all([refetchGoals(), refetchBackendGoals()]);
-
+        
         // Reset form and close modal
         setCustomGoalForm({
           name: "",
@@ -3389,6 +3425,7 @@ export default function AppPage() {
           setForm={setCustomGoalForm}
           isLoading={createGoalLoading || interestRatesLoading}
           error={createGoalError}
+          exchangeRate={getKESRate()}
         />
 
         {/* Keep existing modals for functionality */}
