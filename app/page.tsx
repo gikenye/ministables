@@ -1584,7 +1584,7 @@ export default function AppPage() {
     fetchUserPositions();
   }, [account?.address]);
 
-  // API hooks for data fetching
+  // API hooks for data fetching - concurrent initialization
   const {
     goals,
     stats: goalStats,
@@ -1593,27 +1593,21 @@ export default function AppPage() {
     refetch: refetchGoals,
   } = useGoals();
 
-  // Use user positions data instead of backend goals
-  const backendGoalsLoading = positionsLoading;
-  const backendGoalsError = null;
-  const refetchBackendGoals = () => fetchUserPositions();
-
   const {
     user,
     loading: userLoading,
     error: userError,
     refetch: refetchUser,
   } = useUser();
+  
   const {
     createGoal,
     loading: createGoalLoading,
     error: createGoalError,
   } = useCreateGoal();
 
-  // Backend allocation hook for deposit allocation
   const { allocateDeposit } = useAllocate();
 
-  // Use leaderboard hook for leaderboard data
   const {
     userScore: leaderboardUserScore,
     userRank,
@@ -1622,6 +1616,16 @@ export default function AppPage() {
     error: leaderboardError,
     refetch: refetchLeaderboard,
   } = useLeaderboard();
+
+  const { isInitialized } = useInitializeUserGoals(defaultToken, chain);
+  const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
+  const { amount: groupSavingsAmount, loading: groupSavingsLoading } = useGroupSavingsAmount();
+  const { getTokenRate, loading: interestRatesLoading } = useInterestRates();
+
+  // Use user positions data instead of backend goals
+  const backendGoalsLoading = positionsLoading;
+  const backendGoalsError = null;
+  const refetchBackendGoals = () => fetchUserPositions();
 
   // Find current user in leaderboard to get formatted score
   const currentUserEntry = leaderboard.find(entry => entry.isCurrentUser);
@@ -1632,19 +1636,6 @@ export default function AppPage() {
     rank: userRank,
     formattedScore: "0.000000"
   } : null);
-
-  // Initialize user goals (monitor backend quicksave goal initialization)
-  const { isInitialized } = useInitializeUserGoals(defaultToken, chain);
-
-  // Exchange rates hook
-  const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
-
-  // Group savings hook
-  const { amount: groupSavingsAmount, loading: groupSavingsLoading } =
-    useGroupSavingsAmount();
-
-  // Interest rates hook
-  const { getTokenRate, loading: interestRatesLoading } = useInterestRates();
 
   // State for the new design
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -1880,10 +1871,7 @@ export default function AppPage() {
       const createdGoal = await createGoal(newGoalData);
 
       if (createdGoal) {
-        // Refresh data first to ensure new goal appears
-        await Promise.all([refetchGoals(), refetchBackendGoals()]);
-        
-        // Reset form and close modal
+        // Close modal immediately for better UX
         setCustomGoalForm({
           name: "",
           amount: "",
@@ -1891,6 +1879,14 @@ export default function AppPage() {
           category: "custom",
         });
         setCustomGoalModalOpen(false);
+        
+        // Refresh data concurrently in background
+        Promise.allSettled([
+          refetchGoals(),
+          refetchBackendGoals(),
+          refetchUser(),
+          refetchLeaderboard()
+        ]).catch(() => {});
       } else {
         throw new Error(createGoalError || "Failed to create goal");
       }
