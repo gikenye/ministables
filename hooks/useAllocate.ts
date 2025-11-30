@@ -23,6 +23,7 @@ interface AllocateDepositParams {
   txHash: string;
   userAddress?: string; // Optional override, defaults to connected account
   targetGoalId?: string; // Optional target goal ID for goal-specific deposits
+  lockTier?: number; // Lock tier in days (default: 30)
 }
 
 /**
@@ -79,6 +80,7 @@ export function useAllocate(): UseAllocateResult {
           amount: params.amount,
           txHash: params.txHash,
           targetGoalId: params.targetGoalId, // Include target goal ID if provided
+          lockTier: params.lockTier || 30, // Default to 30-day lock tier
         };
 
         // Report allocation attempt
@@ -92,7 +94,10 @@ export function useAllocate(): UseAllocateResult {
           additional: { asset },
         });
 
+        console.log("[useAllocate] SENDING REQUEST TO /api/allocate:", JSON.stringify(allocateRequest, null, 2));
+
         // Call local API route which will call the backend
+        console.log("[useAllocate] Making fetch request to /api/allocate with body:", JSON.stringify(allocateRequest, null, 2));
         const response = await fetch("/api/allocate", {
           method: "POST",
           headers: {

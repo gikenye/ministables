@@ -41,6 +41,7 @@ interface UseGoalsResult {
   goals: FrontendGoal[];
   stats: GoalStats | null;
   loading: boolean;
+  refreshing: boolean;
   error: string | null;
   refetch: () => Promise<void>;
 }
@@ -51,6 +52,7 @@ export function useGoals(category?: string): UseGoalsResult {
   const [stats, setStats] = useState<GoalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const userAddress = account?.address;
 
@@ -63,28 +65,26 @@ export function useGoals(category?: string): UseGoalsResult {
     }
 
     try {
-      setLoading(true);
+      // Only show loading on initial load, use refreshing for subsequent calls
+      if (goals.length === 0) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       setError(null);
 
-      // Sync and fetch user goals from database
-      try {
-        await fetch('/api/sync-user-goals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userAddress })
-        });
-      } catch (syncError) {
-        console.warn('Goal sync failed:', syncError);
-        // Continue with cached data but log the issue
-      }
-
-      const response = await fetch(`/api/sync-user-goals?userAddress=${userAddress}`);
+      // Fetch user positions directly from consolidated API
+      const response = await fetch(`/api/user-balances?userAddress=${userAddress}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch user goals');
+        throw new Error('Failed to fetch user positions');
       }
       
-      const { goals: userGoals } = await response.json();
+      const data = await response.json();
+      console.log('API Response:', data); // Debug log
+      console.log('Goals array:', data.goals); // Debug log
+      console.log('Goals array length:', data.goals?.length); // Debug log
+      const userGoals = data.goals || [];
       const allGoals: FrontendGoal[] = [];
       
       // Convert goals from database
@@ -94,7 +94,7 @@ export function useGoals(category?: string): UseGoalsResult {
             id: goalData.goalId,
             title: goalData.isQuicksave ? `Quick Save (${goalData.asset})` : goalData.name || `Goal ${goalData.goalId}`,
             description: goalData.isQuicksave ? "Save without a specific goal" : "Custom savings goal",
-            currentAmount: goalData.totalValueUSD || "0",
+            currentAmount: goalData.userBalanceUSD || goalData.totalValueUSD || "0",
             targetAmount: goalData.targetAmountUSD || "0",
             progress: parseFloat(goalData.progressPercent) || 0,
             icon: goalData.isQuicksave ? "🐷" : "🎯",
@@ -116,6 +116,8 @@ export function useGoals(category?: string): UseGoalsResult {
           allGoals.push(goal);
         }
       }
+      
+      console.log('Converted goals:', allGoals); // Debug log
 
       // Filter by category if specified
       const filteredGoals = category 
@@ -158,6 +160,7 @@ export function useGoals(category?: string): UseGoalsResult {
       setError(err instanceof Error ? err.message : "Failed to fetch goals");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -173,6 +176,7 @@ export function useGoals(category?: string): UseGoalsResult {
     goals,
     stats,
     loading,
+    refreshing,
     error,
     refetch,
   };

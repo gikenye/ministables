@@ -54,7 +54,7 @@ interface UseBackendGoalsResult {
 
 /**
  * Hook for managing goals through the backend API
- * Integrates with the backend /api/goals endpoint
+ * Integrates with the backend /api/user-positions endpoint
  */
 export function useBackendGoals(
   tokenSymbol: string = "USDC"
@@ -117,7 +117,7 @@ export function useBackendGoals(
           additional: { goalId },
         });
 
-        const response = await fetch(`/api/backend-goals?goalId=${goalId}`);
+        const response = await fetch(`/api/user-balances?goalId=${goalId}`);
         if (!response.ok) {
           const errorData = await response
             .json()
@@ -127,7 +127,8 @@ export function useBackendGoals(
           );
         }
 
-        const goalData = (await response.json()) as GoalDetailsResponse;
+        const data = await response.json();
+        const goalData = data.goalDetails as GoalDetailsResponse;
         return convertBackendGoal(goalData);
       } catch (err) {
         reportError(err as Error, {
@@ -171,9 +172,9 @@ export function useBackendGoals(
 
         const params = new URLSearchParams({
           userAddress: address,
-          tokenSymbol: symbol,
+          vaultAddress: getVaultAddress(celo.id, symbol),
         });
-        const response = await fetch(`/api/backend-goals?${params}`);
+        const response = await fetch(`/api/user-balances?${params}`);
 
         if (!response.ok) {
           const errorData = await response
@@ -184,18 +185,19 @@ export function useBackendGoals(
           );
         }
 
-        const data = (await response.json()) as QuicksaveGoalResponse;
+        const data = await response.json();
+        const quicksaveGoalId = data.quicksaveGoalId;
 
         // Treat goalId "0" or empty as null (no quicksave goal exists)
         if (
-          !data.quicksaveGoalId ||
-          data.quicksaveGoalId === "0" ||
-          String(data.quicksaveGoalId) === "0"
+          !quicksaveGoalId ||
+          quicksaveGoalId === "0" ||
+          String(quicksaveGoalId) === "0"
         ) {
           return null;
         }
 
-        return data.quicksaveGoalId;
+        return quicksaveGoalId;
       } catch (err) {
         reportError(err as Error, {
           component: "useBackendGoals",
