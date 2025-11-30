@@ -552,12 +552,16 @@ const CustomGoalModal = ({
             variant="primary"
             size="lg"
             className="flex-1"
-            disabled={!canProceed || isLoading || (currentField.key === "amount" && !exchangeRate)}
+            disabled={
+              !canProceed ||
+              isLoading ||
+              (currentField.key === "amount" && !exchangeRate)
+            }
           >
             {isLoading ? "Creating..." : isLastStep ? "Create Goal" : "Next"}
           </ActionButton>
         </div>
-        
+
         {currentField.key === "amount" && !exchangeRate && (
           <div className="text-center mt-2">
             <p className="text-xs text-yellow-400">Loading exchange rate...</p>
@@ -726,7 +730,9 @@ const GoalDetailsModal = ({
 
       {/* Goal Card Header */}
       <div
-        className={`bg-gradient-to-r ${getGoalGradient(goal.category)} p-2 flex items-center justify-between`}
+        className={`bg-gradient-to-r ${getGoalGradient(
+          goal.category
+        )} p-2 flex items-center justify-between`}
       >
         <div className="flex-1">
           <div className="text-xs text-white/80">Current Balance</div>
@@ -856,7 +862,8 @@ const DepositConfirmationModal = ({
               Deposit Successful!
             </h3>
             <p className="text-gray-400 text-xs mb-3">
-              Your KES {depositSuccess.amount} has been deposited to your {goalTitle}.
+              Your KES {depositSuccess.amount} has been deposited to your{" "}
+              {goalTitle}.
             </p>
 
             {depositSuccess.transactionHash && (
@@ -894,7 +901,8 @@ const DepositConfirmationModal = ({
             </div>
 
             {/* Show funding options if user has zero balance */}
-            {(error.includes("You have KES 0") || error.includes("You have $0")) && (
+            {(error.includes("You have KES 0") ||
+              error.includes("You have $0")) && (
               <div className="mt-3 space-y-3">
                 <p className="text-red-200 text-xs text-center">
                   Choose how to add funds:
@@ -951,7 +959,9 @@ const DepositConfirmationModal = ({
         )}
 
         {/* Only show confirmation details if there's no zero balance error */}
-        {!(error?.includes("You have KES 0") || error?.includes("You have $0")) && (
+        {!(
+          error?.includes("You have KES 0") || error?.includes("You have $0")
+        ) && (
           <>
             {/* Confirmation Details */}
             <div className="text-center py-3">
@@ -1012,6 +1022,7 @@ const DepositConfirmationModal = ({
 interface ExpandableQuickSaveCardProps {
   goal: any; // Quick Save goal object
   goals: any[]; // All user goals for total calculation
+  userPositions?: any; // User positions data with totalValueUSD
   account?: any;
   user?: any; // User object with ID
   isLoading?: boolean;
@@ -1030,6 +1041,7 @@ interface ExpandableQuickSaveCardProps {
 const ExpandableQuickSaveCard = ({
   goal,
   goals,
+  userPositions,
   account,
   user,
   isLoading = false,
@@ -1051,12 +1063,8 @@ const ExpandableQuickSaveCard = ({
   const [dragTimeout, setDragTimeout] = useState<NodeJS.Timeout | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  // Calculate total savings across all goals
-  const totalSavingsNum = goals.reduce((total, goalItem) => {
-    // The backend API already returns human-readable amounts, no need to format again
-    const amount = goalItem?.currentAmount || "0";
-    return total + parseFloat(amount);
-  }, 0);
+  // Calculate total savings using userPositions.totalValueUSD
+  const totalSavingsNum = parseFloat(userPositions?.totalValueUSD || "0");
 
   // Parse Quick Save goal amounts (for the expanded view)
   const quickSaveAmountNum = parseFloat(goal?.currentAmount || "0");
@@ -1077,15 +1085,22 @@ const ExpandableQuickSaveCard = ({
   // Determine primary and secondary amounts based on currency mode for TOTAL SAVINGS
   const primaryAmount =
     currencyMode === "LOCAL" && hasValidExchangeRate
-      ? `Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-      : `$${totalSavingsNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      ? `Ksh${totalLocalAmount.toLocaleString("en-US", {
+          maximumFractionDigits: 0,
+        })}`
+      : `$${totalSavingsNum.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
 
   const secondaryAmount =
     currencyMode === "LOCAL" && hasValidExchangeRate
       ? `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`
       : hasValidExchangeRate
-        ? `≈ Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-        : `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`;
+      ? `≈ Ksh${totalLocalAmount.toLocaleString("en-US", {
+          maximumFractionDigits: 0,
+        })}`
+      : `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`;
 
   const handleCurrencyToggle = () => {
     // Only allow toggle to LOCAL if we have a valid exchange rate
@@ -1257,10 +1272,10 @@ const ExpandableQuickSaveCard = ({
                 {!account
                   ? "0"
                   : isLoading
-                    ? "Loading..."
-                    : showBalance
-                      ? primaryAmount
-                      : "••••"}
+                  ? "Loading..."
+                  : showBalance
+                  ? primaryAmount
+                  : "••••"}
               </span>
             </div>
             {/* Show secondary amount */}
@@ -1334,8 +1349,8 @@ const ExpandableQuickSaveCard = ({
                     {isLoading
                       ? "..."
                       : quickSaveAmountNum < 0.01
-                        ? "<0.01"
-                        : quickSaveAmountNum.toFixed(2)}
+                      ? "<0.01"
+                      : quickSaveAmountNum.toFixed(2)}
                   </div>
                   <div className="text-gray-600 text-xs font-medium">
                     {isDragging ? "Dragging..." : "Quick Save"}
@@ -1559,30 +1574,64 @@ export default function AppPage() {
   // User positions from ALLOCATE_API_URL
   const [userPositions, setUserPositions] = useState(null);
   const [positionsLoading, setPositionsLoading] = useState(false);
-  
-  const fetchUserPositions = async () => {
+  const [positionsError, setPositionsError] = useState<string | null>(null);
+
+  const fetchUserPositions = async (targetGoalId?: string) => {
     if (!account?.address) return;
-    
+
     setPositionsLoading(true);
+    setPositionsError(null);
+
     try {
-      const response = await fetch(`/api/user-balances?userAddress=${account.address}`);
+      const url = targetGoalId
+        ? `/api/user-balances?userAddress=${account.address}&targetGoalId=${targetGoalId}`
+        : `/api/user-balances?userAddress=${account.address}`;
+
+      // Add timeout to prevent long waits
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const data = await response.json();
         setUserPositions(data);
+      } else {
+        throw new Error(`Failed to fetch positions: ${response.status}`);
       }
     } catch (error) {
-      reportError('Failed to fetch user positions', {
-        component: 'AppPage',
-        operation: 'fetchUserPositions',
-        additional: { error }
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      setPositionsError(errorMessage);
+
+      // Set fallback data to prevent UI blocking
+      setUserPositions({
+        totalBalance: "0",
+        positions: [],
+        goals: [],
+        leaderboardRank: null,
+        formattedLeaderboardScore: "0.00",
+      });
+
+      reportError("Failed to fetch user positions", {
+        component: "AppPage",
+        operation: "fetchUserPositions",
+        additional: { error: errorMessage },
       });
     } finally {
       setPositionsLoading(false);
     }
   };
-  
+
   useEffect(() => {
-    fetchUserPositions();
+    // Only fetch if we have an address and haven't started loading yet
+    if (account?.address && !positionsLoading && !userPositions) {
+      fetchUserPositions();
+    }
   }, [account?.address]);
 
   // API hooks for data fetching - concurrent initialization
@@ -1600,7 +1649,7 @@ export default function AppPage() {
     error: userError,
     refetch: refetchUser,
   } = useUser();
-  
+
   const {
     createGoal,
     loading: createGoalLoading,
@@ -1620,16 +1669,17 @@ export default function AppPage() {
 
   const { isInitialized } = useInitializeUserGoals(defaultToken, chain);
   const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
-  const { amount: groupSavingsAmount, loading: groupSavingsLoading } = useGroupSavingsAmount();
+  const { amount: groupSavingsAmount, loading: groupSavingsLoading } =
+    useGroupSavingsAmount();
   const { getTokenRate, loading: interestRatesLoading } = useInterestRates();
-  
+
   // Real-time goals refresh
   const { forceRefresh } = useRealTimeGoals({
     onGoalsUpdate: () => {
       fetchUserPositions();
       refetchGoals();
     },
-    intervalMs: 30000 // Refresh every 30 seconds
+    intervalMs: 30000, // Refresh every 30 seconds
   });
 
   // Use user positions data instead of backend goals
@@ -1638,14 +1688,18 @@ export default function AppPage() {
   const refetchBackendGoals = () => fetchUserPositions();
 
   // Find current user in leaderboard to get formatted score
-  const currentUserEntry = leaderboard.find(entry => entry.isCurrentUser);
-  const userScore = currentUserEntry ? {
-    rank: currentUserEntry.rank,
-    formattedScore: currentUserEntry.formattedScore
-  } : (userRank ? {
-    rank: userRank,
-    formattedScore: "0.000000"
-  } : null);
+  const currentUserEntry = leaderboard.find((entry) => entry.isCurrentUser);
+  const userScore = currentUserEntry
+    ? {
+        rank: currentUserEntry.rank,
+        formattedScore: currentUserEntry.formattedScore,
+      }
+    : userRank
+    ? {
+        rank: userRank,
+        formattedScore: "0.000000",
+      }
+    : null;
 
   // State for the new design
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -1867,6 +1921,7 @@ export default function AppPage() {
       isPublic: false,
       allowContributions: false,
       isQuickSave: false,
+      vaultAddress: getVaultAddress(chain.id, defaultToken.symbol),
       // Add timeline as targetDate if provided
       targetDate: customGoalForm.timeline
         ? new Date(
@@ -1889,22 +1944,18 @@ export default function AppPage() {
           category: "custom",
         });
         setCustomGoalModalOpen(false);
-        
-        // Force fresh data fetch by invalidating cache first
+
+        // Force fresh data fetch
         if (account?.address) {
-          await fetch('/api/user-balances', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAddress: account.address })
-          }).catch(() => {});
+          await fetchUserPositions();
         }
-        
+
         // Refresh data concurrently in background
         Promise.allSettled([
           refetchGoals(),
           refetchBackendGoals(),
           refetchUser(),
-          refetchLeaderboard()
+          refetchLeaderboard(),
         ]).catch(() => {});
       } else {
         throw new Error(createGoalError || "Failed to create goal");
@@ -2061,6 +2112,14 @@ export default function AppPage() {
 
     // Call backend allocation API to properly allocate the deposit
     try {
+      console.log("📝 ALLOCATION CHECK:", {
+        hasUser: !!user?.address,
+        hasDefaultToken: !!defaultToken,
+        hasTxHash: !!receipt?.transactionHash,
+        goalConfirmationOpen,
+        selectedGoalId: selectedGoal?.id,
+      });
+
       if (user?.address && defaultToken && receipt?.transactionHash) {
         // Convert usdAmount to wei for the backend API
         const amountWei = parseUnits(
@@ -2068,30 +2127,37 @@ export default function AppPage() {
           defaultToken.decimals || 6
         );
 
-        // Log what we're sending to the allocate endpoint
-        console.log("🔄 Sending to allocate endpoint:", {
-          tokenSymbol: selectedToken?.symbol || defaultToken.symbol,
-          amount: amountWei.toString(),
-          txHash: receipt.transactionHash,
-          targetGoalId: goalConfirmationOpen && selectedGoal?.id ? selectedGoal.id : 'quicksave',
-          goalConfirmationOpen,
-          selectedGoalId: selectedGoal?.id,
-          selectedGoalTitle: selectedGoal?.title,
-        });
-
         // Call the backend allocation API with the correct token symbol and goal context
         const allocationRequest: any = {
           tokenSymbol: selectedToken?.symbol || defaultToken.symbol,
           amount: amountWei.toString(),
           txHash: receipt.transactionHash,
+          lockTier: 30, // 30-day lock tier for all deposits
         };
-        
+
         // Add goal context if this is a goal-specific deposit
         if (goalConfirmationOpen && selectedGoal?.id) {
           allocationRequest.targetGoalId = selectedGoal.id;
+          console.log(
+            "🎯 GOAL-SPECIFIC DEPOSIT - Adding targetGoalId:",
+            selectedGoal.id
+          );
+        } else {
+          console.log("💰 QUICKSAVE DEPOSIT - No targetGoalId");
         }
-        
+
+        console.log(
+          "🚀 CALLING allocateDeposit with:",
+          JSON.stringify(allocationRequest, null, 2)
+        );
         const allocationResult = await allocateDeposit(allocationRequest);
+        console.log("✅ allocateDeposit RESULT:", allocationResult);
+
+        if (!allocationResult) {
+          console.error(
+            "❌ Backend allocation failed - deposit successful but allocation failed"
+          );
+        }
 
         if (allocationResult) {
           reportInfo("Backend allocation completed successfully", {
@@ -2122,17 +2188,12 @@ export default function AppPage() {
       );
     }
 
-    // Update database immediately with new balance
+    // Update database after allocation is complete
     try {
-      
-      // Refresh database with fresh data from server
-      await fetch('/api/user-balances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userAddress: account.address })
-      });
-      
-      // Refresh UI data
+      // Pass targetGoalId if this is a goal-specific deposit
+      const targetGoalId =
+        goalConfirmationOpen && selectedGoal?.id ? selectedGoal.id : undefined;
+      await fetchUserPositions(targetGoalId);
       await refetchBackendGoals();
       await refetchGoals();
     } catch (error) {
@@ -2187,10 +2248,7 @@ export default function AppPage() {
     console.log("🔍 Selecting best stablecoin for deposit");
     let bestToken;
     try {
-      bestToken = await getBestStablecoinForDeposit(
-        account.address,
-        chain.id
-      );
+      bestToken = await getBestStablecoinForDeposit(account.address, chain.id);
       console.log("Selected token:", bestToken);
     } catch (error) {
       console.log("❌ Error selecting stablecoin:", error);
@@ -2292,7 +2350,9 @@ export default function AppPage() {
           );
         } else {
           setDepositError(
-            `Amount exceeds available balance of $${walletBalance.toFixed(2)} in ${selectedToken.symbol}`
+            `Amount exceeds available balance of $${walletBalance.toFixed(
+              2
+            )} in ${selectedToken.symbol}`
           );
         }
         setIsDepositLoading(false);
@@ -2550,10 +2610,10 @@ export default function AppPage() {
   // Combine goals from user positions API
   const combinedGoals = useMemo(() => {
     if (!userPositions?.goals) return goals;
-    
+
     const quicksaveGoals = userPositions.goals
-      .filter(goal => goal.isQuicksave)
-      .map(goal => ({
+      .filter((goal) => goal.isQuicksave)
+      .map((goal) => ({
         id: goal.goalId,
         title: `Quick Save (${goal.asset})`,
         description: "Save without a specific goal",
@@ -2564,7 +2624,7 @@ export default function AppPage() {
         status: "active" as const,
         tokenSymbol: goal.asset,
         tokenAddress: goal.vault,
-        tokenDecimals: goal.asset === 'CUSD' ? 18 : 6,
+        tokenDecimals: goal.asset === "CUSD" ? 18 : 6,
         interestRate: 4.2,
         totalInterestEarned: "0",
         createdAt: new Date(),
@@ -2574,14 +2634,17 @@ export default function AppPage() {
         isQuickSave: true,
         blockchainGoalId: goal.goalId,
       }));
-    
-    return [...quicksaveGoals, ...goals.filter(g => !g.isQuickSave)];
+
+    return [...quicksaveGoals, ...goals.filter((g) => !g.isQuickSave)];
   }, [userPositions, goals]);
 
   // Combined loading and error states
   const combinedLoading =
-    goalsLoading || backendGoalsLoading || dynamicGoalsLoading || positionsLoading;
-  const combinedError = goalsError || backendGoalsError;
+    goalsLoading ||
+    backendGoalsLoading ||
+    dynamicGoalsLoading ||
+    positionsLoading;
+  const combinedError = goalsError || backendGoalsError || positionsError;
 
   // Calculate dynamic savings data based on goals
   const calculateSavingsStats = () => {
@@ -2872,14 +2935,14 @@ export default function AppPage() {
                   </ActionButton>
 
                   {/* Refresh Button */}
-                  <button 
+                  <button
                     onClick={forceRefresh}
                     className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
                     title="Refresh goals"
                   >
                     <ArrowDownLeft className="w-5 h-5" />
                   </button>
-                  
+
                   {/* Notifications */}
                   <button className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center">
                     <Bell className="w-5 h-5" />
@@ -2918,19 +2981,30 @@ export default function AppPage() {
           {activeTab === "goals" && (
             <div className="py-4">
               {/* Error State - only show when there's an error and not loading */}
-              {goalsError && !goalsLoading && (
+              {combinedError && !combinedLoading && (
                 <div className="text-center py-8">
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
-                    <p className="text-red-400 mb-2">Failed to load goals</p>
-                    <p className="text-gray-400 text-sm">{goalsError}</p>
+                    <p className="text-red-400 mb-2">Failed to load data</p>
+                    <p className="text-gray-400 text-sm">
+                      {goalsError || positionsError || "Unknown error occurred"}
+                    </p>
                   </div>
-                  <ActionButton
-                    onClick={refetchGoals}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Try Again
-                  </ActionButton>
+                  <div className="flex gap-2 justify-center">
+                    <ActionButton
+                      onClick={refetchGoals}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Retry Goals
+                    </ActionButton>
+                    <ActionButton
+                      onClick={() => fetchUserPositions()}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Retry Positions
+                    </ActionButton>
+                  </div>
                 </div>
               )}
 
@@ -2949,6 +3023,7 @@ export default function AppPage() {
                           combinedGoals.find((g) => g.category === "quick")!
                         }
                         goals={combinedGoals}
+                        userPositions={userPositions}
                         account={account}
                         user={user}
                         isLoading={combinedLoading}
@@ -3038,7 +3113,7 @@ export default function AppPage() {
                               aria-label="No goals available"
                             >
                               <p className="text-gray-400 mb-4">
-                                No goals created yet
+                                No custom goals created yet
                               </p>
                               <ActionButton
                                 onClick={handleCreateFirstGoal}
@@ -3211,7 +3286,9 @@ export default function AppPage() {
                               ? "bg-cyan-500/10 border border-cyan-500/20"
                               : "bg-gray-700/20"
                           }`}
-                          aria-label={`Rank ${entry.rank}: ${entry.isCurrentUser ? "You" : "User"} with score ${entry.formattedScore} USD`}
+                          aria-label={`Rank ${entry.rank}: ${
+                            entry.isCurrentUser ? "You" : "User"
+                          } with score ${entry.formattedScore} USD`}
                         >
                           {/* Rank */}
                           <div
@@ -3224,8 +3301,8 @@ export default function AppPage() {
                                 {entry.rank === 1
                                   ? "🥇"
                                   : entry.rank === 2
-                                    ? "🥈"
-                                    : "🥉"}
+                                  ? "🥈"
+                                  : "🥉"}
                               </div>
                             ) : (
                               <div className="text-sm font-semibold text-gray-400">
@@ -3239,7 +3316,10 @@ export default function AppPage() {
                             <div className="text-white font-medium">
                               {entry.isCurrentUser
                                 ? "You"
-                                : `${entry.address.slice(0, 6)}...${entry.address.slice(-4)}`}
+                                : `${entry.address.slice(
+                                    0,
+                                    6
+                                  )}...${entry.address.slice(-4)}`}
                             </div>
                             {entry.isCurrentUser && (
                               <div className="text-xs text-cyan-400">
@@ -3398,20 +3478,20 @@ export default function AppPage() {
             selectedGoal?.category === "personal"
               ? ""
               : selectedGoal?.category === "retirement"
-                ? "🏦"
-                : selectedGoal?.category === "emergency"
-                  ? "🚨"
-                  : selectedGoal?.category === "travel"
-                    ? "✈️"
-                    : selectedGoal?.category === "education"
-                      ? "🎓"
-                      : selectedGoal?.category === "business"
-                        ? "💼"
-                        : selectedGoal?.category === "health"
-                          ? "🏥"
-                          : selectedGoal?.category === "home"
-                            ? "🏠"
-                            : "💰"
+              ? "🏦"
+              : selectedGoal?.category === "emergency"
+              ? "🚨"
+              : selectedGoal?.category === "travel"
+              ? "✈️"
+              : selectedGoal?.category === "education"
+              ? "🎓"
+              : selectedGoal?.category === "business"
+              ? "💼"
+              : selectedGoal?.category === "health"
+              ? "🏥"
+              : selectedGoal?.category === "home"
+              ? "🏠"
+              : "💰"
           }
         />
 
@@ -3437,7 +3517,21 @@ export default function AppPage() {
           setSelectedTokenForOnramp={setSelectedTokenForOnramp}
           setShowOnrampModal={setShowOnrampModal}
           goalTitle={selectedGoal?.title || "Goal"}
-          goalIcon={selectedGoal?.category === "personal" ? "🎯" : selectedGoal?.category === "travel" ? "✈️" : selectedGoal?.category === "education" ? "🎓" : selectedGoal?.category === "business" ? "💼" : selectedGoal?.category === "health" ? "🏥" : selectedGoal?.category === "home" ? "🏠" : "💰"}
+          goalIcon={
+            selectedGoal?.category === "personal"
+              ? "🎯"
+              : selectedGoal?.category === "travel"
+              ? "✈️"
+              : selectedGoal?.category === "education"
+              ? "🎓"
+              : selectedGoal?.category === "business"
+              ? "💼"
+              : selectedGoal?.category === "health"
+              ? "🏥"
+              : selectedGoal?.category === "home"
+              ? "🏠"
+              : "💰"
+          }
         />
 
         {/* Custom Goal Modal */}

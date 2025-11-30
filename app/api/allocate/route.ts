@@ -10,7 +10,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tokenSymbol, userAddress, amount, txHash, targetGoalId } = body;
+    const { tokenSymbol, userAddress, amount, txHash, targetGoalId, lockTier } = body;
 
     // Validate required fields
     if (!tokenSymbol || !userAddress || !amount || !txHash) {
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       amount,
       txHash,
       targetGoalId, // Pass the target goal ID if provided
+      lockTier: lockTier || 30, // Default to 30-day lock tier
     };
 
     console.log("[API] Calling backend allocation service:", {
@@ -73,7 +74,10 @@ export async function POST(request: NextRequest) {
       amount: amount.substring(0, 10) + "...", // Log truncated amount for privacy
       txHash,
       targetGoalId: targetGoalId || 'quicksave (default)',
+      lockTier: lockTier || 30,
     });
+
+    console.log("[API] FULL REQUEST PAYLOAD TO REMOTE SERVER:", JSON.stringify(allocateRequest, null, 2));
 
     // Call backend allocation service
     const result = await backendApiClient.allocateDeposit(allocateRequest);

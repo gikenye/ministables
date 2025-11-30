@@ -3,15 +3,110 @@ import { getUserPositions } from '@/lib/utils/allocateApi';
 import { UserPositions } from '@/lib/models/userPositions';
 import { getCollection } from '@/lib/mongodb';
 
+// Helper function to fetch and update user positions
+async function updateUserPositions(address: string, targetGoalId?: string | null) {
+  try {
+    const url = targetGoalId 
+      ? `${process.env.ALLOCATE_API_URL}/api/user-positions?userAddress=${address}&targetGoalId=${targetGoalId}`
+      : `${process.env.ALLOCATE_API_URL}/api/user-positions?userAddress=${address}`;
+    
+    console.log('[user-balances] Calling:', url);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    const positions = await response.json();
+    
+    // Update database
+    const collection = await getCollection('userBalances');
+    await collection.findOneAndUpdate(
+      { userAddress: address },
+      { $set: { data: positions, lastUpdated: new Date() } },
+      { upsert: true }
+    );
+    
+    return positions;
+  } catch (apiError) {
+    console.warn('[user-balances] API call failed:', apiError);
+    return {
+      totalBalance: '0',
+      positions: [],
+      leaderboardRank: null,
+      formattedLeaderboardScore: '0.00'
+    };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action');
+    
+    if (action === 'create-goal') {
+      const body = await request.json();
+      console.log('[user-balances POST] Creating goal:', body);
+      
+      try {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=create-goal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `API responded with status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return NextResponse.json(data);
+      } catch (error) {
+        console.error('[user-balances POST] Goal creation error:', error);
+        return NextResponse.json({ 
+          error: error instanceof Error ? error.message : 'Failed to create goal' 
+        }, { status: 500 });
+      }
+    }
+    
     const { userAddress } = await request.json();
+    console.log('[user-balances POST] Request received for:', userAddress);
     
     if (!userAddress) {
       return NextResponse.json({ error: 'userAddress required' }, { status: 400 });
     }
     
-    const freshPositions = await getUserPositions(userAddress);
+    const url = `${process.env.ALLOCATE_API_URL}/api/user-positions?userAddress=${userAddress}`;
+    console.log('[user-balances POST] Calling:', url);
+    
+    // Add timeout to prevent long waits
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    const freshPositions = await response.json();
     
     const collection = await getCollection('userBalances');
     await collection.findOneAndUpdate(
@@ -22,6 +117,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(freshPositions);
   } catch (error) {
+    console.error('[user-balances POST] Error:', error);
     return NextResponse.json({ error: 'Failed to refresh user balances' }, { status: 500 });
   }
 }
@@ -30,6 +126,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('userAddress');
+    const targetGoalId = searchParams.get('targetGoalId');
     
     if (!address) {
       return NextResponse.json({ error: 'userAddress parameter required' }, { status: 400 });
@@ -38,34 +135,29 @@ export async function GET(request: NextRequest) {
     const collection = await getCollection('userBalances');
     const stored = await collection.findOne<UserPositions>({ userAddress: address });
     
-    // Check if cached data is stale (older than 30 seconds)
-    const CACHE_TTL = 30 * 1000; // 30 seconds
+    // Check if cached data is stale (older than 5 minutes)
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
     const now = new Date();
     const isStale = !stored || !stored.lastUpdated || (now.getTime() - stored.lastUpdated.getTime()) > CACHE_TTL;
     
-    if (stored && !isStale) {
-      return NextResponse.json(stored.data);
+    // Return cached data immediately if available, then update in background if stale
+    if (stored && !targetGoalId) {
+      // Return cached data immediately
+      const response = NextResponse.json(stored.data);
+      
+      // If stale, update in background
+      if (isStale) {
+        // Don't await - update in background
+        updateUserPositions(address, targetGoalId).catch(err => 
+          console.warn('[user-balances] Background update failed:', err)
+        );
+      }
+      
+      return response;
     }
     
-    let positions;
-    
-    try {
-      positions = await getUserPositions(address);
-    } catch (apiError) {
-      positions = {
-        totalBalance: '0',
-        positions: [],
-        leaderboardRank: null,
-        formattedLeaderboardScore: '0.00'
-      };
-    }
-    
-    await collection.findOneAndUpdate(
-      { userAddress: address },
-      { $set: { data: positions, lastUpdated: new Date() } },
-      { upsert: true }
-    );
-    
+    // Fetch fresh data
+    const positions = await updateUserPositions(address, targetGoalId);
     return NextResponse.json(positions);
   } catch (error) {
     return NextResponse.json({ 

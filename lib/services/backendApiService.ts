@@ -15,7 +15,7 @@ if (!ALLOCATE_API_URL) {
 // API endpoint configuration
 export const API_ENDPOINTS = {
   ALLOCATE: "/api/allocate",
-  GOALS: "/api/goals",
+  USER_POSITIONS: "/api/user-positions",
   LEADERBOARD: "/api/leaderboard",
 } as const;
 
@@ -40,6 +40,7 @@ export interface AllocateRequest {
   amount: string; // Amount in wei as string
   txHash: string; // Transaction hash of the deposit
   targetGoalId?: string; // Optional target goal ID for goal-specific deposits
+  lockTier?: number; // Lock tier in days (default: 30)
 }
 
 export interface AllocateResponse {
@@ -147,6 +148,12 @@ export class BackendApiClient {
         const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
+        console.error("[BackendApiClient] API ERROR:", {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
         throw new Error(
           errorData.error || `HTTP ${response.status}: ${response.statusText}`
         );
@@ -154,6 +161,11 @@ export class BackendApiClient {
 
       return await response.json();
     } catch (error) {
+      console.error("[BackendApiClient] REQUEST FAILED:", {
+        url,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined
+      });
       if (error instanceof Error) {
         throw error;
       }
@@ -163,6 +175,8 @@ export class BackendApiClient {
 
   // Allocation API methods
   async allocateDeposit(request: AllocateRequest): Promise<AllocateResponse> {
+    console.log("[BackendApiClient] SENDING TO ALLOCATE_API_URL:", this.baseUrl + API_ENDPOINTS.ALLOCATE);
+    console.log("[BackendApiClient] REQUEST PAYLOAD:", JSON.stringify(request, null, 2));
     return this.request<AllocateResponse>(API_ENDPOINTS.ALLOCATE, {
       method: "POST",
       body: JSON.stringify(request),
@@ -171,7 +185,7 @@ export class BackendApiClient {
 
   // Goal creation API methods
   async createGoal(request: CreateGoalRequest): Promise<CreateGoalResponse> {
-    return this.request<CreateGoalResponse>("/api/create-goal", {
+    return this.request<CreateGoalResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=create-goal`, {
       method: "POST",
       body: JSON.stringify(request),
     });
@@ -188,9 +202,10 @@ export class BackendApiClient {
     }
 
     const params = new URLSearchParams({ goalId });
-    return this.request<GoalDetailsResponse>(
-      `${API_ENDPOINTS.GOALS}?${params}`
+    const response = await this.request<any>(
+      `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );
+    return response.goalDetails;
   }
 
   async getQuicksaveGoal(
@@ -198,9 +213,10 @@ export class BackendApiClient {
     vaultAddress: string
   ): Promise<QuicksaveGoalResponse> {
     const params = new URLSearchParams({ userAddress, vaultAddress });
-    return this.request<QuicksaveGoalResponse>(
-      `${API_ENDPOINTS.GOALS}?${params}`
+    const response = await this.request<any>(
+      `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );
+    return { quicksaveGoalId: response.quicksaveGoalId };
   }
 
   // Leaderboard API methods
