@@ -87,6 +87,7 @@ import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { useGroupSavingsAmount } from "@/hooks/useGroupGoals";
 import { useInterestRates } from "@/hooks/useInterestRates";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
+import { useRealTimeGoals } from "@/hooks/useRealTimeGoals";
 // import { useBlockchainGoals } from "@/hooks/useBlockchainGoals"; // Removed for production deployment
 import {
   reportError,
@@ -1621,6 +1622,15 @@ export default function AppPage() {
   const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
   const { amount: groupSavingsAmount, loading: groupSavingsLoading } = useGroupSavingsAmount();
   const { getTokenRate, loading: interestRatesLoading } = useInterestRates();
+  
+  // Real-time goals refresh
+  const { forceRefresh } = useRealTimeGoals({
+    onGoalsUpdate: () => {
+      fetchUserPositions();
+      refetchGoals();
+    },
+    intervalMs: 30000 // Refresh every 30 seconds
+  });
 
   // Use user positions data instead of backend goals
   const backendGoalsLoading = positionsLoading;
@@ -1879,6 +1889,15 @@ export default function AppPage() {
           category: "custom",
         });
         setCustomGoalModalOpen(false);
+        
+        // Force fresh data fetch by invalidating cache first
+        if (account?.address) {
+          await fetch('/api/user-balances', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: account.address })
+          }).catch(() => {});
+        }
         
         // Refresh data concurrently in background
         Promise.allSettled([
@@ -2852,6 +2871,15 @@ export default function AppPage() {
                     +
                   </ActionButton>
 
+                  {/* Refresh Button */}
+                  <button 
+                    onClick={forceRefresh}
+                    className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    title="Refresh goals"
+                  >
+                    <ArrowDownLeft className="w-5 h-5" />
+                  </button>
+                  
                   {/* Notifications */}
                   <button className="p-2 text-gray-400 hover:text-white border border-gray-600 rounded-full transition-colors duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center">
                     <Bell className="w-5 h-5" />

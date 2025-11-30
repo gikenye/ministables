@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
     const collection = await getCollection('userBalances');
     const stored = await collection.findOne<UserPositions>({ userAddress: address });
     
-    if (stored) {
+    // Check if cached data is stale (older than 30 seconds)
+    const CACHE_TTL = 30 * 1000; // 30 seconds
+    const now = new Date();
+    const isStale = !stored || !stored.lastUpdated || (now.getTime() - stored.lastUpdated.getTime()) > CACHE_TTL;
+    
+    if (stored && !isStale) {
       return NextResponse.json(stored.data);
     }
     

@@ -5,12 +5,30 @@ const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL;
 
 export class UserGoalsService {
   private static collection = 'userGoals';
+  private static syncInProgress = new Map<string, Promise<UserGoal[]>>();
 
   static async syncUserGoals(userAddress: string): Promise<UserGoal[]> {
     if (!ALLOCATE_API_URL) {
       throw new Error('ALLOCATE_API_URL not configured');
     }
 
+    // Prevent concurrent syncs for the same user
+    if (this.syncInProgress.has(userAddress)) {
+      return await this.syncInProgress.get(userAddress)!;
+    }
+
+    const syncPromise = this._performSync(userAddress);
+    this.syncInProgress.set(userAddress, syncPromise);
+    
+    try {
+      const result = await syncPromise;
+      return result;
+    } finally {
+      this.syncInProgress.delete(userAddress);
+    }
+  }
+
+  private static async _performSync(userAddress: string): Promise<UserGoal[]> {
     try {
       // Fetch goals from ALLOCATE API
       const response = await fetch(`${ALLOCATE_API_URL}/api/user-goals?userAddress=${userAddress}`);
