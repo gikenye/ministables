@@ -894,7 +894,7 @@ const DepositConfirmationModal = ({
             </div>
 
             {/* Show funding options if user has zero balance */}
-            {error.includes("You have KES 0") && (
+            {(error.includes("You have KES 0") || error.includes("You have $0")) && (
               <div className="mt-3 space-y-3">
                 <p className="text-red-200 text-xs text-center">
                   Choose how to add funds:
@@ -951,7 +951,7 @@ const DepositConfirmationModal = ({
         )}
 
         {/* Only show confirmation details if there's no zero balance error */}
-        {!error?.includes("You have KES 0") && (
+        {!(error?.includes("You have KES 0") || error?.includes("You have $0")) && (
           <>
             {/* Confirmation Details */}
             <div className="text-center py-3">
