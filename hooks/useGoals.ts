@@ -67,11 +67,16 @@ export function useGoals(category?: string): UseGoalsResult {
       setError(null);
 
       // Sync and fetch user goals from database
-      await fetch('/api/sync-user-goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userAddress })
-      }).catch(() => {}); // Silent fail for sync
+      try {
+        await fetch('/api/sync-user-goals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userAddress })
+        });
+      } catch (syncError) {
+        console.warn('Goal sync failed:', syncError);
+        // Continue with cached data but log the issue
+      }
 
       const response = await fetch(`/api/sync-user-goals?userAddress=${userAddress}`);
       
