@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import {
   BottomSheet,
@@ -7,6 +8,8 @@ import {
   InfoCard,
   ActionButton,
 } from "@/components/ui";
+import { getBestStablecoinForDeposit } from "@/lib/services/balanceService";
+import { useChain } from "@/components/ChainProvider";
 
 // SaveMoneyModal using the exact QuickSaveConfirmationModal flow
 const SaveMoneyModal = ({
@@ -48,6 +51,29 @@ const SaveMoneyModal = ({
   setShowOnrampModal?: (value: boolean) => void;
   goal?: any;
 }) => {
+  const { chain } = useChain();
+  const [selectedToken, setSelectedToken] = useState<any>(null);
+  const [checkingBalance, setCheckingBalance] = useState(false);
+
+  // Check for best stablecoin when modal opens
+  useEffect(() => {
+    if (isOpen && account?.address && chain?.id && !depositSuccess) {
+      setCheckingBalance(true);
+      getBestStablecoinForDeposit(account.address, chain.id)
+        .then((bestToken) => {
+          console.log("Selected token for deposit:", bestToken);
+          setSelectedToken(bestToken);
+        })
+        .catch((error) => {
+          console.error("Failed to get best stablecoin:", error);
+          // Fallback to default token
+          setSelectedToken({ symbol: tokenSymbol, address: "", balance: 0 });
+        })
+        .finally(() => {
+          setCheckingBalance(false);
+        });
+    }
+  }, [isOpen, account?.address, chain?.id, tokenSymbol, depositSuccess]);
   // Show success state if deposit is successful
   if (depositSuccess) {
     return (
@@ -88,11 +114,20 @@ const SaveMoneyModal = ({
     );
   }
 
+  const displayTokenSymbol = selectedToken?.symbol || tokenSymbol;
+
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
       <ModalHeader title="Confirm Deposit" onClose={onClose} />
 
       <div className="bg-gray-800/20 backdrop-blur-sm p-4 space-y-6">
+        {/* Balance Check Loading */}
+        {checkingBalance && (
+          <div className="bg-blue-900/20 border border-blue-700 text-blue-300 p-3 rounded-xl text-sm flex items-start gap-2">
+            <Loader2 className="w-4 h-4 mt-0.5 flex-shrink-0 animate-spin" />
+            <span>Checking your wallet balance...</span>
+          </div>
+        )}
         {/* Error Display */}
         {error && (
           <div className="bg-red-900/20 border border-red-700 text-red-300 p-3 rounded-xl text-sm">
@@ -102,10 +137,10 @@ const SaveMoneyModal = ({
             </div>
 
             {/* Show funding options if user has zero balance */}
-            {error.includes("You have KES 0") && (
+            {error.includes("You have $0") && (
               <div className="mt-3 space-y-3">
                 <p className="text-red-200 text-xs text-center">
-                  Choose how to add funds:
+                  Choose how to add {displayTokenSymbol} funds:
                 </p>
 
                 {/* Compact Action Buttons */}
@@ -143,7 +178,7 @@ const SaveMoneyModal = ({
 
                 <p className="text-gray-400 text-xs text-center mt-3">
                   Once you add funds, you can proceed with your KES {amount}{" "}
-                  deposit.
+                  deposit using {displayTokenSymbol}.
                 </p>
               </div>
             )}

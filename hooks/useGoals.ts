@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useActiveAccount } from "thirdweb/react";
+import { getVaultAddress, VAULT_CONTRACTS } from "@/config/chainConfig";
+import { celo } from "thirdweb/chains";
 
 export interface FrontendGoal {
   id: string;
@@ -64,70 +66,69 @@ export function useGoals(category?: string): UseGoalsResult {
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams();
-      params.append("userId", userAddress);
-      if (category) {
-        params.append("category", category);
-      }
+      // Sync and fetch user goals from database
+      await fetch('/api/sync-user-goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress })
+      }).catch(() => {}); // Silent fail for sync
 
-      const response = await fetch(`/api/goals?${params.toString()}`);
-
+      const response = await fetch(`/api/sync-user-goals?userAddress=${userAddress}`);
+      
       if (!response.ok) {
-        if (response.status === 404) {
-          setGoals([]);
-          setStats({
-            totalGoals: 0,
-            activeGoals: 0,
-            completedGoals: 0,
-            totalSaved: "0",
-            totalInterestEarned: "0",
-            averageProgress: 0,
-          });
-          setLoading(false);
-          return;
+        throw new Error('Failed to fetch user goals');
+      }
+      
+      const { goals: userGoals } = await response.json();
+      const allGoals: FrontendGoal[] = [];
+      
+      // Convert goals from database
+      if (userGoals && Array.isArray(userGoals)) {
+        for (const goalData of userGoals) {
+          const goal: FrontendGoal = {
+            id: goalData.goalId,
+            title: goalData.isQuicksave ? `Quick Save (${goalData.asset})` : goalData.name || `Goal ${goalData.goalId}`,
+            description: goalData.isQuicksave ? "Save without a specific goal" : "Custom savings goal",
+            currentAmount: goalData.totalValueUSD || "0",
+            targetAmount: goalData.targetAmountUSD || "0",
+            progress: parseFloat(goalData.progressPercent) || 0,
+            icon: goalData.isQuicksave ? "🐷" : "🎯",
+            category: goalData.isQuicksave ? "quick" : "personal",
+            status: goalData.completed ? "completed" : goalData.cancelled ? "cancelled" : "active",
+            tokenSymbol: goalData.asset,
+            tokenAddress: goalData.vault || "",
+            tokenDecimals: goalData.asset === 'cUSD' ? 18 : 6,
+            interestRate: 4.2,
+            totalInterestEarned: "0.00",
+            createdAt: new Date(parseInt(goalData.createdAt) * 1000),
+            updatedAt: new Date(),
+            isPublic: false,
+            allowContributions: false,
+            isQuickSave: goalData.isQuicksave || false,
+            blockchainGoalId: goalData.goalId,
+          };
+          
+          allGoals.push(goal);
         }
-        throw new Error(`Failed to fetch goals: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      const dbGoals = data.goals || [];
+      // Filter by category if specified
+      const filteredGoals = category 
+        ? allGoals.filter(goal => goal.category === category)
+        : allGoals;
 
-      const userGoals: FrontendGoal[] = dbGoals.map((goal: any) => ({
-        id: goal._id?.toString() || goal.id,
-        title: goal.title || "Untitled Goal",
-        description: goal.description,
-        currentAmount: goal.currentAmount || "0",
-        targetAmount: goal.targetAmount || "0",
-        progress: goal.progress || 0,
-        icon: goal.icon,
-        category: goal.category || "personal",
-        status: goal.status || "active",
-        tokenSymbol: goal.tokenSymbol || "USDC",
-        tokenAddress: goal.tokenAddress || "",
-        tokenDecimals: goal.tokenDecimals || 6,
-        interestRate: goal.interestRate || 0,
-        totalInterestEarned: goal.totalInterestEarned || "0",
-        createdAt: goal.createdAt ? new Date(goal.createdAt) : new Date(),
-        updatedAt: goal.updatedAt ? new Date(goal.updatedAt) : new Date(),
-        targetDate: goal.targetDate ? new Date(goal.targetDate) : undefined,
-        completedAt: goal.completedAt ? new Date(goal.completedAt) : undefined,
-        isPublic: goal.isPublic || false,
-        allowContributions: goal.allowContributions || false,
-        isQuickSave: goal.isQuickSave || false,
-        blockchainGoalId: goal.blockchainGoalId,
-      }));
+      setGoals(filteredGoals);
 
-      setGoals(userGoals);
-
-      const activeGoals = userGoals.filter((g) => g.status === "active");
-      const completedGoals = userGoals.filter((g) => g.status === "completed");
-      const totalSaved = userGoals.reduce(
+      // Calculate stats
+      const activeGoals = filteredGoals.filter((g) => g.status === "active");
+      const completedGoals = filteredGoals.filter((g) => g.status === "completed");
+      const totalSaved = filteredGoals.reduce(
         (sum, goal) => sum + parseFloat(goal.currentAmount || "0"),
         0
       );
-      const totalInterestEarned = userGoals.reduce(
+      const totalInterestEarned = filteredGoals.reduce(
         (sum, goal) =>
-          sum + parseFloat((goal as any).totalInterestEarned || "0"),
+          sum + parseFloat(goal.totalInterestEarned || "0"),
         0
       );
       const avgProgress =
@@ -136,11 +137,14 @@ export function useGoals(category?: string): UseGoalsResult {
             activeGoals.length
           : 0;
 
+      // Calculate total value from goals
+      const totalValueFromGoals = filteredGoals.reduce((sum, goal) => sum + parseFloat(goal.currentAmount || "0"), 0);
+
       setStats({
-        totalGoals: userGoals.length,
+        totalGoals: filteredGoals.length,
         activeGoals: activeGoals.length,
         completedGoals: completedGoals.length,
-        totalSaved: totalSaved.toString(),
+        totalSaved: totalValueFromGoals.toString(),
         totalInterestEarned: totalInterestEarned.toString(),
         averageProgress: avgProgress,
       });

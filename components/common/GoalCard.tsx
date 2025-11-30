@@ -9,6 +9,7 @@ interface GoalCardProps {
   showBalance?: boolean;
   onToggleBalance?: () => void;
   onCardClick?: () => void;
+  exchangeRate?: number;
 }
 
 export const GoalCard = ({
@@ -16,15 +17,26 @@ export const GoalCard = ({
   showBalance = true,
   onToggleBalance,
   onCardClick,
+  exchangeRate,
 }: GoalCardProps) => {
   const formatAmount = (amount: string) => {
     if (!showBalance) return "****";
-    return new Intl.NumberFormat("en-KE").format(Number(amount));
+    const usdAmount = Number(amount);
+    if (exchangeRate && exchangeRate > 0) {
+      const kesAmount = usdAmount * exchangeRate;
+      return new Intl.NumberFormat("en-KE").format(kesAmount);
+    }
+    return new Intl.NumberFormat("en-KE").format(usdAmount);
   };
 
   const formatTargetAmount = (amount: string) => {
     if (!showBalance) return "****";
-    return new Intl.NumberFormat("en-KE").format(Number(amount));
+    const usdAmount = Number(amount);
+    if (exchangeRate && exchangeRate > 0) {
+      const kesAmount = usdAmount * exchangeRate;
+      return new Intl.NumberFormat("en-KE").format(kesAmount);
+    }
+    return new Intl.NumberFormat("en-KE").format(usdAmount);
   };
 
   // Special styling for Quick Save card

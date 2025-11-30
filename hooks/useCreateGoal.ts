@@ -10,7 +10,7 @@ interface UseCreateGoalResult {
 }
 
 /**
- * Custom hook to create goals via the API (with blockchain sync in background)
+ * Custom hook to create goals via backend API
  */
 export function useCreateGoal(): UseCreateGoalResult {
   const { data: session } = useSession();
@@ -32,26 +32,53 @@ export function useCreateGoal(): UseCreateGoalResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch("/api/goals", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await fetch('/api/backend-goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
-          ...goalData,
-        }),
+          userAddress: userId,
+          targetAmount: goalData.targetAmount, // Already converted to USD
+          tokenSymbol: goalData.tokenSymbol,
+          name: goalData.title,
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to create goal: ${response.statusText}`
-        );
+        throw new Error(errorData.error || 'Failed to create goal');
       }
 
-      const data = await response.json();
-      return data.goal;
+      const blockchainResult = await response.json();
+
+      if (!blockchainResult.success) {
+        throw new Error("Failed to create goal on blockchain");
+      }
+
+      const goal: Goal = {
+        _id: { toString: () => blockchainResult.goalId } as any,
+        userId,
+        title: goalData.title,
+        description: goalData.description || `Custom goal for ${goalData.title}`,
+        category: goalData.category,
+        status: "active",
+        currentAmount: "0",
+        targetAmount: goalData.targetAmount,
+        progress: 0,
+        tokenAddress: goalData.tokenAddress,
+        tokenSymbol: goalData.tokenSymbol,
+        tokenDecimals: goalData.tokenDecimals,
+        interestRate: goalData.interestRate || 4.0,
+        totalInterestEarned: "0",
+        isPublic: goalData.isPublic || false,
+        allowContributions: goalData.allowContributions || false,
+        isQuickSave: goalData.isQuickSave || false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        targetDate: goalData.targetDate,
+        blockchainGoalId: blockchainResult.goalId,
+      };
+
+      return goal;
     } catch (err) {
       console.error("Error creating goal:", err);
       setError(err instanceof Error ? err.message : "Unknown error occurred");
@@ -59,7 +86,7 @@ export function useCreateGoal(): UseCreateGoalResult {
     } finally {
       setLoading(false);
     }
-  }, [userId, setLoading, setError]);
+  }, [userId]);
 
   return {
     createGoal,

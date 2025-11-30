@@ -103,12 +103,34 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Handle unsupported methods
-export async function POST() {
-  return NextResponse.json(
-    { error: "Method not allowed. Use GET." },
-    { status: 405 }
-  );
+export async function POST(request: NextRequest) {
+  try {
+    const goalData = await request.json();
+    
+    if (!goalData.userAddress || !goalData.targetAmount || !goalData.name) {
+      return NextResponse.json(
+        { error: 'userAddress, targetAmount, and name are required' },
+        { status: 400 }
+      );
+    }
+    
+    const vaultAddress = getVaultAddress(celo.id, goalData.tokenSymbol || 'USDC');
+    
+    const result = await backendApiClient.createGoal({
+      vaultAddress,
+      targetAmount: goalData.targetAmount,
+      name: goalData.name,
+      creatorAddress: goalData.userAddress,
+    });
+    
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('[API] Failed to create goal:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to create goal' },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PUT() {

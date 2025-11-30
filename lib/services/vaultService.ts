@@ -311,7 +311,7 @@ export const vaultService = {
     chainId: number;
     tokenSymbol: string;
     amount: string;
-    lockPeriod: number;
+    lockPeriod?: number; // Made optional, defaults to 30 days
     userId: string;
     goalId?: string;
   }): VaultDepositGoalIntegration {
@@ -328,7 +328,8 @@ export const vaultService = {
       params.chainId,
       this.getTokenAddressBySymbol(params.chainId, params.tokenSymbol)
     );
-    const lockTierId = this.getLockTierId(params.lockPeriod);
+    const lockPeriod = params.lockPeriod ?? 2592000; // Default to 30 days (2592000 seconds)
+    const lockTierId = this.getLockTierId(lockPeriod);
 
     return {
       chainId: params.chainId,
@@ -337,7 +338,7 @@ export const vaultService = {
       tokenSymbol: params.tokenSymbol,
       amount: params.amount,
       lockTierId,
-      lockPeriod: params.lockPeriod,
+      lockPeriod,
       userId: params.userId,
       goalId: params.goalId,
     };

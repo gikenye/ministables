@@ -10,7 +10,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tokenSymbol, userAddress, amount, txHash } = body;
+    const { tokenSymbol, userAddress, amount, txHash, targetGoalId } = body;
 
     // Validate required fields
     if (!tokenSymbol || !userAddress || !amount || !txHash) {
@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       userAddress,
       amount,
       txHash,
+      targetGoalId, // Pass the target goal ID if provided
     };
 
     console.log("[API] Calling backend allocation service:", {
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
       userAddress,
       amount: amount.substring(0, 10) + "...", // Log truncated amount for privacy
       txHash,
+      targetGoalId: targetGoalId || 'quicksave (default)',
     });
 
     // Call backend allocation service

@@ -22,6 +22,7 @@ interface AllocateDepositParams {
   amount: string; // Amount in wei as string
   txHash: string;
   userAddress?: string; // Optional override, defaults to connected account
+  targetGoalId?: string; // Optional target goal ID for goal-specific deposits
 }
 
 /**
@@ -77,6 +78,7 @@ export function useAllocate(): UseAllocateResult {
           userAddress,
           amount: params.amount,
           txHash: params.txHash,
+          targetGoalId: params.targetGoalId, // Include target goal ID if provided
         };
 
         // Report allocation attempt
