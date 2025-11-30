@@ -2549,7 +2549,7 @@ export default function AppPage() {
 
   // Combine goals from user positions API
   const combinedGoals = useMemo(() => {
-    if (!userPositions) return goals;
+    if (!userPositions?.goals) return goals;
     
     const quicksaveGoals = userPositions.goals
       .filter(goal => goal.isQuicksave)
@@ -2558,12 +2558,12 @@ export default function AppPage() {
         title: `Quick Save (${goal.asset})`,
         description: "Save without a specific goal",
         currentAmount: goal.totalValueUSD,
-        targetAmount: "0",
-        progress: 0,
+        targetAmount: goal.targetAmountUSD,
+        progress: parseFloat(goal.progressPercent) || 0,
         category: "quick" as const,
         status: "active" as const,
         tokenSymbol: goal.asset,
-        tokenAddress: "",
+        tokenAddress: goal.vault,
         tokenDecimals: goal.asset === 'CUSD' ? 18 : 6,
         interestRate: 4.2,
         totalInterestEarned: "0",
