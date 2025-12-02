@@ -32,6 +32,7 @@ minilend-thirdweb.txt
 thirdweb-api.json
 thirdweb-api.yaml
 ROADMAP.md
+.DS_Store
 
 # Worker logs
 /logs/
