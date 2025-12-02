@@ -2,7 +2,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
-import { useMiniApp } from "@/hooks/useMiniApp";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -154,8 +153,6 @@ const vaultABI = [
 ] as const;
 
 import { useChain } from "@/components/ChainProvider";
-import { BorrowMoneyModal } from "@/components/BorrowMoneyModal";
-import { PayBackModal } from "@/components/PayBackModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import {
   getTransactionUrl,
@@ -1504,7 +1501,6 @@ export default function AppPage() {
   const { mutateAsync: sendTransaction } = useSendTransaction({
     payModal: false,
   });
-  const { isSDKLoaded, context } = useMiniApp();
   const { chain, tokens, tokenInfos } = useChain();
 
   // Accessibility: Announce dynamic content changes
