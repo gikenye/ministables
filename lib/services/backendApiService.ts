@@ -290,15 +290,10 @@ export class BackendApiClient {
 
   // Allocation API methods
   async allocateDeposit(request: AllocateRequest): Promise<AllocateResponse> {
-    console.log("🔗 API Call to:", `${this.baseUrl}${API_ENDPOINTS.USER_POSITIONS}?action=allocate`);
-    console.log("📤 Request payload:", JSON.stringify(request, null, 2));
-    
     const result = await this.request<AllocateResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=allocate`, {
       method: "POST",
       body: JSON.stringify(request),
     });
-    
-    console.log("📥 API Response:", JSON.stringify(result, null, 2));
     return result;
   }
 
