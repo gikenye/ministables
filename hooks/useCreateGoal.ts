@@ -35,12 +35,11 @@ export function useCreateGoal(): UseCreateGoalResult {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            vaultAddress:
-              (goalData as any).vaultAddress || goalData.tokenAddress,
-            targetAmount: goalData.targetAmount, // Already converted to USD
-            targetDate: goalData.targetDate ? Math.floor(goalData.targetDate.getTime() / 1000).toString() : "0",
-            name: goalData.title,
             creatorAddress: userId,
+            name: goalData.title,
+            targetAmountUSD: parseFloat(goalData.targetAmount) || 0,
+            targetDate: goalData.targetDate ? goalData.targetDate.toISOString().split('T')[0] : "2025-12-31",
+            vaults: "all",
           }),
         });
 

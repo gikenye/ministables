@@ -2,11 +2,12 @@ import { useState, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import {
   AllocateResponse,
-  mapTokenSymbolToAsset,
   isValidEthereumAddress,
   isValidTransactionHash,
 } from "@/lib/services/backendApiService";
 import { reportError, reportInfo } from "@/lib/services/errorReportingService";
+import { VAULT_CONTRACTS, getTokens } from "@/config/chainConfig";
+import { useChain } from "@/components/ChainProvider";
 
 interface UseAllocateResult {
   allocateDeposit: (
@@ -32,6 +33,7 @@ interface AllocateDepositParams {
  */
 export function useAllocate(): UseAllocateResult {
   const account = useActiveAccount();
+  const { chain } = useChain();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastAllocation, setLastAllocation] = useState<AllocateResponse | null>(
@@ -65,11 +67,25 @@ export function useAllocate(): UseAllocateResult {
           throw new Error("Invalid amount provided.");
         }
 
-        // Map token symbol to supported asset
-        const asset = mapTokenSymbolToAsset(params.tokenSymbol);
-        if (!asset) {
+        // Get supported tokens from chain config
+        const chainId = chain?.id;
+        if (!chainId) {
+          throw new Error("Chain not available");
+        }
+        
+        const vaultContracts = VAULT_CONTRACTS[chainId];
+        const supportedTokens = getTokens(chainId);
+        
+        if (!vaultContracts || !supportedTokens) {
+          throw new Error(`Chain ${chainId} not supported for deposits`);
+        }
+        
+        const supportedSymbols = Object.keys(vaultContracts);
+        const normalizedSymbol = params.tokenSymbol.toUpperCase();
+        
+        if (!supportedSymbols.includes(normalizedSymbol)) {
           throw new Error(
-            `Unsupported token: ${params.tokenSymbol}. Supported tokens: USDC, cUSD, USDT, cKES`
+            `Unsupported token: ${params.tokenSymbol}. Supported tokens: ${supportedSymbols.join(", ")}`
           );
         }
 
@@ -91,10 +107,10 @@ export function useAllocate(): UseAllocateResult {
           amount: params.amount,
           transactionHash: params.txHash,
           tokenSymbol: params.tokenSymbol,
-          additional: { asset },
+          additional: { chainId, supportedSymbols },
         });
 
-        console.log("[useAllocate] SENDING REQUEST TO /api/allocate:", JSON.stringify(allocateRequest, null, 2));
+        console.log("[useAllocate] SENDING REQUEST ", JSON.stringify(allocateRequest, null, 2));
 
         // Call local API route which will call the backend
         console.log("[useAllocate] Making fetch request to /api/allocate with body:", JSON.stringify(allocateRequest, null, 2));
@@ -154,7 +170,7 @@ export function useAllocate(): UseAllocateResult {
         setLoading(false);
       }
     },
-    [account?.address]
+    [account?.address, chain?.id]
   );
 
   return {

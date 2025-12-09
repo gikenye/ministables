@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  backendApiClient,
   AllocateRequest,
-  mapTokenSymbolToAsset,
   isValidEthereumAddress,
   isValidTransactionHash,
 } from "@/lib/services/backendApiService";
+import { VAULT_CONTRACTS } from "@/config/chainConfig";
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,16 +46,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Map token symbol to supported asset
-    const asset = mapTokenSymbolToAsset(tokenSymbol);
-    if (!asset) {
+    // Get supported tokens from chain config (assuming Celo for now)
+    const chainId = 42220; // Celo mainnet
+    const vaultContracts = VAULT_CONTRACTS[chainId];
+    
+    if (!vaultContracts) {
+      return NextResponse.json(
+        { error: `Chain ${chainId} not supported for deposits` },
+        { status: 400 }
+      );
+    }
+    
+    const supportedSymbols = Object.keys(vaultContracts);
+    const normalizedSymbol = tokenSymbol.toUpperCase();
+    
+    if (!supportedSymbols.includes(normalizedSymbol)) {
       return NextResponse.json(
         {
-          error: `Unsupported token: ${tokenSymbol}. Supported tokens: USDC, cUSD, USDT, cKES`,
+          error: `Unsupported token: ${tokenSymbol}. Supported tokens: ${supportedSymbols.join(", ")}`,
         },
         { status: 400 }
       );
     }
+    
+    const asset = normalizedSymbol;
 
     // Prepare allocation request
     const allocateRequest: AllocateRequest = {
@@ -75,17 +88,37 @@ export async function POST(request: NextRequest) {
       txHash,
       targetGoalId: targetGoalId || 'quicksave (default)',
       lockTier: lockTier || 30,
+      chainId,
+      supportedSymbols,
     });
 
     console.log("[API] FULL REQUEST PAYLOAD TO REMOTE SERVER:", JSON.stringify(allocateRequest, null, 2));
 
-    // Call backend allocation service
-    const result = await backendApiClient.allocateDeposit(allocateRequest);
+    // Call external backend allocation service directly
+    const backendUrl = process.env.ALLOCATE_API_URL || process.env.NEXT_PUBLIC_ALLOCATE_API_URL;
+    if (!backendUrl) {
+      throw new Error("Backend API URL not configured");
+    }
+
+    const response = await fetch(`${backendUrl}/api/user-positions?action=allocate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(allocateRequest),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(errorData.error || `Backend API responded with status: ${response.status}`);
+    }
+
+    const result = await response.json();
 
     console.log("[API] Backend allocation successful:", {
       success: result.success,
       depositId: result.depositId,
-      quicksaveGoalId: result.quicksaveGoalId,
+      goalId: result.goalId,
       allocationTxHash: result.allocationTxHash,
     });
 
