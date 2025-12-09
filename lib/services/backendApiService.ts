@@ -4,9 +4,9 @@
  */
 
 // Environment variable configuration
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL || process.env.NEXT_PUBLIC_ALLOCATE_API_URL || "";
+const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL  || "";
 
-if (!process.env.ALLOCATE_API_URL && !process.env.NEXT_PUBLIC_ALLOCATE_API_URL) {
+if (!process.env.ALLOCATE_API_URL) {
   console.warn(
     "ALLOCATE_API_URL environment variable not set. Using fallback URL for development."
   );
@@ -244,6 +244,9 @@ export class BackendApiClient {
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || ALLOCATE_API_URL;
+    if(!this.baseUrl){
+      console.error("BackendApiClient: No API base URl set. API calls will fail.");
+    }
   }
 
   private async request<T>(
