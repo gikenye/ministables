@@ -1935,6 +1935,10 @@ export default function AppPage() {
 
   const handleJoinGoalWithAmount = async (amount: string) => {
     if (!selectedGoalToJoin || !account?.address) return;
+    if (!chain?.id) {
+      setJoinGoalError("Network not available");
+      return;
+    }
 
     setJoinGoalLoading(true);
     setJoinGoalError(null);

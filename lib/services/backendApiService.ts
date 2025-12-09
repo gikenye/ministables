@@ -119,6 +119,10 @@ export interface GroupSavingsGoal {
   description?: string;
   // Goal IDs for different assets
   goalIds?: Record<SupportedAsset, string>;
+  // Fields used by ClanTab UI
+  progressPercent?: number;
+  totalProgressUSD?: number;
+  participants?: string[];
 }
 
 export interface GroupSavingsResponse {
