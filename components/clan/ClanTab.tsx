@@ -26,11 +26,12 @@ import {
 } from 'lucide-react';
 import { ActionButton, InfoCard, ProgressBar } from '@/components/ui';
 import { GroupSavingsGoal } from '@/lib/services/backendApiService';
+import { Account, MyGroups } from '@/lib/types/shared';
 
 interface ClanTabProps {
-  account?: any;
+  account?: Account;
   groupGoals: GroupSavingsGoal[];
-  myGroups: any;
+  myGroups?: MyGroups;
   groupGoalsLoading: boolean;
   myGroupsLoading: boolean;
   onCreateGroupGoal: () => void;
@@ -53,9 +54,7 @@ const GroupGoalCard = ({
   onView: () => void;
   exchangeRate?: number;
 }) => {
-  const progress = goal.currentAmountUSD && goal.targetAmountUSD 
-    ? Math.min((goal.currentAmountUSD / goal.targetAmountUSD) * 100, 100)
-    : 0;
+  const progress = goal.progressPercent || 0;
 
   const formatAmount = (usdAmount: number) => {
     if (exchangeRate) {
@@ -137,8 +136,8 @@ const GroupGoalCard = ({
           fillClassName="bg-gradient-to-r from-cyan-400 to-blue-500 h-full rounded-full transition-all duration-500"
         />
         <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
-          <span>{formatAmount(goal.currentAmountUSD || 0)} raised</span>
-          <span>{goal.participantCount || 0} members</span>
+          <span>{formatAmount(goal.totalProgressUSD || 0)} raised</span>
+          <span>{goal.participants?.length || 0} members</span>
         </div>
       </div>
 
@@ -148,7 +147,7 @@ const GroupGoalCard = ({
           <Users className="w-3 h-3" />
           <span>Created by {goal.creatorAddress?.slice(0, 6)}...{goal.creatorAddress?.slice(-4)}</span>
         </div>
-        {goal.targetDate && (
+        {goal.targetDate && goal.targetDate !== "0" && goal.targetDate !== "" && (
           <div className="flex items-center gap-2 text-xs text-gray-400">
             <Calendar className="w-3 h-3" />
             <span>Target: {new Date(goal.targetDate).toLocaleDateString()}</span>
@@ -181,7 +180,7 @@ const GroupGoalCard = ({
 };
 
 // Quick Stats Component
-const QuickStats = ({ myGroups, loading }: { myGroups: any; loading: boolean }) => {
+const QuickStats = ({ groupGoals, loading }: { groupGoals: GroupSavingsGoal[]; loading: boolean }) => {
   if (loading) {
     return (
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -195,9 +194,9 @@ const QuickStats = ({ myGroups, loading }: { myGroups: any; loading: boolean }) 
     );
   }
 
-  const totalGroups = myGroups?.total || 0;
-  const publicGroups = myGroups?.public?.total || 0;
-  const privateGroups = myGroups?.private?.total || 0;
+  const totalGroups = groupGoals.length;
+  const publicGroups = groupGoals.filter(goal => goal.isPublic === true).length;
+  const privateGroups = groupGoals.filter(goal => goal.isPublic === false || goal.isPublic === undefined).length;
 
   return (
     <div className="grid grid-cols-3 gap-3 mb-6">
@@ -341,8 +340,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
 
   // Filter group goals based on search and category
   const filteredGroupGoals = groupGoals.filter(goal => {
-    const matchesSearch = goal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         goal.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = goal.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || goal.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -372,10 +370,8 @@ export const ClanTab: React.FC<ClanTabProps> = ({
         </ActionButton>
       </div>
 
-      {/* Quick Stats - Only show if user has groups */}
-      {account?.address && myGroups && myGroups.total > 0 && (
-        <QuickStats myGroups={myGroups} loading={myGroupsLoading} />
-      )}
+      {/* Quick Stats */}
+      <QuickStats groupGoals={groupGoals} loading={groupGoalsLoading} />
 
       {/* Section Toggle */}
       <div className="flex bg-gray-800/20 backdrop-blur-sm rounded-lg p-1">
@@ -403,9 +399,9 @@ export const ClanTab: React.FC<ClanTabProps> = ({
           <div className="flex items-center justify-center gap-2">
             <Users className="w-4 h-4" />
             <span>My Groups</span>
-            {myGroups?.total > 0 && (
+            {account?.address && groupGoals.filter(goal => goal.creatorAddress === account.address).length > 0 && (
               <span className="bg-cyan-400 text-gray-900 text-xs px-1.5 py-0.5 rounded-full">
-                {myGroups.total}
+                {groupGoals.filter(goal => goal.creatorAddress === account.address).length}
               </span>
             )}
           </div>
@@ -490,7 +486,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                 Connect your wallet to view and manage your savings groups.
               </p>
             </div>
-          ) : myGroupsLoading ? (
+          ) : groupGoalsLoading ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="bg-gray-800/20 rounded-xl p-4 animate-pulse">
@@ -506,55 +502,69 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                 </div>
               ))}
             </div>
-          ) : !myGroups || myGroups.total === 0 ? (
-            <EmptyState type="myGroups" onCreateGroup={onCreateGroupGoal} />
-          ) : (
-            <div className="space-y-6">
-              {/* Public Groups */}
-              {myGroups.public.total > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <Globe className="w-5 h-5 text-green-400" />
-                    Public Groups ({myGroups.public.total})
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {myGroups.public.goals.map((goal: any) => (
-                      <GroupGoalCard
-                        key={goal.metaGoalId}
-                        goal={goal}
-                        isMyGroup={true}
-                        onJoin={() => {}}
-                        onView={() => {}}
-                        exchangeRate={exchangeRate}
-                      />
-                    ))}
+          ) : (() => {
+            const myCreatedGroups = groupGoals.filter(goal => goal.creatorAddress === account.address);
+            const myJoinedGroups = groupGoals.filter(goal => 
+              goal.participants?.includes(account.address) && goal.creatorAddress !== account.address
+            );
+            const allMyGroups = [...myCreatedGroups, ...myJoinedGroups];
+            
+            if (allMyGroups.length === 0) {
+              return <EmptyState type="myGroups" onCreateGroup={onCreateGroupGoal} />;
+            }
+            
+            const myPublicGroups = allMyGroups.filter(goal => goal.isPublic === true);
+            const myPrivateGroups = allMyGroups.filter(goal => goal.isPublic === false || goal.isPublic === undefined);
+            
+            return (
+              <div className="space-y-6">
+                {/* Public Groups */}
+                {myPublicGroups.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-green-400" />
+                      Public Groups ({myPublicGroups.length})
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {myPublicGroups.map((goal) => (
+                        <GroupGoalCard
+                          key={goal.metaGoalId}
+                          goal={goal}
+                          isMyGroup={true}
+                          onJoin={() => {}}
+                          onView={() => {}}
+                          exchangeRate={exchangeRate}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Private Groups */}
-              {myGroups.private.total > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <Lock className="w-5 h-5 text-yellow-400" />
-                    Private Groups ({myGroups.private.total})
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {myGroups.private.goals.map((goal: any) => (
-                      <GroupGoalCard
-                        key={goal.metaGoalId}
-                        goal={goal}
-                        isMyGroup={true}
-                        onJoin={() => {}}
-                        onView={() => {}}
-                        exchangeRate={exchangeRate}
-                      />
-                    ))}
+                {/* Private Groups */}
+                {myPrivateGroups.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Lock className="w-5 h-5 text-yellow-400" />
+                      Private Groups ({myPrivateGroups.length})
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {myPrivateGroups.map((goal) => (
+                        <GroupGoalCard
+                          key={goal.metaGoalId}
+                          goal={goal}
+                          isMyGroup={true}
+                          onJoin={() => {}}
+                          onView={() => {}}
+                          exchangeRate={exchangeRate}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()
+          }
         </div>
       )}
     </div>

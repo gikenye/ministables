@@ -112,6 +112,13 @@ export interface GroupSavingsGoal {
   isPublic: boolean;
   participantCount: number;
   createdAt: string;
+  // Additional fields used by components
+  currentAmountUSD?: number;
+  category?: string;
+  status?: 'active' | 'completed' | 'paused';
+  description?: string;
+  // Goal IDs for different assets
+  goalIds?: Record<SupportedAsset, string>;
 }
 
 export interface GroupSavingsResponse {

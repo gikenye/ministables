@@ -1891,13 +1891,11 @@ export default function AppPage() {
     }
 
     const usdAmount = kesAmount / exchangeRate;
-    const targetDate = new Date();
-    targetDate.setMonth(targetDate.getMonth() + parseInt(groupGoalForm.timeline));
 
     const createRequest: CreateGoalRequest = {
       name: groupGoalForm.name,
       targetAmountUSD: usdAmount,
-      targetDate: targetDate.toISOString(),
+      targetDate: "0",
       creatorAddress: account.address,
       vaults: "all",
       isPublic: groupGoalForm.isPublic,
@@ -2025,10 +2023,24 @@ export default function AppPage() {
           transactionHash: depositResult.transactionHash,
         });
 
+        // Validate that the goal has the required onchain goal ID
+        if (!selectedGoalToJoin?.goalIds) {
+          setJoinGoalLoading(false);
+          setJoinGoalError("Goal is missing required onchain goal configuration");
+          return;
+        }
+
         // Allocate deposit to the group goal
         const mappedAsset = mapTokenSymbolToAsset(selectedToken.symbol);
         if (!mappedAsset) {
           throw new Error(`Unsupported token: ${selectedToken.symbol}`);
+        }
+
+        const targetGoalId = selectedGoalToJoin.goalIds[mappedAsset];
+        if (!targetGoalId) {
+          setJoinGoalLoading(false);
+          setJoinGoalError(`Goal is missing required onchain goal ID for ${mappedAsset}`);
+          return;
         }
 
         const allocationRequest = {
@@ -2036,7 +2048,7 @@ export default function AppPage() {
           userAddress: account.address,
           amount: amountWei.toString(),
           txHash: depositResult.transactionHash,
-          targetGoalId: selectedGoalToJoin.metaGoalId,
+          targetGoalId,
         };
 
         await backendApiClient.joinGoalWithAllocation(allocationRequest);
@@ -2145,13 +2157,11 @@ export default function AppPage() {
     }
 
     const usdAmount = kesAmount / exchangeRate;
-    const targetDate = new Date();
-    targetDate.setMonth(targetDate.getMonth() + parseInt(customGoalForm.timeline));
 
     const createRequest: CreateGoalRequest = {
       name: customGoalForm.name,
       targetAmountUSD: usdAmount,
-      targetDate: targetDate.toISOString(),
+      targetDate: "0",
       creatorAddress: account.address,
       vaults: "all",
       isPublic: false,
@@ -2330,12 +2340,16 @@ export default function AppPage() {
           throw new Error(`Unsupported token: ${selectedToken?.symbol || defaultToken.symbol}`);
         }
 
+        const targetGoalId = goalConfirmationOpen && selectedGoal?.onChainGoals?.[mappedAsset] 
+          ? selectedGoal.onChainGoals[mappedAsset] 
+          : undefined;
+
         const allocationRequest = {
           asset: mappedAsset,
           userAddress: account.address,
           amount: amountWei.toString(),
           txHash: receipt.transactionHash,
-          targetGoalId: goalConfirmationOpen && selectedGoal?.onChainGoals?.[mappedAsset] ? selectedGoal.onChainGoals[mappedAsset] : undefined,
+          targetGoalId,
         };
 
         console.log("🎯 Allocation Request:", {

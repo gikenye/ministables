@@ -170,7 +170,7 @@ export const GoalCard = ({
             </h3>
           </div>
           <span className="text-xs font-bold text-cyan-400">
-            {isNaN(goal.progress || 0) ? '0.0' : (goal.progress || 0).toFixed(1)}%
+            {(goal.progress || 0).toFixed(1)}%
           </span>
         </div>
 
@@ -201,7 +201,7 @@ export const GoalCard = ({
           </div>
 
           {/* Progress bar */}
-          <ProgressBar progress={isNaN(goal.progress || 0) ? 0 : (goal.progress || 0)} />
+          <ProgressBar progress={goal.progress || 0} />
         </InfoCard>
       </div>
     </div>

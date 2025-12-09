@@ -74,9 +74,8 @@ export function useAllocate(): UseAllocateResult {
         }
         
         const vaultContracts = VAULT_CONTRACTS[chainId];
-        const supportedTokens = getTokens(chainId);
         
-        if (!vaultContracts || !supportedTokens) {
+        if (!vaultContracts) {
           throw new Error(`Chain ${chainId} not supported for deposits`);
         }
         
@@ -97,6 +96,7 @@ export function useAllocate(): UseAllocateResult {
           txHash: params.txHash,
           targetGoalId: params.targetGoalId, // Include target goal ID if provided
           lockTier: params.lockTier || 30, // Default to 30-day lock tier
+          chainId,
         };
 
         // Report allocation attempt

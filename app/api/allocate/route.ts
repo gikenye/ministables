@@ -9,14 +9,14 @@ import { VAULT_CONTRACTS } from "@/config/chainConfig";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tokenSymbol, userAddress, amount, txHash, targetGoalId, lockTier } = body;
+    const { tokenSymbol, userAddress, amount, txHash, targetGoalId, lockTier, chainId } = body;
 
     // Validate required fields
-    if (!tokenSymbol || !userAddress || !amount || !txHash) {
+    if (!tokenSymbol || !userAddress || !amount || !txHash || !chainId) {
       return NextResponse.json(
         {
           error:
-            "Missing required fields: tokenSymbol, userAddress, amount, txHash",
+            "Missing required fields: tokenSymbol, userAddress, amount, txHash, chainId",
         },
         { status: 400 }
       );
@@ -46,8 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get supported tokens from chain config (assuming Celo for now)
-    const chainId = 42220; // Celo mainnet
+    // Get supported tokens from chain config
     const vaultContracts = VAULT_CONTRACTS[chainId];
     
     if (!vaultContracts) {
@@ -95,9 +94,9 @@ export async function POST(request: NextRequest) {
     console.log("[API] FULL REQUEST PAYLOAD TO REMOTE SERVER:", JSON.stringify(allocateRequest, null, 2));
 
     // Call external backend allocation service directly
-    const backendUrl = process.env.ALLOCATE_API_URL || process.env.NEXT_PUBLIC_ALLOCATE_API_URL;
+    const backendUrl = process.env.ALLOCATE_API_URL;
     if (!backendUrl) {
-      throw new Error("Backend API URL not configured");
+      throw new Error("ALLOCATE_API_URL environment variable not configured");
     }
 
     const response = await fetch(`${backendUrl}/api/user-positions?action=allocate`, {
