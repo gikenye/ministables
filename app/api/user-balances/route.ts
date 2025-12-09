@@ -53,12 +53,12 @@ export async function POST(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
     
-    if (action === 'create-goal') {
+    if (action === 'allocate') {
       const body = await request.json();
-      console.log('[user-balances POST] Creating goal:', body);
+      console.log('[user-balances POST] Allocate request:', body);
       
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=create-goal`, {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=allocate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -72,14 +72,41 @@ export async function POST(request: NextRequest) {
         const data = await response.json();
         return NextResponse.json(data);
       } catch (error) {
-        console.error('[user-balances POST] Goal creation error:', error);
+        console.error('[user-balances POST] Allocate error:', error);
         return NextResponse.json({ 
-          error: error instanceof Error ? error.message : 'Failed to create goal' 
+          error: error instanceof Error ? error.message : 'Failed to allocate deposit' 
         }, { status: 500 });
       }
     }
     
-    const { userAddress } = await request.json();
+    if (action === 'create-goal' || action === 'create-group-goal') {
+      const body = await request.json();
+      console.log(`[user-balances POST] Creating ${action}:`, body);
+      
+      try {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `API responded with status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return NextResponse.json(data);
+      } catch (error) {
+        console.error(`[user-balances POST] ${action} error:`, error);
+        return NextResponse.json({ 
+          error: error instanceof Error ? error.message : `Failed to ${action}` 
+        }, { status: 500 });
+      }
+    }
+    
+    const body = await request.json();
+    const { userAddress } = body;
     console.log('[user-balances POST] Request received for:', userAddress);
     
     if (!userAddress) {
@@ -127,6 +154,43 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('userAddress');
     const targetGoalId = searchParams.get('targetGoalId');
+    const action = searchParams.get('action');
+    
+    // Handle Group Goals actions
+    if (action === 'public-goals') {
+      try {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=public-goals`);
+        if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
+        const data = await response.json();
+        return NextResponse.json(data);
+      } catch (error) {
+        return NextResponse.json({ total: 0, goals: [] });
+      }
+    }
+    
+    if (action === 'my-groups' && address) {
+      try {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=my-groups&userAddress=${address}`);
+        if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
+        const data = await response.json();
+        return NextResponse.json(data);
+      } catch (error) {
+        return NextResponse.json({ total: 0, public: { total: 0, goals: [] }, private: { total: 0, goals: [] } });
+      }
+    }
+
+    if (action === 'leaderboard') {
+      const start = searchParams.get('start') || '0';
+      const limit = searchParams.get('limit') || '10';
+      try {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=leaderboard&start=${start}&limit=${limit}`);
+        if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
+        const data = await response.json();
+        return NextResponse.json(data);
+      } catch (error) {
+        return NextResponse.json({ total: '0', start: parseInt(start), limit: parseInt(limit), data: [] });
+      }
+    }
     
     if (!address) {
       return NextResponse.json({ error: 'userAddress parameter required' }, { status: 400 });

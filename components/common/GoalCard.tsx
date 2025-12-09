@@ -21,7 +21,8 @@ export const GoalCard = ({
 }: GoalCardProps) => {
   const formatAmount = (amount: string) => {
     if (!showBalance) return "****";
-    const usdAmount = Number(amount);
+    const usdAmount = Number(amount) || 0;
+    if (isNaN(usdAmount)) return "0";
     if (exchangeRate && exchangeRate > 0) {
       const kesAmount = usdAmount * exchangeRate;
       return new Intl.NumberFormat("en-KE").format(kesAmount);
@@ -31,7 +32,8 @@ export const GoalCard = ({
 
   const formatTargetAmount = (amount: string) => {
     if (!showBalance) return "****";
-    const usdAmount = Number(amount);
+    const usdAmount = Number(amount) || 0;
+    if (isNaN(usdAmount)) return "0";
     if (exchangeRate && exchangeRate > 0) {
       const kesAmount = usdAmount * exchangeRate;
       return new Intl.NumberFormat("en-KE").format(kesAmount);
@@ -168,7 +170,7 @@ export const GoalCard = ({
             </h3>
           </div>
           <span className="text-xs font-bold text-cyan-400">
-            {goal.progress.toFixed(1)}%
+            {(goal.progress || 0).toFixed(1)}%
           </span>
         </div>
 
@@ -199,7 +201,7 @@ export const GoalCard = ({
           </div>
 
           {/* Progress bar */}
-          <ProgressBar progress={goal.progress} />
+          <ProgressBar progress={goal.progress || 0} />
         </InfoCard>
       </div>
     </div>

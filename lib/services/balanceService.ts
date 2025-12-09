@@ -28,9 +28,16 @@ export async function getStablecoinBalances(
       throw new Error(`Chain with ID ${chainId} not found`);
     }
 
-    // Filter for stablecoins (USDC, USDT, CUSD)
+    // Get all supported tokens with vault contracts
+    const { VAULT_CONTRACTS } = await import('@/config/chainConfig');
+    const vaultContracts = VAULT_CONTRACTS[chainId];
+    if (!vaultContracts) {
+      throw new Error(`No vault contracts for chain ${chainId}`);
+    }
+    
+    const supportedSymbols = Object.keys(vaultContracts);
     const stablecoins = tokens.filter(token =>
-      ['USDC', 'USDT', 'CUSD'].includes(token.symbol.toUpperCase())
+      supportedSymbols.includes(token.symbol.toUpperCase())
     );
 
     const balances: TokenBalance[] = [];
@@ -77,13 +84,18 @@ export async function getStablecoinBalances(
  * Priority: USDC > USDT > CUSD (if balances are equal, prefer USDC)
  * @param accountAddress User's wallet address
  * @param chainId Current chain ID
+ * @param allowZeroBalance If true, returns default token even with 0 balance (for onramp)
  * @returns The best token to use, or null if none available
  */
 export async function getBestStablecoinForDeposit(
   accountAddress: string,
-  chainId: number
+  chainId: number,
+  allowZeroBalance: boolean = false
 ): Promise<TokenBalance | null> {
   const balances = await getStablecoinBalances(accountAddress, chainId);
+
+  // Log all balances for debugging
+  console.log(`💰 User balances on chain ${chainId}:`, balances.map(b => `${b.symbol}: $${b.balance}`));
 
   if (balances.length === 0) {
     return null;
@@ -91,11 +103,17 @@ export async function getBestStablecoinForDeposit(
 
   // Filter tokens with positive balance
   const tokensWithBalance = balances.filter(token => token.balance > 0);
+  console.log(`✅ Tokens with balance:`, tokensWithBalance.map(b => `${b.symbol}: $${b.balance}`));
 
   if (tokensWithBalance.length === 0) {
-    // No balance in any stablecoin, return USDC as default
-    const usdcToken = balances.find(token => token.symbol.toUpperCase() === 'USDC');
-    return usdcToken || balances[0];
+    // No balance in any stablecoin
+    if (allowZeroBalance) {
+      // For onramp transactions, return USDC as default
+      const usdcToken = balances.find(token => token.symbol.toUpperCase() === 'USDC');
+      return usdcToken || balances[0];
+    }
+    // For regular deposits, return null if no balance
+    return null;
   }
 
   // Sort by balance (highest first), then by priority (USDC > USDT > CUSD)
