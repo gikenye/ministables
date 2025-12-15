@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const userId = String(user._id);
     const encryptedString = encrypt(`${walletAddress}:${userId}`);
 
-    return NextResponse.json({ userId: encryptedString });
+    return NextResponse.json({ selfId: encryptedString });
   } catch (error) {
     console.error("Error processing userid request:", error);
     return NextResponse.json(
