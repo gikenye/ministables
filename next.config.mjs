@@ -13,7 +13,7 @@ const nextConfig = {
   experimental: {
     turbo: {
       resolveAlias: {
-        '@anon-aadhaar/core': '@anon-aadhaar/core/dist/index.js',
+        // '@anon-aadhaar/core': '@anon-aadhaar/core/dist/index.js',
       },
     },
   },
