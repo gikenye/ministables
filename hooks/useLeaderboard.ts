@@ -11,14 +11,14 @@ export interface LeaderboardEntry {
   rank: number;
   address: string;
   score: string;
-  formattedScore: string;
+  formattedLeaderboardScore: string;
   isCurrentUser?: boolean;
 }
 
 export interface UserScore {
   userAddress: string;
   score: string;
-  formattedScore: string;
+  formattedLeaderboardScore: string;
   rank?: number;
 }
 
@@ -121,7 +121,8 @@ export function useBackendLeaderboard(
         const formattedUserScore: UserScore = {
           userAddress: data.userAddress,
           score: data.score,
-          formattedScore: data.formattedScore || formatScore(data.score), // Use backend formatted score if available
+          formattedLeaderboardScore:
+            data.formattedLeaderboardScore || formatScore(data.score), // Use backend formatted score if available
           rank: data.rank,
         };
         setUserScore(formattedUserScore);
@@ -163,14 +164,15 @@ export function useBackendLeaderboard(
 
         const data = await response.json();
 
-        const formattedEntries: LeaderboardEntry[] = data.data.map(
+        const formattedEntries: LeaderboardEntry[] = data.users.map(
           (entry: any) => ({
             rank: entry.rank,
-            address: entry.address,
-            score: entry.score,
-            formattedScore: entry.formattedScore || formatScore(entry.score), // Use backend formatted score if available
+            address: entry.userAddress,
+            score: entry.leaderboardScore,
+            formattedLeaderboardScore:
+              entry.formattedLeaderboardScore || formatScore(entry.leaderboardScore), // Use backend formatted score if available
             isCurrentUser:
-              account?.address?.toLowerCase() === entry.address.toLowerCase(),
+              account?.address?.toLowerCase() === entry.userAddress.toLowerCase(),
           })
         );
 
@@ -181,8 +183,8 @@ export function useBackendLeaderboard(
           setLeaderboard((prev) => [...prev, ...formattedEntries]);
         }
 
-        setTotal(parseInt(data.total, 10));
-        setHasMore(start + limit < parseInt(data.total, 10));
+        setTotal(data.totalUsers);
+        setHasMore(start + limit < data.totalUsers);
         setCurrentLimit(start + limit);
 
         // If user's score exists but doesn't have rank, try to get it from leaderboard
@@ -202,7 +204,8 @@ export function useBackendLeaderboard(
                 : {
                     userAddress: userEntry.address,
                     score: userEntry.score,
-                    formattedScore: userEntry.formattedScore,
+                    formattedLeaderboardScore:
+                      userEntry.formattedLeaderboardScore,
                     rank: userEntry.rank,
                   }
             );
@@ -364,7 +367,7 @@ export function useUserScore(userAddress?: string) {
       setUserScore({
         userAddress: response.userAddress,
         score: response.score,
-        formattedScore: formatScore(response.score),
+        formattedLeaderboardScore: formatScore(response.score),
       });
 
       reportInfo("Individual user score fetched", {

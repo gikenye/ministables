@@ -38,7 +38,11 @@ async function updateUserPositions(address: string, targetGoalId?: string | null
     
     return positions;
   } catch (apiError) {
-    console.warn('[user-balances] API call failed:', apiError);
+    console.error('[user-balances] API call failed:', {
+      url,
+      error: apiError instanceof Error ? apiError.message : apiError,
+      stack: apiError instanceof Error ? apiError.stack : undefined
+    });
     return {
       totalBalance: '0',
       positions: [],
@@ -224,6 +228,7 @@ export async function GET(request: NextRequest) {
     const positions = await updateUserPositions(address, targetGoalId);
     return NextResponse.json(positions);
   } catch (error) {
+    console.error('[user-balances GET] Error:', error);
     return NextResponse.json({ 
       error: 'Failed to fetch user balances'
     }, { status: 500 });

@@ -161,6 +161,25 @@ interface TokenInfo {
   decimals: number;
 }
 
+interface LeaderboardEntry {
+  rank: number;
+  userAddress: string;
+  totalValueUSD: string;
+  leaderboardScore: string;
+  formattedLeaderboardScore: string;
+  leaderboardRank: number;
+  isCurrentUser?: boolean;
+  assetBalances: Array<{
+    asset: string;
+    vault: string;
+    totalAmountWei: string;
+    totalAmountUSD: string;
+    totalSharesWei: string;
+    totalSharesUSD: string;
+    depositCount: number;
+  }>;
+}
+
 // Save Actions Modal - Quick save actions for main SAVE button
 const SaveActionsModal = ({
   isOpen,
@@ -1570,7 +1589,7 @@ export default function AppPage() {
     });
 
   // User portfolio from backend API
-  const [userPortfolio, setUserPortfolio] = useState(null);
+  const [userPortfolio, setUserPortfolio] = useState<any>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
 
@@ -1588,11 +1607,10 @@ export default function AppPage() {
       setPortfolioError(errorMessage);
       setUserPortfolio({
         totalValueUSD: "0",
-        leaderboardScore: "0",
         formattedLeaderboardScore: "0.00",
         leaderboardRank: 0,
         assetBalances: [],
-      });
+      } as any);
       reportError("Failed to fetch user portfolio", {
         component: "AppPage",
         operation: "fetchUserPortfolio",
@@ -1610,15 +1628,15 @@ export default function AppPage() {
   }, [account?.address]);
 
   // Multi-vault goals from backend API
-  const [userGoals, setUserGoals] = useState([]);
+  const [userGoals, setUserGoals] = useState<any[]>([]);
   const [goalsLoading, setGoalsLoading] = useState(false);
   const [goalsError, setGoalsError] = useState<string | null>(null);
   
   // Leaderboard from backend API
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
-  const [userScore, setUserScore] = useState<{rank: number; formattedScore: string} | null>(null);
+  const [userScore, setUserScore] = useState<{rank: number; formattedLeaderboardScore: string} | null>(null);
 
   const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
 
@@ -1634,7 +1652,7 @@ export default function AppPage() {
     } catch (error) {
       console.error('Error fetching goals:', error);
       setGoalsError(error instanceof Error ? error.message : "Failed to load goals");
-      setUserGoals([]);
+      setUserGoals([] as any[]);
     } finally {
       setGoalsLoading(false);
     }
@@ -1648,14 +1666,23 @@ export default function AppPage() {
         backendApiClient.getLeaderboard(0, 10),
         account?.address ? backendApiClient.getUserPortfolio(account.address) : null
       ]);
-      setLeaderboard(leaderboardData.data.map((entry, index) => ({
+      setLeaderboard(leaderboardData.users.map((entry, index) => ({
         ...entry,
-        isCurrentUser: account?.address === entry.address
+        isCurrentUser: account?.address?.toLowerCase() === entry.userAddress?.toLowerCase()
       })));
-      if (userPortfolioData) {
+      // Find user's actual rank from leaderboard data
+      const userEntry = leaderboardData.users.find(entry => 
+        account?.address?.toLowerCase() === entry.userAddress?.toLowerCase()
+      );
+      if (userEntry) {
+        setUserScore({
+          rank: userEntry.rank,
+          formattedLeaderboardScore: userEntry.formattedLeaderboardScore
+        });
+      } else if (userPortfolioData) {
         setUserScore({
           rank: userPortfolioData.leaderboardRank,
-          formattedScore: userPortfolioData.formattedLeaderboardScore
+          formattedLeaderboardScore: userPortfolioData.formattedLeaderboardScore
         });
       }
     } catch (error) {
@@ -3415,7 +3442,7 @@ export default function AppPage() {
                     <div className="text-right">
                       <div className="text-xs opacity-75">Score</div>
                       <div className="text-lg font-bold">
-                        ${userScore.formattedScore}
+                        ${userScore.formattedLeaderboardScore}
                       </div>
                     </div>
                   </div>
@@ -3496,7 +3523,7 @@ export default function AppPage() {
                     <div role="rowgroup">
                       {leaderboard.map((entry, index) => (
                         <div
-                          key={entry.address}
+                          key={entry.userAddress}
                           role="row"
                           className={`flex items-center gap-3 p-3 rounded-lg ${
                             entry.isCurrentUser
@@ -3505,7 +3532,7 @@ export default function AppPage() {
                           }`}
                           aria-label={`Rank ${entry.rank}: ${
                             entry.isCurrentUser ? "You" : "User"
-                          } with score ${entry.formattedScore} USD`}
+                          } with score ${entry.formattedLeaderboardScore} USD`}
                         >
                           {/* Rank */}
                           <div
@@ -3513,7 +3540,7 @@ export default function AppPage() {
                             className="flex items-center justify-center w-8 h-8"
                             aria-label={`Rank ${entry.rank}`}
                           >
-                            {entry.rank <= 3 ? (
+                            {entry.rank <= 10 ? (
                               <div className="text-xl" aria-hidden="true">
                                 {entry.rank === 1
                                   ? "🥇"
@@ -3533,10 +3560,10 @@ export default function AppPage() {
                             <div className="text-white font-medium">
                               {entry.isCurrentUser
                                 ? "You"
-                                : `${entry.address.slice(
+                                : `${entry.userAddress.slice(
                                     0,
                                     6
-                                  )}...${entry.address.slice(-4)}`}
+                                  )}...${entry.userAddress.slice(-4)}`}
                             </div>
                             {entry.isCurrentUser && (
                               <div className="text-xs text-cyan-400">
@@ -3548,7 +3575,7 @@ export default function AppPage() {
                           {/* Score */}
                           <div role="cell" className="text-right">
                             <div className="text-white font-semibold">
-                              ${entry.formattedScore || entry.score}
+                              ${entry.totalValueUSD || "0.00"}
                             </div>
                             <div className="text-xs text-gray-400">USD</div>
                           </div>
