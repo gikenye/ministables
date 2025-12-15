@@ -4,13 +4,13 @@ import { SelfVerification } from "@/lib/models/selfVerification";
 import { decrypt } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
-  const { userId } = await req.json();
+  const { selfId } = await req.json();
 
-  if (!userId) {
-    return NextResponse.json({ error: "User ID required" }, { status: 400 });
+  if (!selfId) {
+    return NextResponse.json({ error: "Self ID required" }, { status: 400 });
   }
 
-  const decrypted = decrypt(userId);
+  const decrypted = decrypt(selfId);
   const [walletAddress, userIdPart] = decrypted.split(":");
   if (!walletAddress || !userIdPart) {
     return NextResponse.json(
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     // First check if verification already exists in database
     const collection = await getCollection("selfVerifications");
-    const existingVerification = await collection.findOne({ userId });
+    const existingVerification = await collection.findOne({ walletAddress });
 
     if (existingVerification) {
       return NextResponse.json({
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     // Save to database
     const now = new Date();
     const verification: SelfVerification = {
-      userId,
+      selfId,
       walletAddress,
       sessionId: verificationData.transactionHash,
       attestationId: verificationData.attestationId,
@@ -96,17 +96,26 @@ export async function POST(req: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId");
+  const selfId = searchParams.get("selfId");
 
-  if (!userId) {
-    return NextResponse.json({ error: "User ID is required" }, { status: 400 });
+  if (!selfId) {
+    return NextResponse.json({ error: "Self ID is required" }, { status: 400 });
   }
 
   try {
-    // ONLY check database - do not fallback to blockchain
+    const decrypted = decrypt(selfId);
+    const [walletAddress] = decrypted.split(":");
+    
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: "Invalid user ID format" },
+        { status: 400 }
+      );
+    }
+
     const collection = await getCollection("selfVerifications");
     const existingVerification = await collection.findOne({
-      userId,
+      walletAddress,
     });
 
     if (existingVerification) {
@@ -116,8 +125,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // If no verification found in database, return 404
-    // Do NOT fallback to blockchain service
     return NextResponse.json(
       { error: "No verification found" },
       { status: 404 }

@@ -1,5 +1,5 @@
 export interface SelfVerification {
-  userId: string;
+  selfId: string;
   walletAddress: string;
   sessionId: string;
   attestationId: string;

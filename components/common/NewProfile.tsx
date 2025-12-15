@@ -76,13 +76,15 @@ export const NewProfile = ({
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
 
   useEffect(() => {
-    if (!address || !isVerificationModalOpen) return;
+    if (!address || !isVerificationModalOpen || !encryptedUserId) return;
 
     try {
-      // Use the contract address
       const endpoint =
         process.env.NEXT_PUBLIC_SELF_ENDPOINT ||
         "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
+
+      const hash = encryptedUserId.replace(/[^a-f0-9]/gi, '').toLowerCase().padEnd(32, '0');
+      const uuid = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(12, 15)}-8${hash.slice(16, 19)}-${hash.slice(20, 32)}`;
 
       const app = new SelfAppBuilder({
         version: 2,
@@ -90,9 +92,9 @@ export const NewProfile = ({
         scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-app",
         endpoint: endpoint,
         logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
-        userId: encryptedUserId || address,
+        userId: uuid,
         endpointType: "celo",
-        userIdType: "hex",
+        userIdType: "uuid",
         userDefinedData: "Enjoy saving together with Minilend!",
         deeplinkCallback: `${window.location.origin}/`,
         disclosures: {
@@ -107,7 +109,7 @@ export const NewProfile = ({
     } catch (error) {
       console.error("Failed to initialize Self app:", error);
     }
-  }, [excludedCountries, address, isVerificationModalOpen]);
+  }, [excludedCountries, address, isVerificationModalOpen, encryptedUserId]);
 
   useEffect(() => {
     if (!address) return;
@@ -122,7 +124,7 @@ export const NewProfile = ({
         });
         if (response.ok) {
           const data = await response.json();
-          setEncryptedUserId(data.userId);
+          setEncryptedUserId(data.selfId);
         } else {
           console.error('Failed to fetch encrypted userId');
         }
@@ -142,7 +144,7 @@ export const NewProfile = ({
     const checkVerification = async () => {
       setVerificationLoading(true);
       try {
-        const response = await fetch(`/api/self/verify?userId=${encryptedUserId}`);
+        const response = await fetch(`/api/self/verify?selfId=${encodeURIComponent(encryptedUserId)}`);
         if (response.ok) {
           const data = await response.json();
           setIsVerified(true);
@@ -217,7 +219,7 @@ export const NewProfile = ({
       const response = await fetch("/api/self/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: encryptedUserId }),
+        body: JSON.stringify({ selfId: encryptedUserId }),
       });
 
       if (response.ok) {
@@ -234,7 +236,7 @@ export const NewProfile = ({
             const checkVerification = async () => {
               setVerificationLoading(true);
               try {
-                const response = await fetch(`/api/self/verify?userId=${encryptedUserId}`);
+                const response = await fetch(`/api/self/verify?selfId=${encodeURIComponent(encryptedUserId)}`);
                 if (response.ok) {
                   const data = await response.json();
                   setIsVerified(true);
