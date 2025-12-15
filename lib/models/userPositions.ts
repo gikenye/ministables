@@ -3,7 +3,7 @@ export interface UserPositions {
   data: {
     userAddress: string;
     totalValueUSD: string;
-    leaderboardScore: string;
+    totalValueUSD: string;
     formattedLeaderboardScore: string;
     leaderboardRank: number;
     assetBalances: Array<{

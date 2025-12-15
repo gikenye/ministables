@@ -11,14 +11,14 @@ export interface LeaderboardEntry {
   rank: number;
   address: string;
   score: string;
-  formattedScore: string;
+  formattedLeaderboardScore: string;
   isCurrentUser?: boolean;
 }
 
 export interface UserScore {
   userAddress: string;
   score: string;
-  formattedScore: string;
+  formattedLeaderboardScore: string;
   rank?: number;
 }
 
@@ -121,7 +121,8 @@ export function useBackendLeaderboard(
         const formattedUserScore: UserScore = {
           userAddress: data.userAddress,
           score: data.score,
-          formattedScore: data.formattedScore || formatScore(data.score), // Use backend formatted score if available
+          formattedLeaderboardScore:
+            data.formattedLeaderboardScore || formatScore(data.score), // Use backend formatted score if available
           rank: data.rank,
         };
         setUserScore(formattedUserScore);
@@ -168,7 +169,8 @@ export function useBackendLeaderboard(
             rank: entry.rank,
             address: entry.address,
             score: entry.score,
-            formattedScore: entry.formattedScore || formatScore(entry.score), // Use backend formatted score if available
+            formattedLeaderboardScore:
+              entry.formattedLeaderboardScore || formatScore(entry.score), // Use backend formatted score if available
             isCurrentUser:
               account?.address?.toLowerCase() === entry.address.toLowerCase(),
           })
@@ -202,7 +204,8 @@ export function useBackendLeaderboard(
                 : {
                     userAddress: userEntry.address,
                     score: userEntry.score,
-                    formattedScore: userEntry.formattedScore,
+                    formattedLeaderboardScore:
+                      userEntry.formattedLeaderboardScore,
                     rank: userEntry.rank,
                   }
             );
@@ -364,7 +367,7 @@ export function useUserScore(userAddress?: string) {
       setUserScore({
         userAddress: response.userAddress,
         score: response.score,
-        formattedScore: formatScore(response.score),
+        formattedLeaderboardScore: formatScore(response.score),
       });
 
       reportInfo("Individual user score fetched", {

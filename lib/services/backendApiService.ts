@@ -4,7 +4,7 @@
  */
 
 // Environment variable configuration
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL  || "";
+const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL || "";
 
 if (!process.env.ALLOCATE_API_URL) {
   console.warn(
@@ -57,7 +57,7 @@ export interface AllocateResponse {
 export interface CreateGoalRequest {
   name: string;
   targetAmountUSD: number;
-  targetDate: string; // use '0' 
+  targetDate: string; // use '0'
   creatorAddress: string;
   vaults: SupportedAsset[] | "all";
   isPublic?: boolean;
@@ -81,12 +81,15 @@ export interface GoalDetailsResponse {
   onChainGoals: Record<SupportedAsset, string>;
   totalProgressUSD: number;
   progressPercent: number;
-  vaultProgress: Record<SupportedAsset, {
-    goalId: string;
-    progressUSD: number;
-    progressPercent: number;
-    attachmentCount: number;
-  }>;
+  vaultProgress: Record<
+    SupportedAsset,
+    {
+      goalId: string;
+      progressUSD: number;
+      progressPercent: number;
+      attachmentCount: number;
+    }
+  >;
   participants: string[];
   userBalance: string;
   userBalanceUSD: string;
@@ -115,7 +118,7 @@ export interface GroupSavingsGoal {
   // Additional fields used by components
   currentAmountUSD?: number;
   category?: string;
-  status?: 'active' | 'completed' | 'paused';
+  status?: "active" | "completed" | "paused";
   description?: string;
   // Goal IDs for different assets
   goalIds?: Record<SupportedAsset, string>;
@@ -174,11 +177,14 @@ export interface GroupGoalDetailsResponse {
   metaGoalId: string;
   goalName: string;
   targetAmountUSD: number;
-  balances: Record<SupportedAsset, {
-    asset: SupportedAsset;
-    totalBalance: string;
-    formattedBalance: string;
-  }>;
+  balances: Record<
+    SupportedAsset,
+    {
+      asset: SupportedAsset;
+      totalBalance: string;
+      formattedBalance: string;
+    }
+  >;
   transactions: Array<{
     asset: SupportedAsset;
     userAddress: string;
@@ -192,7 +198,6 @@ export interface GroupGoalDetailsResponse {
 export interface UserPortfolioResponse {
   userAddress: string;
   totalValueUSD: string;
-  leaderboardScore: string;
   formattedLeaderboardScore: string;
   leaderboardRank: number;
   assetBalances: Array<{
@@ -207,17 +212,16 @@ export interface UserPortfolioResponse {
   goals?: GoalDetailsResponse[];
 }
 
-
 export interface UserScoreResponse {
   userAddress: string;
   score: string;
-    vault: string;
-    totalAmountWei: string;
-    totalAmountUSD: string;
-    totalSharesWei: string;
-    totalSharesUSD: string;
-    depositCount: number;
-  formattedScore?: string;
+  vault: string;
+  totalAmountWei: string;
+  totalAmountUSD: string;
+  totalSharesWei: string;
+  totalSharesUSD: string;
+  depositCount: number;
+  formattedLeaderboardScore?: string;
   rank?: number;
   totalUsers?: string;
 }
@@ -230,7 +234,7 @@ export interface LeaderboardResponse {
     rank: number;
     address: string;
     score: string;
-    formattedScore?: string;
+    formattedLeaderboardScore?: string;
   }>;
 }
 
@@ -244,8 +248,10 @@ export class BackendApiClient {
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || ALLOCATE_API_URL;
-    if(!this.baseUrl){
-      console.error("BackendApiClient: No API base URl set. API calls will fail.");
+    if (!this.baseUrl) {
+      console.error(
+        "BackendApiClient: No API base URl set. API calls will fail."
+      );
     }
   }
 
@@ -253,7 +259,6 @@ export class BackendApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-
     const url = `${this.baseUrl}${endpoint}`;
     const config: RequestInit = {
       headers: {
@@ -274,7 +279,7 @@ export class BackendApiClient {
           url,
           status: response.status,
           statusText: response.statusText,
-          errorData
+          errorData,
         });
         throw new Error(
           errorData.error || `HTTP ${response.status}: ${response.statusText}`
@@ -286,7 +291,7 @@ export class BackendApiClient {
       console.error("[BackendApiClient] REQUEST FAILED:", {
         url,
         error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
       });
       if (error instanceof Error) {
         throw error;
@@ -297,45 +302,64 @@ export class BackendApiClient {
 
   // Allocation API methods
   async allocateDeposit(request: AllocateRequest): Promise<AllocateResponse> {
-    const result = await this.request<AllocateResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=allocate`, {
-      method: "POST",
-      body: JSON.stringify(request),
-    });
+    const result = await this.request<AllocateResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=allocate`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      }
+    );
     return result;
   }
 
   // User Portfolio API methods
   async getUserPortfolio(userAddress: string): Promise<UserPortfolioResponse> {
     const params = new URLSearchParams({ userAddress });
-    return this.request<UserPortfolioResponse>(`${API_ENDPOINTS.USER_POSITIONS}?${params}`);
+    return this.request<UserPortfolioResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?${params}`
+    );
   }
 
   // Multi-vault goal creation API methods
-  async createGroupGoal(request: CreateGoalRequest): Promise<CreateGoalResponse> {
-    return this.request<CreateGoalResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=create-group-goal`, {
-      method: "POST",
-      body: JSON.stringify(request),
-    });
+  async createGroupGoal(
+    request: CreateGoalRequest
+  ): Promise<CreateGoalResponse> {
+    return this.request<CreateGoalResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=create-group-goal`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      }
+    );
   }
 
   // Group savings API methods
   async getAllGroupSavings(): Promise<GroupSavingsResponse> {
-    return this.request<GroupSavingsResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=all-group-savings`);
+    return this.request<GroupSavingsResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=all-group-savings`
+    );
   }
 
   async getPublicGoals(): Promise<GroupSavingsResponse> {
-    return this.request<GroupSavingsResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=public-goals`);
+    return this.request<GroupSavingsResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=public-goals`
+    );
   }
 
   async getPrivateGoals(): Promise<GroupSavingsResponse> {
-    return this.request<GroupSavingsResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=private-goals`);
+    return this.request<GroupSavingsResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=private-goals`
+    );
   }
 
   async joinGoal(request: JoinGoalRequest): Promise<JoinGoalResponse> {
-    return this.request<JoinGoalResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=join-goal`, {
-      method: "POST",
-      body: JSON.stringify(request),
-    });
+    return this.request<JoinGoalResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=join-goal`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      }
+    );
   }
 
   // Join goal with allocation - allocates existing deposit to a group goal
@@ -356,21 +380,38 @@ export class BackendApiClient {
     });
   }
 
-  async getGroupGoalMembers(metaGoalId: string): Promise<GroupGoalMembersResponse> {
-    return this.request<GroupGoalMembersResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=group-goal-members`, {
-      method: "POST",
-      body: JSON.stringify({ metaGoalId }),
-    });
+  async getGroupGoalMembers(
+    metaGoalId: string
+  ): Promise<GroupGoalMembersResponse> {
+    return this.request<GroupGoalMembersResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=group-goal-members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ metaGoalId }),
+      }
+    );
   }
 
-  async getGroupGoalDetails(metaGoalId: string): Promise<GroupGoalDetailsResponse> {
-    return this.request<GroupGoalDetailsResponse>(`${API_ENDPOINTS.USER_POSITIONS}?action=group-goal-details`, {
-      method: "POST",
-      body: JSON.stringify({ metaGoalId }),
-    });
+  async getGroupGoalDetails(
+    metaGoalId: string
+  ): Promise<GroupGoalDetailsResponse> {
+    return this.request<GroupGoalDetailsResponse>(
+      `${API_ENDPOINTS.USER_POSITIONS}?action=group-goal-details`,
+      {
+        method: "POST",
+        body: JSON.stringify({ metaGoalId }),
+      }
+    );
   }
 
-  async cancelGoal(metaGoalId: string, userAddress: string): Promise<{ success: boolean; metaGoalId: string; cancelledGoals: Record<SupportedAsset, string> }> {
+  async cancelGoal(
+    metaGoalId: string,
+    userAddress: string
+  ): Promise<{
+    success: boolean;
+    metaGoalId: string;
+    cancelledGoals: Record<SupportedAsset, string>;
+  }> {
     return this.request(`${API_ENDPOINTS.USER_POSITIONS}?action=cancel-goal`, {
       method: "POST",
       body: JSON.stringify({ metaGoalId, userAddress }),
@@ -388,15 +429,23 @@ export class BackendApiClient {
   }
 
   // Multi-vault Goals API methods
-  async getUserGoalsByCreator(creatorAddress: string): Promise<GoalDetailsResponse[]> {
+  async getUserGoalsByCreator(
+    creatorAddress: string
+  ): Promise<GoalDetailsResponse[]> {
     const params = new URLSearchParams({ creatorAddress });
-    return this.request<GoalDetailsResponse[]>(`${API_ENDPOINTS.GOALS}?${params}`);
+    return this.request<GoalDetailsResponse[]>(
+      `${API_ENDPOINTS.GOALS}?${params}`
+    );
   }
 
   // Get goals with progress data
-  async getGoalsWithProgress(creatorAddress: string): Promise<GoalDetailsResponse[]> {
+  async getGoalsWithProgress(
+    creatorAddress: string
+  ): Promise<GoalDetailsResponse[]> {
     const params = new URLSearchParams({ creatorAddress });
-    return this.request<GoalDetailsResponse[]>(`${API_ENDPOINTS.GOALS}?${params}`);
+    return this.request<GoalDetailsResponse[]>(
+      `${API_ENDPOINTS.GOALS}?${params}`
+    );
   }
 
   // Leaderboard API methods
@@ -431,7 +480,7 @@ export function mapTokenSymbolToAsset(symbol: string): SupportedAsset | null {
   if (symbol.toUpperCase() === "CUSD") {
     return "cUSD";
   }
-  
+
   const normalizedSymbol = symbol.toUpperCase();
   if (SUPPORTED_ASSETS.includes(normalizedSymbol as SupportedAsset)) {
     return normalizedSymbol as SupportedAsset;
