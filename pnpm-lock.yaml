@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@anon-aadhaar/core':
-        specifier: https://gitpkg.vercel.app/selfxyz/anon-aadhaar/packages/core?1b9efa501cff3cf25dc260b060bf611229e316a4
-        version: https://gitpkg.vercel.app/selfxyz/anon-aadhaar/packages/core?1b9efa501cff3cf25dc260b060bf611229e316a4(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       '@auth/core':
         specifier: ^0.40.0
         version: 0.40.0
