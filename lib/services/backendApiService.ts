@@ -227,14 +227,25 @@ export interface UserScoreResponse {
 }
 
 export interface LeaderboardResponse {
-  total: string;
-  start: number;
+  totalUsers: number;
   limit: number;
-  data: Array<{
+  offset: number;
+  users: Array<{
     rank: number;
-    address: string;
-    score: string;
-    formattedLeaderboardScore?: string;
+    userAddress: string;
+    totalValueUSD: string;
+    leaderboardScore: string;
+    formattedLeaderboardScore: string;
+    leaderboardRank: number;
+    assetBalances: Array<{
+      asset: string;
+      vault: string;
+      totalAmountWei: string;
+      totalAmountUSD: string;
+      totalSharesWei: string;
+      totalSharesUSD: string;
+      depositCount: number;
+    }>;
   }>;
 }
 
