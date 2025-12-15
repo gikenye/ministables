@@ -78,37 +78,45 @@ export const NewProfile = ({
   useEffect(() => {
     if (!address || !isVerificationModalOpen || !encryptedUserId) return;
 
-    try {
-      const endpoint =
-        process.env.NEXT_PUBLIC_SELF_ENDPOINT ||
-        "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
+    const initSelfApp = async () => {
+      try {
+        const endpoint =
+          process.env.NEXT_PUBLIC_SELF_ENDPOINT ||
+          "0x4ea3a08de3d5cc74a5b2e20ba813af1ab3765956";
 
-      const hash = encryptedUserId.replace(/[^a-f0-9]/gi, '').toLowerCase().padEnd(32, '0');
-      const uuid = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(12, 15)}-8${hash.slice(16, 19)}-${hash.slice(20, 32)}`;
+        const encoder = new TextEncoder();
+        const data = encoder.encode(encryptedUserId);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        const uuid = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(12, 15)}-${(parseInt(hash[16], 16) & 0x3 | 0x8).toString(16)}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 
-      const app = new SelfAppBuilder({
-        version: 2,
-        appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Minilend",
-        scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-app",
-        endpoint: endpoint,
-        logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
-        userId: uuid,
-        endpointType: "celo",
-        userIdType: "uuid",
-        userDefinedData: "Enjoy saving together with Minilend!",
-        deeplinkCallback: `${window.location.origin}/`,
-        disclosures: {
-          minimumAge: 18,
-          ofac: true,
-          excludedCountries: excludedCountries,
-          nationality: true,
-        },
-      }).build();
-      setSelfApp(app);
-      setUniversalLink(getUniversalLink(app));
-    } catch (error) {
-      console.error("Failed to initialize Self app:", error);
-    }
+        const app = new SelfAppBuilder({
+          version: 2,
+          appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Minilend",
+          scope: process.env.NEXT_PUBLIC_SELF_SCOPE || "minilend-app",
+          endpoint: endpoint,
+          logoBase64: "https://i.postimg.cc/mrmVf9hm/self.png",
+          userId: uuid,
+          endpointType: "celo",
+          userIdType: "uuid",
+          userDefinedData: "Enjoy saving together with Minilend!",
+          deeplinkCallback: `${window.location.origin}/`,
+          disclosures: {
+            minimumAge: 18,
+            ofac: true,
+            excludedCountries: excludedCountries,
+            nationality: true,
+          },
+        }).build();
+        setSelfApp(app);
+        setUniversalLink(getUniversalLink(app));
+      } catch (error) {
+        console.error("Failed to initialize Self app:", error);
+      }
+    };
+
+    initSelfApp();
   }, [excludedCountries, address, isVerificationModalOpen, encryptedUserId]);
 
   useEffect(() => {
