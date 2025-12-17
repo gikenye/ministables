@@ -55,7 +55,7 @@ export async function fetchUSDExchangeRates(): Promise<Record<string, number> | 
       timestamp: now 
     });
     
-    console.log('Fetched fresh USD exchange rates, KES rate:', data.rates.KES);
+    // console.log('Fetched fresh USD exchange rates, KES rate:', data.rates.KES);
     return data.rates;
   } catch (error) {
     console.error('Failed to fetch USD exchange rates:', error);

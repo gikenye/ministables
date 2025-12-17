@@ -5,7 +5,6 @@
 
 // Environment variable configuration
 const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL || "";
-
 if (!process.env.ALLOCATE_API_URL) {
   console.warn(
     "ALLOCATE_API_URL environment variable not set. Using fallback URL for development."
@@ -18,6 +17,7 @@ export const API_ENDPOINTS = {
   USER_POSITIONS: "/api/user-balances",
   LEADERBOARD: "/api/leaderboard",
   GOALS: "/api/goals",
+  XP: "/api/xp",
 } as const;
 
 // Supported assets from the backend API
@@ -51,6 +51,8 @@ export interface AllocateResponse {
   shares: string;
   formattedShares: string;
   allocationTxHash: string;
+  goalCompleted?: boolean;
+  metaGoalId?: string;
 }
 
 // Multi-vault goal types
@@ -248,6 +250,24 @@ export interface LeaderboardResponse {
     }>;
   }>;
 }
+
+export interface UserXpResponse {
+  useraddress: string;
+  totalXP: number;
+  updatedAt: string;
+  xpHistory: Array<{
+    metaGoalId: string;
+    goalName: string;
+    contributionUSD: string;
+    completedAt: string;
+  }>;
+}
+
+export interface awardXPResponse {
+  awarded: boolean;
+  recipients: Record<string, number>;
+}
+
 
 export interface ApiError {
   error: string;
@@ -478,6 +498,29 @@ export class BackendApiClient {
     });
     return this.request<LeaderboardResponse>(
       `${API_ENDPOINTS.USER_POSITIONS}?${params}`
+    );
+  }
+
+  // XP API methods
+  async getUserXp(userAddress: string): Promise<UserXpResponse> {
+    return this.request<UserXpResponse>(
+      `${API_ENDPOINTS.XP}?userAddress=${userAddress}`
+    );
+  }
+  async getUserXpHistory(userAddress: string): Promise<UserXpResponse> {
+    return this.request<UserXpResponse>(
+      `${API_ENDPOINTS.XP}?action=history&userAddress=${userAddress}`
+    );
+  }
+  //award xp
+
+  async awardXP(metaGoalId: string): Promise<awardXPResponse> {
+    return this.request<awardXPResponse>(
+      `${API_ENDPOINTS.XP}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ metaGoalId }),
+      }
     );
   }
 }

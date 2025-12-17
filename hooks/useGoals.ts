@@ -81,9 +81,6 @@ export function useGoals(category?: string): UseGoalsResult {
       }
       
       const data = await response.json();
-      console.log('API Response:', data); // Debug log
-      console.log('Goals array:', data.goals); // Debug log
-      console.log('Goals array length:', data.goals?.length); // Debug log
       const userGoals = data.goals || [];
       const allGoals: FrontendGoal[] = [];
       

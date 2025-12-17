@@ -76,10 +76,16 @@ import {
 } from "@/components/common";
 import { ClanTab } from "@/components/clan/ClanTab";
 import { JoinGoalModal } from "@/components/clan/JoinGoalModal";
+import { CreateGroupGoalModal } from "@/components/clan/CreateGroupGoalModal";
 
 // Import custom hooks for API integration
 import { useExchangeRates } from "@/hooks/useExchangeRates";
-import { backendApiClient, type GroupSavingsGoal, type CreateGoalRequest, type SupportedAsset } from "@/lib/services/backendApiService";
+import {
+  backendApiClient,
+  type GroupSavingsGoal,
+  type CreateGoalRequest,
+  type SupportedAsset,
+} from "@/lib/services/backendApiService";
 // import { useBlockchainGoals } from "@/hooks/useBlockchainGoals"; // Removed for production deployment
 import {
   reportError,
@@ -110,7 +116,7 @@ import { Logo } from "@/components/Logo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // thirdweb handles transaction modals; no custom tx modal
-import SaveMoneyModal from "@/components/SaveMoneyModal";
+
 
 // Import chain configuration utilities
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
@@ -1603,7 +1609,8 @@ export default function AppPage() {
       const data = await backendApiClient.getUserPortfolio(account.address);
       setUserPortfolio(data);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       setPortfolioError(errorMessage);
       setUserPortfolio({
         totalValueUSD: "0",
@@ -1631,12 +1638,15 @@ export default function AppPage() {
   const [userGoals, setUserGoals] = useState<any[]>([]);
   const [goalsLoading, setGoalsLoading] = useState(false);
   const [goalsError, setGoalsError] = useState<string | null>(null);
-  
+
   // Leaderboard from backend API
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
-  const [userScore, setUserScore] = useState<{rank: number; formattedLeaderboardScore: string} | null>(null);
+  const [userScore, setUserScore] = useState<{
+    rank: number;
+    formattedLeaderboardScore: string;
+  } | null>(null);
 
   const { rates, getKESRate, loading: ratesLoading } = useExchangeRates();
 
@@ -1645,13 +1655,27 @@ export default function AppPage() {
     setGoalsLoading(true);
     setGoalsError(null);
     try {
-      console.log('Fetching goals for address:', account.address);
-      const goals = await backendApiClient.getGoalsWithProgress(account.address);
-      console.log('Received goals:', goals);
+      console.log("Fetching goals for address:", account.address);
+      const goals = await backendApiClient.getGoalsWithProgress(
+        account.address
+      );
       setUserGoals(goals);
+      
+      // Award XP for completed goals
+      goals.forEach(goal => {
+        if (goal.progressPercent >= 100 && goal.metaGoalId) {
+          fetch('/api/xp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metaGoalId: goal.metaGoalId }),
+          }).catch(() => {});
+        }
+      });
     } catch (error) {
-      console.error('Error fetching goals:', error);
-      setGoalsError(error instanceof Error ? error.message : "Failed to load goals");
+      console.error("Error fetching goals:", error);
+      setGoalsError(
+        error instanceof Error ? error.message : "Failed to load goals"
+      );
       setUserGoals([] as any[]);
     } finally {
       setGoalsLoading(false);
@@ -1664,29 +1688,39 @@ export default function AppPage() {
     try {
       const [leaderboardData, userPortfolioData] = await Promise.all([
         backendApiClient.getLeaderboard(0, 10),
-        account?.address ? backendApiClient.getUserPortfolio(account.address) : null
+        account?.address
+          ? backendApiClient.getUserPortfolio(account.address)
+          : null,
       ]);
-      setLeaderboard(leaderboardData.users.map((entry, index) => ({
-        ...entry,
-        isCurrentUser: account?.address?.toLowerCase() === entry.userAddress?.toLowerCase()
-      })));
+      setLeaderboard(
+        leaderboardData.users.map((entry, index) => ({
+          ...entry,
+          isCurrentUser:
+            account?.address?.toLowerCase() ===
+            entry.userAddress?.toLowerCase(),
+        }))
+      );
       // Find user's actual rank from leaderboard data
-      const userEntry = leaderboardData.users.find(entry => 
-        account?.address?.toLowerCase() === entry.userAddress?.toLowerCase()
+      const userEntry = leaderboardData.users.find(
+        (entry) =>
+          account?.address?.toLowerCase() === entry.userAddress?.toLowerCase()
       );
       if (userEntry) {
         setUserScore({
           rank: userEntry.rank,
-          formattedLeaderboardScore: userEntry.formattedLeaderboardScore
+          formattedLeaderboardScore: userEntry.formattedLeaderboardScore,
         });
       } else if (userPortfolioData) {
         setUserScore({
           rank: userPortfolioData.leaderboardRank,
-          formattedLeaderboardScore: userPortfolioData.formattedLeaderboardScore
+          formattedLeaderboardScore:
+            userPortfolioData.formattedLeaderboardScore,
         });
       }
     } catch (error) {
-      setLeaderboardError(error instanceof Error ? error.message : "Failed to load leaderboard");
+      setLeaderboardError(
+        error instanceof Error ? error.message : "Failed to load leaderboard"
+      );
       setLeaderboard([]);
     } finally {
       setLeaderboardLoading(false);
@@ -1716,7 +1750,6 @@ export default function AppPage() {
   }, [account?.address]);
 
   // State for the new design
-  const [activeModal, setActiveModal] = useState<string | null>(null);
   const [saveActionsModalOpen, setSaveActionsModalOpen] = useState(false);
   const [showBalances, setShowBalances] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
@@ -1728,19 +1761,26 @@ export default function AppPage() {
   const [groupGoals, setGroupGoals] = useState<GroupSavingsGoal[]>([]);
   const [groupGoalsLoading, setGroupGoalsLoading] = useState(false);
   const [groupGoalsError, setGroupGoalsError] = useState<string | null>(null);
-  const [myGroups, setMyGroups] = useState<{ total: number; public: { total: number; goals: GroupSavingsGoal[] }; private: { total: number; goals: GroupSavingsGoal[] } } | null>(null);
+  const [myGroups, setMyGroups] = useState<{
+    total: number;
+    public: { total: number; goals: GroupSavingsGoal[] };
+    private: { total: number; goals: GroupSavingsGoal[] };
+  } | null>(null);
   const [myGroupsLoading, setMyGroupsLoading] = useState(false);
-  const [createGroupGoalModalOpen, setCreateGroupGoalModalOpen] = useState(false);
+  const [createGroupGoalModalOpen, setCreateGroupGoalModalOpen] =
+    useState(false);
   const [groupGoalForm, setGroupGoalForm] = useState({
     name: "",
     amount: "",
     timeline: "3",
     isPublic: true,
   });
+  const [createGroupGoalLoading, setCreateGroupGoalLoading] = useState(false);
 
   // Join Goal modal states
   const [joinGoalModalOpen, setJoinGoalModalOpen] = useState(false);
-  const [selectedGoalToJoin, setSelectedGoalToJoin] = useState<GroupSavingsGoal | null>(null);
+  const [selectedGoalToJoin, setSelectedGoalToJoin] =
+    useState<GroupSavingsGoal | null>(null);
   const [joinGoalLoading, setJoinGoalLoading] = useState(false);
   const [joinGoalError, setJoinGoalError] = useState<string | null>(null);
 
@@ -1774,6 +1814,10 @@ export default function AppPage() {
     transactionHash?: string;
   } | null>(null);
   const [selectedDepositToken, setSelectedDepositToken] = useState<any>(null);
+  const [goalCompletedCelebration, setGoalCompletedCelebration] = useState<{
+    goalName: string;
+    metaGoalId: string;
+  } | null>(null);
 
   // Mobile money onramp states
   const [showOnrampModal, setShowOnrampModal] = useState(false);
@@ -1789,6 +1833,7 @@ export default function AppPage() {
     timeline: "3", // months
     category: "custom",
   });
+  const [customGoalLoading, setCustomGoalLoading] = useState(false);
 
   // Goals data is now fetched from API via useGoals hook above
 
@@ -1857,7 +1902,9 @@ export default function AppPage() {
       const response = await backendApiClient.getPublicGoals();
       setGroupGoals(response.goals);
     } catch (error) {
-      setGroupGoalsError(error instanceof Error ? error.message : "Failed to load group goals");
+      setGroupGoalsError(
+        error instanceof Error ? error.message : "Failed to load group goals"
+      );
       setGroupGoals([]);
     } finally {
       setGroupGoalsLoading(false);
@@ -1883,6 +1930,8 @@ export default function AppPage() {
   };
 
   const handleCreateGroupGoal = async () => {
+    if (createGroupGoalLoading) return;
+
     if (!groupGoalForm.name.trim() || !groupGoalForm.amount.trim()) {
       reportWarning("Goal name and amount are required", {
         component: "AppPage",
@@ -1917,7 +1966,7 @@ export default function AppPage() {
       return;
     }
 
-    const usdAmount = kesAmount / exchangeRate;
+    const usdAmount = Math.round((kesAmount / exchangeRate) * 100) / 100;
 
     const createRequest: CreateGoalRequest = {
       name: groupGoalForm.name,
@@ -1928,11 +1977,18 @@ export default function AppPage() {
       isPublic: groupGoalForm.isPublic,
     };
 
+    setCreateGroupGoalLoading(true);
     try {
-      await backendApiClient.createGroupGoal(createRequest);
+      const response = await fetch("/api/user-balances?action=create-group-goal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createRequest),
+      });
+      if (!response.ok) throw new Error("Failed to create group goal");
+      await response.json();
       setCreateGroupGoalModalOpen(false);
       setGroupGoalForm({ name: "", amount: "", timeline: "3", isPublic: true });
-      fetchGroupGoals(); // Refresh the list
+      fetchGroupGoals();
       reportInfo("Group goal created successfully", {
         component: "AppPage",
         operation: "handleCreateGroupGoal",
@@ -1943,6 +1999,8 @@ export default function AppPage() {
         operation: "handleCreateGroupGoal",
         additional: { error },
       });
+    } finally {
+      setCreateGroupGoalLoading(false);
     }
   };
 
@@ -1954,7 +2012,7 @@ export default function AppPage() {
       });
       return;
     }
-    
+
     setSelectedGoalToJoin(goal);
     setJoinGoalModalOpen(true);
     setJoinGoalError(null);
@@ -1981,14 +2039,23 @@ export default function AppPage() {
       const usdAmount = kesAmount / exchangeRate;
 
       // Get best stablecoin for deposit
-      const bestToken = await getBestStablecoinForDeposit(account.address, chain.id);
+      const bestToken = await getBestStablecoinForDeposit(
+        account.address,
+        chain.id
+      );
       if (!bestToken) {
-        throw new Error("No stablecoin with balance available. Please add funds to your wallet first.");
+        throw new Error(
+          "No stablecoin with balance available. Please add funds to your wallet first."
+        );
       }
 
       // Check if user has sufficient balance
       if (bestToken.balance < usdAmount) {
-        throw new Error(`Insufficient balance. You have $${bestToken.balance.toFixed(2)} but need $${usdAmount.toFixed(2)}`);
+        throw new Error(
+          `Insufficient balance. You have $${bestToken.balance.toFixed(
+            2
+          )} but need $${usdAmount.toFixed(2)}`
+        );
       }
 
       // Prepare deposit transaction
@@ -2005,7 +2072,10 @@ export default function AppPage() {
         throw new Error("This chain is not yet supported for deposits");
       }
 
-      const amountWei = parseUnits(usdAmount.toString(), selectedToken.decimals);
+      const amountWei = parseUnits(
+        usdAmount.toString(),
+        selectedToken.decimals
+      );
       const vaultAddress = getVaultAddress(chainId, selectedToken.symbol);
 
       const vaultContract = getContract({
@@ -2057,7 +2127,9 @@ export default function AppPage() {
         // Validate that the goal has the required onchain goal ID
         if (!selectedGoalToJoin?.goalIds) {
           setJoinGoalLoading(false);
-          setJoinGoalError("Goal is missing required onchain goal configuration");
+          setJoinGoalError(
+            "Goal is missing required onchain goal configuration"
+          );
           return;
         }
 
@@ -2070,7 +2142,9 @@ export default function AppPage() {
         const targetGoalId = selectedGoalToJoin.goalIds[mappedAsset];
         if (!targetGoalId) {
           setJoinGoalLoading(false);
-          setJoinGoalError(`Goal is missing required onchain goal ID for ${mappedAsset}`);
+          setJoinGoalError(
+            `Goal is missing required onchain goal ID for ${mappedAsset}`
+          );
           return;
         }
 
@@ -2098,7 +2172,8 @@ export default function AppPage() {
         });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to join group goal";
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to join group goal";
       setJoinGoalError(errorMessage);
       reportError("Failed to join group goal", {
         component: "AppPage",
@@ -2109,8 +2184,6 @@ export default function AppPage() {
       setJoinGoalLoading(false);
     }
   };
-
-
 
   const handleSaveActionSelect = (actionId: string) => {
     setSaveActionsModalOpen(false);
@@ -2153,6 +2226,8 @@ export default function AppPage() {
   };
 
   const handleCreateCustomGoal = async () => {
+    if (customGoalLoading) return;
+
     if (!customGoalForm.name.trim() || !customGoalForm.amount.trim()) {
       reportWarning("Goal name and amount are required", {
         component: "AppPage",
@@ -2198,10 +2273,16 @@ export default function AppPage() {
       isPublic: false,
     };
 
+    setCustomGoalLoading(true);
     try {
       await backendApiClient.createGroupGoal(createRequest);
       setCustomGoalModalOpen(false);
-      setCustomGoalForm({ name: "", amount: "", timeline: "3", category: customGoalForm.category });
+      setCustomGoalForm({
+        name: "",
+        amount: "",
+        timeline: "3",
+        category: customGoalForm.category,
+      });
       fetchUserGoals();
       reportInfo("Goal created successfully", {
         component: "AppPage",
@@ -2213,6 +2294,8 @@ export default function AppPage() {
         operation: "handleCreateCustomGoal",
         additional: { error },
       });
+    } finally {
+      setCustomGoalLoading(false);
     }
   };
 
@@ -2366,14 +2449,19 @@ export default function AppPage() {
         );
 
         // Map token symbol to supported asset
-        const mappedAsset = mapTokenSymbolToAsset(selectedToken?.symbol || defaultToken.symbol);
+        const mappedAsset = mapTokenSymbolToAsset(
+          selectedToken?.symbol || defaultToken.symbol
+        );
         if (!mappedAsset) {
-          throw new Error(`Unsupported token: ${selectedToken?.symbol || defaultToken.symbol}`);
+          throw new Error(
+            `Unsupported token: ${selectedToken?.symbol || defaultToken.symbol}`
+          );
         }
 
-        const targetGoalId = goalConfirmationOpen && selectedGoal?.onChainGoals?.[mappedAsset] 
-          ? selectedGoal.onChainGoals[mappedAsset] 
-          : undefined;
+        const targetGoalId =
+          goalConfirmationOpen && selectedGoal?.onChainGoals?.[mappedAsset]
+            ? selectedGoal.onChainGoals[mappedAsset]
+            : undefined;
 
         const allocationRequest = {
           asset: mappedAsset,
@@ -2388,16 +2476,21 @@ export default function AppPage() {
           goalConfirmationOpen,
           selectedGoalOnChainId: selectedGoal?.onChainGoals?.[mappedAsset],
           selectedGoalTitle: selectedGoal?.title,
-          isQuickSave: !allocationRequest.targetGoalId
+          isQuickSave: !allocationRequest.targetGoalId,
         });
 
         try {
-          const allocationResult = await backendApiClient.allocateDeposit(allocationRequest);
-          
+          const allocationResult = await backendApiClient.allocateDeposit(
+            allocationRequest
+          );
+
           console.log("📊 Allocation Result:", allocationResult);
-          
+
           if (allocationResult && allocationResult.success) {
-            console.log("✅ Deposit attached to goalId:", allocationResult.goalId || 'quicksave');
+            console.log(
+              "✅ Deposit attached to goalId:",
+              allocationResult.goalId || "quicksave"
+            );
             reportInfo("Backend allocation completed successfully", {
               component: "AppPage",
               operation: "handleDepositSuccess",
@@ -2410,13 +2503,41 @@ export default function AppPage() {
                 targetGoalId: allocationRequest.targetGoalId,
               },
             });
+
+            if (allocationResult.goalCompleted && allocationResult.metaGoalId) {
+              const xpResponse = await fetch('/api/xp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ metaGoalId: allocationResult.metaGoalId }),
+              });
+              const xpData = await xpResponse.json();
+              
+              if (xpData.awarded) {
+                const xpEarned = Object.values(xpData.recipients)[0];
+                reportInfo(`🎉 Goal completed! You earned ${xpEarned} XP!`, {
+                  component: "AppPage",
+                  operation: "handleDepositSuccess",
+                });
+              }
+              
+              setGoalCompletedCelebration({
+                goalName: selectedGoal?.title || selectedGoal?.name || 'Goal',
+                metaGoalId: allocationResult.metaGoalId,
+              });
+            }
           } else {
-            console.warn("⚠️ Allocation completed but with issues:", allocationResult);
+            console.warn(
+              "⚠️ Allocation completed but with issues:",
+              allocationResult
+            );
             reportWarning("Deposit successful but allocation may have issues", {
               component: "AppPage",
               operation: "handleDepositSuccess",
               transactionHash: receipt.transactionHash,
-              additional: { allocationResult, targetGoalId: allocationRequest.targetGoalId }
+              additional: {
+                allocationResult,
+                targetGoalId: allocationRequest.targetGoalId,
+              },
             });
           }
         } catch (allocationError) {
@@ -2426,7 +2547,7 @@ export default function AppPage() {
             operation: "handleDepositSuccess",
             transactionHash: receipt.transactionHash,
             error: allocationError,
-            additional: { targetGoalId: allocationRequest.targetGoalId }
+            additional: { targetGoalId: allocationRequest.targetGoalId },
           });
         }
       }
@@ -2504,7 +2625,9 @@ export default function AppPage() {
 
     if (!bestToken) {
       console.log("❌ No stablecoin with balance available");
-      setDepositError("You have $0 in your wallet. To deposit, please add funds using Mobile Money or transfer from another wallet.");
+      setDepositError(
+        "You have $0 in your wallet. To deposit, please add funds using Mobile Money or transfer from another wallet."
+      );
       setIsDepositLoading(false);
       return;
     }
@@ -2865,9 +2988,12 @@ export default function AppPage() {
       metaGoalId: goal.metaGoalId,
       title: goal.name,
       name: goal.name,
-      description: goal.targetDate && goal.targetDate !== "0" 
-        ? `Target: $${goal.targetAmountUSD} by ${new Date(goal.targetDate).toLocaleDateString()}` 
-        : `Target: $${goal.targetAmountUSD}`,
+      description:
+        goal.targetDate && goal.targetDate !== "0"
+          ? `Target: $${goal.targetAmountUSD} by ${new Date(
+              goal.targetDate
+            ).toLocaleDateString()}`
+          : `Target: $${goal.targetAmountUSD}`,
       currentAmount: goal.totalProgressUSD?.toString() || "0",
       targetAmount: goal.targetAmountUSD?.toString() || "0",
       progress: Math.min(goal.progressPercent || 0, 100),
@@ -2891,8 +3017,6 @@ export default function AppPage() {
 
   const combinedLoading = goalsLoading || portfolioLoading;
   const combinedError = goalsError || portfolioError;
-
-
 
   const closeAllQuickSaveModals = () => {
     setQuickSaveDetailsOpen(false);
@@ -3344,7 +3468,9 @@ export default function AppPage() {
                               <div
                                 key={goal.metaGoalId || goal.id}
                                 role="gridcell"
-                                aria-label={`Goal ${index + 1}: ${goal.name || goal.title}`}
+                                aria-label={`Goal ${index + 1}: ${
+                                  goal.name || goal.title
+                                }`}
                               >
                                 <GoalCard
                                   goal={goal}
@@ -3786,146 +3912,24 @@ export default function AppPage() {
           onCreateGoal={handleCreateCustomGoal}
           form={customGoalForm}
           setForm={setCustomGoalForm}
-          isLoading={false}
+          isLoading={customGoalLoading}
           error={null}
           exchangeRate={getKESRate()}
         />
 
-        {/* Create Group Goal Modal */}
-        <BottomSheet
+        {/* Create Group Goal Modal - Using improved mobile-optimized component */}
+        <CreateGroupGoalModal
           isOpen={createGroupGoalModalOpen}
           onClose={() => setCreateGroupGoalModalOpen(false)}
-          maxHeight="max-h-[95vh]"
-        >
-          <ModalHeader
-            title="Create Group Goal"
-            onClose={() => setCreateGroupGoalModalOpen(false)}
-          />
-          <div className="bg-gray-800/20 backdrop-blur-sm p-4 space-y-4">
-            <div className="text-center py-2">
-              <div className="text-2xl mb-2">👥</div>
-              <h3 className="text-lg font-bold text-white mb-1">
-                Create Group Savings Goal
-              </h3>
-              <p className="text-sm text-gray-400">
-                Invite friends and family to save together
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  Goal Name
-                </label>
-                <input
-                  type="text"
-                  value={groupGoalForm.name}
-                  onChange={(e) => setGroupGoalForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Family Vacation, Wedding Fund"
-                  className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
-                  maxLength={50}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  Target Amount (KES)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={groupGoalForm.amount}
-                  onChange={(e) => setGroupGoalForm(prev => ({ ...prev, amount: e.target.value.replace(/[^0-9]/g, "") }))}
-                  placeholder="0"
-                  className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-center text-xl font-bold"
-                />
-                {groupGoalForm.amount && getKESRate() && (
-                  <div className="text-center mt-2 text-sm text-gray-400">
-                    ≈ ${(parseFloat(groupGoalForm.amount) / getKESRate()).toFixed(2)} USD
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  Timeline
-                </label>
-                <select
-                  value={groupGoalForm.timeline}
-                  onChange={(e) => setGroupGoalForm(prev => ({ ...prev, timeline: e.target.value }))}
-                  className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400"
-                >
-                  <option value="3">3 months</option>
-                  <option value="6">6 months</option>
-                  <option value="12">12 months</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg">
-                <div>
-                  <div className="text-white font-medium">{groupGoalForm.isPublic ? 'Public Goal' : 'Private Goal'}</div>
-                  <div className="text-xs text-gray-400">{groupGoalForm.isPublic ? 'Anyone can discover and join' : 'Invite only'}</div>
-                </div>
-                <div
-                  className={`relative w-12 h-6 rounded-full cursor-pointer transition-all ${
-                    groupGoalForm.isPublic ? 'bg-cyan-500' : 'bg-gray-600'
-                  }`}
-                  onClick={() => setGroupGoalForm(prev => ({ ...prev, isPublic: !prev.isPublic }))}
-                >
-                  <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                      groupGoalForm.isPublic ? "translate-x-7" : "translate-x-1"
-                    }`}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <ActionButton
-                onClick={() => setCreateGroupGoalModalOpen(false)}
-                variant="outline"
-                size="lg"
-                className="flex-1"
-              >
-                Cancel
-              </ActionButton>
-              <ActionButton
-                onClick={handleCreateGroupGoal}
-                variant="primary"
-                size="lg"
-                className="flex-1"
-                disabled={!groupGoalForm.name.trim() || !groupGoalForm.amount.trim() || !getKESRate()}
-              >
-                Create Goal
-              </ActionButton>
-            </div>
-          </div>
-        </BottomSheet>
-
-        {/* Keep existing modals for functionality */}
-        <SaveMoneyModal
-          isOpen={activeModal === "save"}
-          onClose={() => setActiveModal(null)}
-          amount={quickSaveAmount || "100"}
-          onDeposit={handleQuickSaveDeposit}
-          isLoading={isDepositLoading}
-          error={depositError}
-          transactionStatus={transactionStatus}
-          tokenSymbol={
-            selectedDepositToken?.symbol || defaultToken?.symbol || "USDC"
-          }
-          depositSuccess={depositSuccess}
-          account={account}
-          tokens={tokens || []}
-          tokenInfos={tokenInfos || {}}
-          supportedStablecoins={supportedStablecoins}
-          copied={copied}
-          setCopied={setCopied}
-          setSelectedTokenForOnramp={setSelectedTokenForOnramp}
-          setShowOnrampModal={setShowOnrampModal}
-          goal={selectedGoal}
+          onCreateGroupGoal={handleCreateGroupGoal}
+          groupGoalForm={groupGoalForm}
+          setGroupGoalForm={setGroupGoalForm}
+          isLoading={createGroupGoalLoading}
+          error={null}
+          exchangeRate={getKESRate()}
         />
+
+
 
         {/* Onramp Modal for Mobile Money Deposits */}
         <OnrampDepositModal
