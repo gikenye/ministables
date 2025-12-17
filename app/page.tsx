@@ -117,7 +117,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // thirdweb handles transaction modals; no custom tx modal
 
-
 // Import chain configuration utilities
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
@@ -1660,17 +1659,28 @@ export default function AppPage() {
         account.address
       );
       setUserGoals(goals);
-      
+
       // Award XP for completed goals
-      goals.forEach(goal => {
-        if (goal.progressPercent >= 100 && goal.metaGoalId) {
-          fetch('/api/xp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ metaGoalId: goal.metaGoalId }),
-          }).catch(() => {});
-        }
-      });
+      const completedGoals = goals.filter(
+        (goal) => goal.progressPercent >= 100 && goal.metaGoalId
+      );
+      if (completedGoals.length > 0) {
+        Promise.all(
+          completedGoals.map((goal) =>
+            fetch("api/xp", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ metaGoalId: goal.metaGoalId }),
+            }).catch((err) => {
+              reportWarning("failed to award XP for completed goal", {
+                component: "AppPage",
+                operation: "fetchUserGoals",
+                additional: { metaGoalId: goal.metaGoalId, error: err },
+              });
+            })
+          )
+        );
+      }
     } catch (error) {
       console.error("Error fetching goals:", error);
       setGoalsError(
@@ -1979,11 +1989,14 @@ export default function AppPage() {
 
     setCreateGroupGoalLoading(true);
     try {
-      const response = await fetch("/api/user-balances?action=create-group-goal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createRequest),
-      });
+      const response = await fetch(
+        "/api/user-balances?action=create-group-goal",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(createRequest),
+        }
+      );
       if (!response.ok) throw new Error("Failed to create group goal");
       await response.json();
       setCreateGroupGoalModalOpen(false);
@@ -2505,13 +2518,15 @@ export default function AppPage() {
             });
 
             if (allocationResult.goalCompleted && allocationResult.metaGoalId) {
-              const xpResponse = await fetch('/api/xp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ metaGoalId: allocationResult.metaGoalId }),
+              const xpResponse = await fetch("/api/xp", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  metaGoalId: allocationResult.metaGoalId,
+                }),
               });
               const xpData = await xpResponse.json();
-              
+
               if (xpData.awarded) {
                 const xpEarned = Object.values(xpData.recipients)[0];
                 reportInfo(`🎉 Goal completed! You earned ${xpEarned} XP!`, {
@@ -2519,9 +2534,9 @@ export default function AppPage() {
                   operation: "handleDepositSuccess",
                 });
               }
-              
+
               setGoalCompletedCelebration({
-                goalName: selectedGoal?.title || selectedGoal?.name || 'Goal',
+                goalName: selectedGoal?.title || selectedGoal?.name || "Goal",
                 metaGoalId: allocationResult.metaGoalId,
               });
             }
@@ -3928,8 +3943,6 @@ export default function AppPage() {
           error={null}
           exchangeRate={getKESRate()}
         />
-
-
 
         {/* Onramp Modal for Mobile Money Deposits */}
         <OnrampDepositModal
