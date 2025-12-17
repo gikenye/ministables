@@ -71,6 +71,10 @@ export const NewProfile = ({
   const { user, loading: userLoading } = useUser();
   const { goals, stats, loading: goalsLoading } = useGoals();
 
+  // XP state
+  const [xpData, setXpData] = useState<{ totalXP: number; xpHistory: any[] } | null>(null);
+  const [xpLoading, setXpLoading] = useState(false);
+
 
   // Self verification setup
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
@@ -144,6 +148,28 @@ export const NewProfile = ({
     };
 
     fetchUserId();
+  }, [address]);
+
+  // Fetch XP data
+  useEffect(() => {
+    if (!address) return;
+
+    const fetchXpData = async () => {
+      setXpLoading(true);
+      try {
+        const response = await fetch(`/api/xp?userAddress=${address}`);
+        if (response.ok) {
+          const data = await response.json();
+          setXpData(data);
+        }
+      } catch (error) {
+        console.error('Error fetching XP data:', error);
+      } finally {
+        setXpLoading(false);
+      }
+    };
+
+    fetchXpData();
   }, [address]);
 
   useEffect(() => {
@@ -312,9 +338,12 @@ export const NewProfile = ({
 
   // Calculate stats from real data
   const totalSaved = stats?.totalSaved || "0";
-  const goalsCompleted = stats?.completedGoals || 0;
+  const totalXP = xpData?.totalXP || 0;
+  const goalsCompleted = xpData?.xpHistory 
+    ? new Set(xpData.xpHistory.map(item => item.metaGoalId)).size 
+    : 0;
 
-  const loading = userLoading || goalsLoading;
+  const loading = userLoading || goalsLoading || xpLoading;
 
   return (
     <div className={`min-h-screen ${className}`}>
@@ -333,9 +362,9 @@ export const NewProfile = ({
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-white">
-                  {showBalance ? `$${totalSaved}` : "••••"}
+                  {xpLoading ? "..." : totalXP.toFixed(2)}
                 </p>
-                <p className="text-xs text-gray-400">Total Saved</p>
+                <p className="text-xs text-gray-400">Total XP</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-white">

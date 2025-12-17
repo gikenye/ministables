@@ -37,3 +37,13 @@ export function formatAmount(amount: string, decimals = 6): string {
     return "0.00"
   }
 }
+
+/**
+ * Convert KES amount to USD with consistent 2-decimal rounding
+ * @param kesAmount - Amount in KES
+ * @param exchangeRate - KES to USD exchange rate
+ * @returns USD amount rounded to 2 decimals
+ */
+export function formatUsdFromKes(kesAmount: number, exchangeRate: number): number {
+  return Number((kesAmount / exchangeRate).toFixed(2));
+}
