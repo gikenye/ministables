@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ActionButton, BottomSheet, ModalHeader } from "@/components/ui";
+import { formatUsdFromKes } from "@/lib/utils";
 
 interface CreateGroupGoalModalProps {
   isOpen: boolean;
@@ -92,7 +93,7 @@ export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
     if (!exchangeRate || !groupGoalForm.amount) return null;
     const kesAmount = parseFloat(groupGoalForm.amount);
     if (isNaN(kesAmount)) return null;
-    return (kesAmount / exchangeRate).toFixed(2);
+    return formatUsdFromKes(kesAmount, exchangeRate).toFixed(2);
   };
 
   // Reset step when modal closes

@@ -122,7 +122,7 @@ import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
 import { vaultService } from "@/lib/services/vaultService";
 import type { VaultPosition, VaultDeposit } from "@/lib/services/vaultService";
-import { formatAmount } from "@/lib/utils";
+import { formatAmount, formatUsdFromKes } from "@/lib/utils";
 import { getBestStablecoinForDeposit } from "@/lib/services/balanceService";
 import { mapTokenSymbolToAsset } from "@/lib/services/backendApiService";
 
@@ -1667,7 +1667,7 @@ export default function AppPage() {
       if (completedGoals.length > 0) {
         Promise.all(
           completedGoals.map((goal) =>
-            fetch("api/xp", {
+            fetch("/api/xp", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ metaGoalId: goal.metaGoalId }),
@@ -1976,7 +1976,7 @@ export default function AppPage() {
       return;
     }
 
-    const usdAmount = Math.round((kesAmount / exchangeRate) * 100) / 100;
+    const usdAmount = formatUsdFromKes(kesAmount, exchangeRate);
 
     const createRequest: CreateGoalRequest = {
       name: groupGoalForm.name,
@@ -2049,7 +2049,7 @@ export default function AppPage() {
       }
 
       const kesAmount = parseFloat(amount);
-      const usdAmount = kesAmount / exchangeRate;
+      const usdAmount = formatUsdFromKes(kesAmount, exchangeRate);
 
       // Get best stablecoin for deposit
       const bestToken = await getBestStablecoinForDeposit(
@@ -2275,7 +2275,7 @@ export default function AppPage() {
       return;
     }
 
-    const usdAmount = kesAmount / exchangeRate;
+    const usdAmount = formatUsdFromKes(kesAmount, exchangeRate);
 
     const createRequest: CreateGoalRequest = {
       name: customGoalForm.name,
