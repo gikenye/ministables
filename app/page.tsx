@@ -2528,7 +2528,7 @@ export default function AppPage() {
               const xpData = await xpResponse.json();
 
               if (xpData.awarded) {
-                const xpEarned = Object.values(xpData.recipients)[0];
+                const xpEarned = xpData.recipients ? Object.values(xpData.recipients)[0] : 0;
                 reportInfo(`🎉 Goal completed! You earned ${xpEarned} XP!`, {
                   component: "AppPage",
                   operation: "handleDepositSuccess",
