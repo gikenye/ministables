@@ -150,25 +150,6 @@ const GroupGoalCard = ({
     return `$${usdAmount.toLocaleString()}`;
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "travel":
-        return "✈️";
-      case "education":
-        return "🎓";
-      case "business":
-        return "💼";
-      case "health":
-        return "🏥";
-      case "home":
-        return "🏠";
-      case "emergency":
-        return "🚨";
-      default:
-        return "💰";
-    }
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -328,31 +309,6 @@ export const ClanTab: React.FC<ClanTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Professional Header */}
-      {/* <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-cyan-400/20 rounded-lg flex items-center justify-center">
-            <Users className="w-5 h-5 text-cyan-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Group Savings</h2>
-            <p className="text-sm text-gray-400">
-              Financial goals achieved together
-            </p>
-          </div>
-        </div>
-
-        <ActionButton
-          onClick={onCreateGroupGoal}
-          variant="primary"
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Create Goal</span>
-        </ActionButton>
-      </div> */}
-
       {/* Financial Summary */}
       <FinancialSummary
         account={account}
@@ -472,24 +428,8 @@ export const ClanTab: React.FC<ClanTabProps> = ({
 
       {activeSection === "availableGoals" && (
         <div className="space-y-6">
-          {/* Curated Available Goals Section - Financial Focus */}
           <div>
-            {/* Financial security notice */}
-            {/* <div className="bg-cyan-400/10 rounded-lg p-4 mb-6 border border-cyan-400/20">
-              <div className="flex items-start gap-3">
-                <Shield className="w-5 h-5 text-cyan-400 mt-0.5" />
-                <div>
-                  <h4 className="text-white text-sm font-medium mb-1">
-                    Secure Group Savings
-                  </h4>
-                  <p className="text-xs text-gray-300">
-                    All group goals are secured with smart contracts and can be
-                    audited on-chain. Only join groups from trusted sources.
-                  </p>
-                </div>
-              </div>
-            </div> */}
-
+          
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">
                 Available Savings Goals

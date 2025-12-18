@@ -525,6 +525,16 @@ export class BackendApiClient {
       }
     );
   }
+
+  async awardVerificationXP(attestationId: string, walletAddress: string): Promise<{ success: boolean; awarded: boolean; totalXP: number }> {
+    return this.request(
+      `${API_ENDPOINTS.XP}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ attestationId, walletAddress }),
+      }
+    );
+  }
 }
 
 // Default API client instance
