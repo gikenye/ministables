@@ -4,8 +4,8 @@
  */
 
 // Environment variable configuration
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL || "";
-if (!process.env.ALLOCATE_API_URL) {
+const ALLOCATE_API_URL = process.env.NEXT_PUBLIC_ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
+if (!process.env.NEXT_PUBLIC_ALLOCATE_API_URL && !process.env.ALLOCATE_API_URL) {
   console.warn(
     "ALLOCATE_API_URL environment variable not set. Using fallback URL for development."
   );
@@ -98,6 +98,7 @@ export interface GoalDetailsResponse {
   createdAt: string;
   updatedAt: string;
   isPublic?: boolean;
+  inviteLink?: string;
   cachedMembers?: {
     totalContributedUSD: number;
     progressPercent: number;
@@ -128,6 +129,7 @@ export interface GroupSavingsGoal {
   progressPercent?: number;
   totalProgressUSD?: number;
   participants?: string[];
+  inviteLink?: string;
 }
 
 export interface GroupSavingsResponse {

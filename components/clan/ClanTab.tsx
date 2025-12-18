@@ -11,6 +11,9 @@ import {
   DollarSign,
   Activity,
   Shield,
+  X,
+  Share2,
+  TrendingUp,
 } from "lucide-react";
 import { ActionButton, InfoCard, ProgressBar } from "@/components/ui";
 import { GroupSavingsGoal } from "@/lib/services/backendApiService";
@@ -27,6 +30,101 @@ interface ClanTabProps {
   onRefreshGroups: () => void;
   exchangeRate?: number;
 }
+
+// Goal Details Modal
+const GoalDetailsModal = ({
+  goal,
+  onClose,
+  exchangeRate,
+}: {
+  goal: GroupSavingsGoal;
+  onClose: () => void;
+  exchangeRate?: number;
+}) => {
+  const progress = goal.progressPercent || 0;
+  const formatAmount = (usdAmount: number) => {
+    if (exchangeRate) {
+      return `KES ${(usdAmount * exchangeRate).toLocaleString()}`;
+    }
+    return `$${usdAmount.toLocaleString()}`;
+  };
+
+  const shareOnWhatsApp = () => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const inviteLink = `${baseUrl}/api/invite/${goal.metaGoalId}`;
+    const message = `Join my savings goal "${goal.name}"!\n\nTarget: ${formatAmount(goal.targetAmountUSD)}\nProgress: ${progress.toFixed(1)}%\nParticipants: ${goal.participants?.length || 0}\n\n${inviteLink}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-white">{goal.name}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Key Metrics */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Target</div>
+              <div className="text-lg font-bold text-white">{formatAmount(goal.targetAmountUSD)}</div>
+            </div>
+            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Progress</div>
+              <div className="text-lg font-bold text-cyan-400">{progress.toFixed(1)}%</div>
+            </div>
+            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Raised</div>
+              <div className="text-lg font-bold text-green-400">{formatAmount(goal.totalProgressUSD || 0)}</div>
+            </div>
+            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Participants</div>
+              <div className="text-lg font-bold text-white">{goal.participants?.length || 0}</div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
+            <ProgressBar progress={progress} height="sm" className="bg-gray-700 rounded-full" />
+          </div>
+
+          {/* Additional Info */}
+          <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              {goal.isPublic ? <Globe className="w-4 h-4 text-cyan-400" /> : <Lock className="w-4 h-4 text-gray-400" />}
+              <span>{goal.isPublic ? 'Public Goal' : 'Private Goal'}</span>
+            </div>
+            {goal.targetDate && goal.targetDate !== '0' && goal.targetDate !== '' && (
+              <div className="flex items-center gap-2 text-sm text-gray-300">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <span>Target: {new Date(goal.targetDate).toLocaleDateString()}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              <TrendingUp className="w-4 h-4 text-gray-400" />
+              <span>Created: {new Date(goal.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+
+          {/* Share Button */}
+          <ActionButton
+            onClick={shareOnWhatsApp}
+            variant="primary"
+            size="sm"
+            className="w-full flex items-center justify-center gap-2"
+          >
+            <img width="20" height="20" src="https://img.icons8.com/3d-fluency/94/whatsapp.png" alt="whatsapp" />
+            Share on WhatsApp
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Redesigned Group Goal Card - Financial Focus
 const GroupGoalCard = ({
@@ -85,9 +183,9 @@ const GroupGoalCard = ({
   };
 
   return (
-    <InfoCard
-      variant="default"
-      className="p-4 hover:border-cyan-400/50 transition-all duration-300"
+    <div
+      onClick={isMyGroup ? onView : onJoin}
+      className="rounded-lg border bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-4 hover:border-cyan-400/50 transition-all duration-300 cursor-pointer"
     >
       {/* Header: Clear, focused financial information */}
       <div className="flex justify-between mb-3">
@@ -151,19 +249,7 @@ const GroupGoalCard = ({
           </div>
         </div>
       )}
-
-      {/* Action Button - Simplified */}
-      <div>
-        <ActionButton
-          onClick={isMyGroup ? onView : onJoin}
-          variant={isMyGroup ? "outline" : "primary"}
-          size="sm"
-          className="w-full text-xs py-2"
-        >
-          {isMyGroup ? "View Details" : "Join Goal"}
-        </ActionButton>
-      </div>
-    </InfoCard>
+    </div>
   );
 };
 
@@ -233,6 +319,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const [activeSection, setActiveSection] = useState<
     "myGoals" | "availableGoals"
   >("myGoals");
+  const [selectedGoal, setSelectedGoal] = useState<GroupSavingsGoal | null>(null);
 
   // Get featured (curated) public goals - limit to 3
   const featuredPublicGoals = groupGoals
@@ -369,8 +456,8 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                           key={goal.metaGoalId}
                           goal={goal}
                           isMyGroup={true}
-                          onJoin={() => {}}
-                          onView={() => {}}
+                          onJoin={() => setSelectedGoal(goal)}
+                          onView={() => setSelectedGoal(goal)}
                           exchangeRate={exchangeRate}
                         />
                       ))}
@@ -450,7 +537,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                     key={goal.metaGoalId}
                     goal={goal}
                     onJoin={() => onJoinGroupGoal(goal)}
-                    onView={() => {}}
+                    onView={() => onJoinGroupGoal(goal)}
                     exchangeRate={exchangeRate}
                   />
                 ))}
@@ -458,6 +545,15 @@ export const ClanTab: React.FC<ClanTabProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Goal Details Modal */}
+      {selectedGoal && (
+        <GoalDetailsModal
+          goal={selectedGoal}
+          onClose={() => setSelectedGoal(null)}
+          exchangeRate={exchangeRate}
+        />
       )}
     </div>
   );

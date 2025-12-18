@@ -79,6 +79,19 @@ export const NewProfile = ({
   // Self verification setup
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
 
+  // Check for verification callback on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'true') {
+      const storedSelfId = sessionStorage.getItem('pendingSelfVerification');
+      if (storedSelfId) {
+        setEncryptedUserId(storedSelfId);
+        setIsVerificationModalOpen(true);
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     if (!address || !isVerificationModalOpen || !encryptedUserId) return;
 
@@ -95,6 +108,8 @@ export const NewProfile = ({
         const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         const uuid = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(12, 15)}-${(parseInt(hash[16], 16) & 0x3 | 0x8).toString(16)}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 
+        const callbackUrl = `${window.location.origin}${window.location.pathname}?verified=true`;
+        
         const app = new SelfAppBuilder({
           version: 2,
           appName: process.env.NEXT_PUBLIC_SELF_APP_NAME || "Minilend",
@@ -105,7 +120,7 @@ export const NewProfile = ({
           endpointType: "celo",
           userIdType: "uuid",
           userDefinedData: "Enjoy saving together with Minilend!",
-          deeplinkCallback: `${window.location.origin}/`,
+          deeplinkCallback: callbackUrl,
           disclosures: {
             minimumAge: 18,
             ofac: true,
@@ -229,18 +244,16 @@ export const NewProfile = ({
 
   // Open Self App
   const openSelfApp = () => {
-    if (!universalLink || !address) return;
+    if (!universalLink || !address || !encryptedUserId) return;
+    // Store selfId for post-redirect verification
+    sessionStorage.setItem('pendingSelfVerification', encryptedUserId);
     window.open(universalLink, "_blank");
     displayToast("Opening Self App...");
   };
 
   // Handle successful verification
   const handleSuccessfulVerification = async () => {
-    // Prevent duplicate submissions
-    if (isVerifying) {
-      return;
-    }
-
+    if (isVerifying) return;
     if (!address) {
       displayToast("Please connect your wallet to proceed with verification");
       return;
@@ -257,57 +270,25 @@ export const NewProfile = ({
       });
 
       if (response.ok) {
-        const data = await response.json();
-        // Log verification success without PII
-        if (process.env.NODE_ENV === "development") {
-          console.log("Verification data received successfully");
-        }
+        sessionStorage.removeItem('pendingSelfVerification');
         displayToast("Verification saved! Closing modal...");
         setTimeout(() => {
           setIsVerificationModalOpen(false);
-          // Refresh verification status by re-checking
+          setIsVerified(true);
           if (encryptedUserId) {
-            const checkVerification = async () => {
-              setVerificationLoading(true);
-              try {
-                const response = await fetch(`/api/self/verify?selfId=${encodeURIComponent(encryptedUserId)}`);
-                if (response.ok) {
-                  const data = await response.json();
-                  setIsVerified(true);
-                  setNationality(data.nationality);
-                } else {
-                  setIsVerified(false);
-                  setNationality(undefined);
-                }
-              } catch (error) {
-                console.error('Error re-checking verification status:', error);
-                setIsVerified(false);
-                setNationality(undefined);
-              } finally {
-                setVerificationLoading(false);
-              }
-            };
-            checkVerification();
+            fetch(`/api/self/verify?selfId=${encodeURIComponent(encryptedUserId)}`)
+              .then(res => res.json())
+              .then(data => setNationality(data.nationality))
+              .catch(console.error);
           }
         }, 1500);
       } else {
-        // Parse and show API error message
-        try {
-          const errorData = await response.json();
-          const errorMessage =
-            errorData.message ||
-            errorData.error ||
-            "Failed to fetch verification data";
-          displayToast(`Verification failed: ${errorMessage}`);
-        } catch {
-          displayToast("Failed to fetch verification data");
-        }
+        const errorData = await response.json().catch(() => ({}));
+        displayToast(`Verification failed: ${errorData.message || errorData.error || "Unknown error"}`);
       }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown verification error";
       console.error("Failed to save verification:", error);
-      displayToast(`Verification error: ${errorMessage}`);
+      displayToast(`Verification error: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsVerifying(false);
     }
