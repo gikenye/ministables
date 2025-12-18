@@ -79,14 +79,40 @@ export const NewProfile = ({
   // Self verification setup
   const excludedCountries = useMemo(() => [countries.NORTH_KOREA], []);
 
-  // Check for verification callback on mount
+  // Check for verification callback on mount and process immediately
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('verified') === 'true') {
       const storedSelfId = sessionStorage.getItem('pendingSelfVerification');
       if (storedSelfId) {
-        setEncryptedUserId(storedSelfId);
-        setIsVerificationModalOpen(true);
+        // Process verification immediately
+        (async () => {
+          try {
+            displayToast("Processing verification...");
+            const response = await fetch("/api/self/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ selfId: storedSelfId }),
+            });
+            
+            if (response.ok) {
+              sessionStorage.removeItem('pendingSelfVerification');
+              displayToast("Verification completed successfully!");
+              // Refresh verification status
+              const verifyResponse = await fetch(`/api/self/verify?selfId=${encodeURIComponent(storedSelfId)}`);
+              if (verifyResponse.ok) {
+                const data = await verifyResponse.json();
+                setIsVerified(true);
+                setNationality(data.nationality);
+              }
+            } else {
+              displayToast("Verification failed. Please try again.");
+            }
+          } catch (error) {
+            console.error('Verification processing error:', error);
+            displayToast("Verification error. Please try again.");
+          }
+        })();
       }
       window.history.replaceState({}, '', window.location.pathname);
     }
