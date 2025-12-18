@@ -81,6 +81,20 @@ export async function POST(req: NextRequest) {
 
     await collection.insertOne(verification);
 
+    // Award XP for verification
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/xp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attestationId: verificationData.attestationId,
+          walletAddress: walletAddress
+        })
+      });
+    } catch (xpError) {
+      console.error('Failed to award XP:', xpError);
+    }
+
     return NextResponse.json({
       nationality: verificationData.nationality,
       olderThan: verificationData.olderThan,

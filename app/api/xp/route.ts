@@ -36,16 +36,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { metaGoalId } = body;
+    const { attestationId, walletAddress } = body;
 
-    if (!metaGoalId) {
+    if (!attestationId || !walletAddress) {
       return NextResponse.json(
-        { error: "metaGoalId is required" },
+        { error: "attestationId and walletAddress are required" },
         { status: 400 }
       );
     }
 
-    const result = await backendApiClient.awardXP(metaGoalId);
+    const result = await backendApiClient.awardVerificationXP(attestationId, walletAddress);
     return NextResponse.json(result);
   } catch (error) {
     console.error("[API] Failed to award XP:", error);
