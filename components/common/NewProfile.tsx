@@ -85,6 +85,7 @@ export const NewProfile = ({
     if (params.get('verified') === 'true') {
       const storedSelfId = sessionStorage.getItem('pendingSelfVerification');
       if (storedSelfId) {
+        setEncryptedUserId(storedSelfId);
         setIsVerificationModalOpen(true);
       }
       window.history.replaceState({}, '', window.location.pathname);
