@@ -66,7 +66,6 @@ export const NewProfile = ({
   const [nationality, setNationality] = useState<string | undefined>(undefined);
   const [useridLoading, setUseridLoading] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
-  const [pendingVerification, setPendingVerification] = useState(false);
 
   // Get real user data
   const { user, loading: userLoading } = useUser();
@@ -86,9 +85,7 @@ export const NewProfile = ({
     if (params.get('verified') === 'true') {
       const storedSelfId = sessionStorage.getItem('pendingSelfVerification');
       if (storedSelfId) {
-        // Reopen modal to let SelfQRcodeWrapper polling complete
         setIsVerificationModalOpen(true);
-        setPendingVerification(true);
       }
       window.history.replaceState({}, '', window.location.pathname);
     }
