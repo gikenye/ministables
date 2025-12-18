@@ -5,7 +5,7 @@ export async function GET(
   { params }: { params: { metaGoalId: string } }
 ) {
   const { metaGoalId } = params;
-  const targetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://selfda1.vercel.app"}/goals/${metaGoalId}`;
+  const targetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/goals/${metaGoalId}`;
   
   return NextResponse.redirect(targetUrl, 302);
 }
