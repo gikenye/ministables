@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { theme } from "@/lib/theme";
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -13,19 +14,13 @@ export const BottomSheet = ({
   children,
   maxHeight = "max-h-[90vh]",
 }: BottomSheetProps) => {
-  // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
-      // Store the current scroll position
       const scrollY = window.scrollY;
-
-      // Prevent scrolling on body
       document.body.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = '100%';
-
-      // Restore scroll position when modal closes
       return () => {
         document.body.style.overflow = '';
         document.body.style.position = '';
@@ -40,25 +35,11 @@ export const BottomSheet = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
-      {/* Backdrop */}
+      <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={onClose} />
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal Content */}
-      <div
-        className={`
-          relative w-full max-w-md mx-auto sm:max-w-lg
-          bg-gray-800/20 backdrop-blur-sm border border-gray-700/30
-          rounded-t-xl sm:rounded-xl
-          overflow-hidden
-          transform transition-transform duration-300 ease-out
-          ${maxHeight}
-          `}
-        style={{
-          maxHeight:
-            "min(85vh, 100% - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+        className={`relative w-full max-w-md mx-auto sm:max-w-lg rounded-t-3xl sm:rounded-xl overflow-hidden transform transition-transform duration-300 ease-out ${maxHeight}`}
+        style={{ 
+          backgroundImage: `linear-gradient(to bottom right, ${theme.colors.cardGradientFrom}, ${theme.colors.cardGradientTo})`,
         }}
       >
         <div className="w-full h-full overflow-hidden">{children}</div>
