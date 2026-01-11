@@ -6,7 +6,7 @@
 # Minilend
 
 
-Minilend is a  savings & lending protocol that enables users to save & borrow various stablecoins with robust compliance mechanisms powered by zkSelf.
+Minilend is a  savings protocol that enables users to save in groups using various stablecoins with robust compliance mechanisms powered by zkSelf.
 
 ## Overview
 
