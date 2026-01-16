@@ -24,7 +24,7 @@ export function MobileBottomNav({
   ] as const;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 flex justify-center px-3 pointer-events-none lg:hidden z-50">
+    <div className="fixed bottom-1 left-0 right-0 flex justify-center px-3 pointer-events-none lg:hidden z-50">
       <nav 
         className="flex items-center gap-2 p-1.5 bg-[#1a1a1a]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl pointer-events-auto"
         role="navigation"
