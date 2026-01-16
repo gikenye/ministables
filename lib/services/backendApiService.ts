@@ -481,6 +481,27 @@ export class BackendApiClient {
     );
   }
 
+  //invite user to group goal
+  async inviteUserToGroupGoal(
+    metaGoalId: string,
+    invitedAddress: string,
+    inviterAddress: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite`, {
+      method: "POST",
+      body: JSON.stringify({ metaGoalId, invitedAddress, inviterAddress }),
+    });
+  }
+
+  // Get single goal by metaGoalId
+  async getGoalByMetaId(metaGoalId: string): Promise<GoalDetailsResponse> {
+    return this.request<GoalDetailsResponse>(
+      `${API_ENDPOINTS.GOALS}/${metaGoalId}`
+    );
+  }
+
+
+
   // Leaderboard API methods
   async getUserScore(userAddress: string): Promise<UserScoreResponse> {
     const params = new URLSearchParams({ userAddress });

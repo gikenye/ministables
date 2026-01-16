@@ -1,17 +1,3 @@
-#!/usr/bin/env node
-/**
- * Standalone Disbursement Worker Service
- *
- * This service runs as a separate Node.js process and handles USDC disbursements
- * independently from the Next.js API routes. It can be run as:
- * 1. A long-running worker process
- * 2. A serverless function (AWS Lambda, Google Cloud Functions)
- * 3. A cron job triggered service
- *
- * Usage:
- *   node services/disbursement-worker.js
- */
-
 const { ethers } = require("ethers");
 const { MongoClient } = require("mongodb");
 require("dotenv").config();
@@ -21,9 +7,6 @@ const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
 
-// Scroll chain ID and USDC configuration
-// Source: config/chainConfig.ts -> TOKENS[scroll.id] -> USDC
-// Note: Hardcoded here for Node.js compatibility (worker runs outside Next.js)
 const SCROLL_CHAIN_ID = 534352; // scroll.id
 const SCROLL_USDC_CONFIG = {
   address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4", // Must match chainConfig.ts

@@ -65,18 +65,6 @@ export const TOKENS = {
       decimals: 18,
       icon: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6807f9a4185658fa6e759a27_Tokens.avif",
     },
-    {
-      address: "0x456a3D042C0DbD3db53D5489e98dFb038553B0d0",
-      symbol: "CKES",
-      decimals: 18,
-      icon: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/68094e158b4206fbeba352aa_Tokens-3.avif",
-    },
-    {
-      address: "0xE2702Bd97ee33c88c8f6f92DA3B733608aa76F71",
-      symbol: "CNGN",
-      decimals: 18,
-      icon: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6818d1976757a7c20485226f_Tokens%20(2).avif",
-    },
   ],
   [scroll.id]: [
     {
@@ -142,30 +130,24 @@ export const getTokensBySymbol = (
   chainId: number
 ): Record<string, { address: string; decimals: number }> => {
   const tokens = getTokens(chainId);
-  return tokens.reduce(
-    (acc, token) => {
-      acc[token.symbol] = { address: token.address, decimals: token.decimals };
-      return acc;
-    },
-    {} as Record<string, { address: string; decimals: number }>
-  );
+  return tokens.reduce((acc, token) => {
+    acc[token.symbol] = { address: token.address, decimals: token.decimals };
+    return acc;
+  }, {} as Record<string, { address: string; decimals: number }>);
 };
 
 export const getTokenInfoMap = (
   chainId: number
 ): Record<string, { symbol: string; decimals: number; icon?: string }> => {
   const tokens = getTokens(chainId);
-  return tokens.reduce(
-    (acc, token) => {
-      acc[token.address] = {
-        symbol: token.symbol,
-        decimals: token.decimals,
-        icon: token.icon,
-      };
-      return acc;
-    },
-    {} as Record<string, { symbol: string; decimals: number; icon?: string }>
-  );
+  return tokens.reduce((acc, token) => {
+    acc[token.address] = {
+      symbol: token.symbol,
+      decimals: token.decimals,
+      icon: token.icon,
+    };
+    return acc;
+  }, {} as Record<string, { symbol: string; decimals: number; icon?: string }>);
 };
 
 export const getExplorerUrl = (chainId: number): string => {

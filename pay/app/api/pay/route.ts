@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     if (data.transaction_code) {
       let statusData = data;
       const startTime = Date.now();
-      const timeout = 5 * 60 * 1000; // 5 minutes
+      const timeout = 60 * 1000; // 1 minutes
 
       while ((statusData.status === 'PENDING' || !statusData.status) && (Date.now() - startTime) < timeout) {
         await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds

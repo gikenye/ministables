@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { theme } from "@/lib/theme";
 
 interface ActionButtonProps {
   children: React.ReactNode;
@@ -19,14 +20,7 @@ export const ActionButton = ({
   className = "",
 }: ActionButtonProps) => {
   const baseClasses =
-    "font-medium rounded-full transition-all duration-200 min-h-[44px] flex items-center justify-center";
-
-  const variantClasses = {
-    primary: "bg-cyan-400 hover:bg-cyan-500 text-black",
-    secondary: "bg-gray-700 hover:bg-gray-600 text-white",
-    outline:
-      "bg-transparent border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black",
-  };
+    "font-medium rounded-xl transition-all duration-200 min-h-[44px] flex items-center justify-center";
 
   const sizeClasses = {
     sm: "px-3 py-2 text-sm",
@@ -38,7 +32,12 @@ export const ActionButton = ({
     <Button
       onClick={onClick}
       disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`${baseClasses} ${sizeClasses[size]} ${className} ${disabled ? 'opacity-50' : ''}`}
+      style={{
+        backgroundColor: theme.colors.cardButton,
+        border: `1px solid ${theme.colors.cardButtonBorder}`,
+        color: theme.colors.cardText,
+      }}
     >
       {children}
     </Button>

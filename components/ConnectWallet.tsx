@@ -54,11 +54,11 @@ export function ConnectWallet({ className }: { className?: string }) {
       }}
       theme={darkTheme({
         colors: {
-          modalBg: "hsla(44, 68%, 12%, 1.00)",
-          borderColor: "hsla(0, 0%, 0%, 1.00)",
-          accentText: "hsla(26, 24%, 32%, 1.00)",
-          primaryButtonBg: "hsla(197, 75%, 22%, 1.00)",
-          primaryButtonText: "hsl(0, 0%, 100%)",
+          modalBg: "#33280aff",
+          borderColor: "#000000ff",
+          accentText: "#654f3eff",
+          primaryButtonBg: "#0e4a62ff",
+          primaryButtonText: "#ffffffff",
         },
       })}
     />

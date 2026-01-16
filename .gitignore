@@ -33,6 +33,7 @@ thirdweb-api.json
 thirdweb-api.yaml
 ROADMAP.md
 .DS_Store
+tmp
 
 # Worker logs
 /logs/

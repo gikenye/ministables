@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "@/lib/theme";
 
 interface ProgressBarProps {
   progress: number;
@@ -19,20 +20,11 @@ export const ProgressBar = ({
     lg: "h-2",
   };
 
-  const colorClasses = {
-    cyan: "bg-cyan-400",
-    green: "bg-green-400",
-    blue: "bg-blue-400",
-    purple: "bg-purple-400",
-  };
-
   return (
-    <div
-      className={`w-full bg-gray-600 rounded-full ${heightClasses[height]} ${className}`}
-    >
+    <div className={`w-full rounded-full ${heightClasses[height]} ${className}`} style={{ backgroundColor: theme.colors.backgroundSecondary }}>
       <div
-        className={`${colorClasses[color]} ${heightClasses[height]} rounded-full transition-all duration-300`}
-        style={{ width: `${Math.min(progress, 100)}%` }}
+        className={`${heightClasses[height]} rounded-full transition-all duration-300`}
+        style={{ width: `${Math.min(progress, 100)}%`, backgroundColor: theme.colors.border }}
       />
     </div>
   );

@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Check, AlertCircle, Loader2 } from "lucide-react";
-import {
-  BottomSheet,
-  ModalHeader,
-  InfoCard,
-  ActionButton,
-} from "@/components/ui";
+import { useState, useEffect, useMemo } from "react";
+import { Loader2, AlertCircle, CheckCircle2, Info, ChevronRight } from "lucide-react";
+import { BottomSheet, ModalHeader, ActionButton } from "@/components/ui";
+import { theme } from "@/lib/theme";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface WithdrawableDeposit {
   depositId: number;
@@ -23,10 +20,13 @@ interface WithdrawableDeposit {
 interface WithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onWithdraw: (tokenSymbol: string, depositIds: number[]) => Promise<void>;
+  onWithdraw: (tokenSymbol: string, depositIds: number[], sponsorGas?: boolean) => Promise<void>;
   vaultPositions: WithdrawableDeposit[];
   loading: boolean;
+  userAddress?: string;
 }
+
+type ModalStage = "INPUT" | "CONFIRMING" | "SUCCESS" | "ERROR";
 
 export const WithdrawModal = ({
   isOpen,
@@ -35,369 +35,219 @@ export const WithdrawModal = ({
   vaultPositions,
   loading,
 }: WithdrawModalProps) => {
-  const [selectedPositions, setSelectedPositions] = useState<
-    WithdrawableDeposit[]
-  >([]);
+  const [stage, setStage] = useState<ModalStage>("INPUT");
+  const [selectedToken, setSelectedToken] = useState<string>("");
+  const [withdrawAmount, setWithdrawAmount] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-
+  
   useEffect(() => {
     if (isOpen) {
-      setSelectedPositions([]);
+      setStage("INPUT");
+      setWithdrawAmount("");
       setError(null);
     }
   }, [isOpen]);
 
-  const handlePositionToggle = (position: WithdrawableDeposit) => {
-    setSelectedPositions((prev) => {
-      const isSelected = prev.some((p) => p.depositId === position.depositId);
-      if (isSelected) {
-        return prev.filter((p) => p.depositId !== position.depositId);
-      } else {
-        return [...prev, position];
-      }
-    });
-  };
+  const tokenBalances = useMemo(() => {
+    const balancesBySymbol: Record<string, { symbol: string; total: number; positions: WithdrawableDeposit[] }> = {};
+    vaultPositions
+      .filter((p) => parseFloat(p.withdrawableAmount || "0") > 0)
+      .forEach((position) => {
+        const symbol = position.tokenSymbol;
+        if (!balancesBySymbol[symbol]) {
+          balancesBySymbol[symbol] = { symbol, total: 0, positions: [] };
+        }
+        balancesBySymbol[symbol].total += parseFloat(position.withdrawableAmount);
+        balancesBySymbol[symbol].positions.push(position);
+      });
+    
+    const result = Object.values(balancesBySymbol);
+    if (result.length > 0 && !selectedToken) setSelectedToken(result[0].symbol);
+    return result;
+  }, [vaultPositions, selectedToken]);
+
+  const currentTokenData = tokenBalances.find((t) => t.symbol === selectedToken);
 
   const handleWithdraw = async () => {
-    if (selectedPositions.length === 0) return;
+    if (stage === "INPUT") {
+      const amount = parseFloat(withdrawAmount);
+      if (!amount || amount <= 0) return setError("Enter a valid amount");
+      if (amount > (currentTokenData?.total || 0)) return setError("Insufficient balance");
+      setStage("CONFIRMING");
+      return;
+    }
 
-    setError(null);
     setIsWithdrawing(true);
-
+    setError(null);
+    
     try {
-      // Group selected positions by token symbol
-      const positionsByToken = selectedPositions.reduce(
-        (acc, position) => {
-          const tokenSymbol = position.tokenSymbol;
-          if (!acc[tokenSymbol]) {
-            acc[tokenSymbol] = [];
-          }
-          acc[tokenSymbol].push(position.depositId);
-          return acc;
-        },
-        {} as Record<string, number[]>
-      );
-
-      // Process withdrawals for each token
-      for (const [tokenSymbol, depositIds] of Object.entries(
-        positionsByToken
-      )) {
-        await onWithdraw(tokenSymbol, depositIds);
-      }
-
-      setSelectedPositions([]);
-      onClose();
-    } catch (error: any) {
-      setError(error.message || "Withdrawal failed. Please try again.");
+      const depositIds = selectPositionsForAmount(parseFloat(withdrawAmount), selectedToken);
+      await onWithdraw(selectedToken, depositIds, true);
+      if (typeof window !== "undefined" && window.navigator.vibrate) window.navigator.vibrate([50, 30, 50]);
+      setStage("SUCCESS");
+    } catch (err: any) {
+      setError(err.message || "Transaction failed");
+      setStage("ERROR");
     } finally {
       setIsWithdrawing(false);
     }
   };
 
-  const getTokenBalancesBySymbol = () => {
-    const balancesBySymbol: Record<
-      string,
-      {
-        positions: WithdrawableDeposit[];
-        totalBalance: number;
-        symbol: string;
-      }
-    > = {};
-
-    // Only include positions that have withdrawable amounts > 0
-    const withdrawablePositions = vaultPositions.filter(
-      (position) => parseFloat(position.withdrawableAmount || "0") > 0
-    );
-
-    withdrawablePositions.forEach((position) => {
-      const tokenSymbol = position.tokenSymbol;
-      if (!balancesBySymbol[tokenSymbol]) {
-        balancesBySymbol[tokenSymbol] = {
-          positions: [],
-          totalBalance: 0,
-          symbol: tokenSymbol,
-        };
-      }
-      balancesBySymbol[tokenSymbol].positions.push(position);
-      balancesBySymbol[tokenSymbol].totalBalance += parseFloat(
-        position.withdrawableAmount || "0"
-      );
-    });
-
-    return balancesBySymbol;
+  const selectPositionsForAmount = (amount: number, tokenSymbol: string): number[] => {
+    if (!currentTokenData) return [];
+    const sorted = [...currentTokenData.positions].sort((a, b) => parseFloat(b.withdrawableAmount) - parseFloat(a.withdrawableAmount));
+    const selectedIds: number[] = [];
+    let remaining = amount;
+    for (const pos of sorted) {
+      if (remaining <= 0) break;
+      selectedIds.push(pos.depositId);
+      remaining -= parseFloat(pos.withdrawableAmount);
+    }
+    return selectedIds;
   };
-
-  const formatBalance = (amount: string | number) => {
-    const num = typeof amount === "string" ? parseFloat(amount) : amount;
-    // Always show 4 decimal places for better precision with tiny deposits
-    return num.toFixed(4);
-  };
-
-  const totalSelectedAmount = selectedPositions.reduce(
-    (sum, position) => sum + parseFloat(position.withdrawableAmount || "0"),
-    0
-  );
-
-  const tokenBalances = getTokenBalancesBySymbol();
-  const availableTokens = Object.keys(tokenBalances).filter(
-    (symbol) => tokenBalances[symbol].positions.length > 0
-  );
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[90vh]">
-      <ModalHeader title="Withdraw Funds" onClose={onClose} />
-
-      <div className="bg-gray-800/20 backdrop-blur-sm p-3 space-y-3 overflow-y-auto">
-        {/* Header */}
-        <div className="text-center py-0.5">
-          <div className="text-2xl mb-1.5">💰</div>
-          <h3 className="text-base font-semibold text-white mb-0.5">
-            Choose Positions to Withdraw
-          </h3>
-          <p className="text-xs text-gray-400">
-            Select multiple positions from any token to withdraw
-          </p>
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[65vh]">
+      <div className="px-5 pt-1 pb-6 space-y-3">
+        {/* 30% Smaller Header */}
+        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+          <h2 className="text-[11px] font-black uppercase tracking-widest text-white/70">
+            {stage === "INPUT" ? "Withdraw" : stage.toLowerCase()}
+          </h2>
+          <button onClick={onClose} className="p-1.5 bg-white/5 rounded-full text-white/30 hover:text-white/60 transition">
+            <ChevronRight className="rotate-90 w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
-              <p className="text-red-400 text-xs">{error}</p>
-            </div>
+        {loading ? (
+          <div className="flex flex-col items-center py-8 space-y-3">
+            <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20">Syncing Vault</p>
           </div>
-        )}
-
-        {/* Loading State */}
-        {loading && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-3"></div>
-            <p className="text-gray-400 text-sm">Loading your positions...</p>
-          </div>
-        )}
-
-        {/* Available Tokens and Positions */}
-        {!loading && availableTokens.length > 0 && (
-          <div className="space-y-3">
-            {availableTokens.map((tokenSymbol) => {
-              const tokenData = tokenBalances[tokenSymbol];
-
-              return (
-                <div key={tokenSymbol} className="space-y-2">
-                  {/* Token Header */}
-                  <div className="flex items-center justify-between px-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-6 h-6 bg-cyan-400/20 rounded-full flex items-center justify-center">
-                        <span className="text-cyan-400 text-xs font-bold">
-                          {tokenSymbol.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {tokenSymbol}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {tokenData.positions.length} position
-                          {tokenData.positions.length !== 1 ? "s" : ""}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-cyan-400">
-                        {formatBalance(tokenData.totalBalance)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Total Available
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Token Positions */}
-                  <div className="space-y-1.5 pl-2">
-                    {tokenData.positions.map((position) => {
-                      const isSelected = selectedPositions.some(
-                        (p) => p.depositId === position.depositId
-                      );
-                      const withdrawableAmount = parseFloat(
-                        position.withdrawableAmount || "0"
-                      );
-
-                      return (
-                        <InfoCard
-                          key={position.depositId}
-                          variant="action"
-                          className={`cursor-pointer transition-all duration-200 ${
-                            isSelected
-                              ? "border-cyan-400 bg-cyan-400/5"
-                              : "hover:border-cyan-400"
-                          }`}
-                        >
-                          <button
-                            onClick={() => handlePositionToggle(position)}
-                            className="w-full flex items-center justify-between p-1"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div
-                                className={`w-4 h-4 rounded border-2 transition-all flex items-center justify-center ${
-                                  isSelected
-                                    ? "bg-cyan-400 border-cyan-400"
-                                    : "border-gray-400"
-                                }`}
-                              >
-                                {isSelected && (
-                                  <Check className="w-3 h-3 text-white" />
-                                )}
-                              </div>
-                              <div className="text-left">
-                                <div className="text-xs font-medium text-white">
-                                  Position #{position.depositId}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Deposited: {formatBalance(position.amount)}{" "}
-                                  {tokenSymbol}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-semibold text-cyan-400">
-                                {formatBalance(withdrawableAmount)}
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                Withdrawable
-                              </div>
-                            </div>
-                          </button>
-                        </InfoCard>
-                      );
-                    })}
-                  </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            {stage === "SUCCESS" ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center py-4 text-center space-y-3">
+                <div className="w-12 h-12 bg-teal-500/10 rounded-2xl flex items-center justify-center border border-teal-500/20">
+                  <CheckCircle2 className="w-6 h-6 text-teal-400" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && availableTokens.length === 0 && (
-          <div className="text-center py-8">
-            <div className="text-4xl mb-3">�</div>
-            <h3 className="text-white font-medium mb-2">
-              No Withdrawable Funds
-            </h3>
-            <p className="text-gray-400 text-sm mb-1">
-              You don't have any funds available for withdrawal at the moment.
-            </p>
-            {vaultPositions.length > 0 && (
-              <p className="text-gray-500 text-xs">
-                Your deposits may still be locked or earning interest. Check
-                back later when the lock period expires.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Selection Summary */}
-        {selectedPositions.length > 0 && (
-          <InfoCard variant="stats">
-            <div className="space-y-2">
-              <div className="text-center">
-                <div className="text-xs text-gray-400 mb-1">Total Selected</div>
-                <div className="text-lg font-bold text-cyan-400">
-                  {formatBalance(totalSelectedAmount)}
+                <div className="space-y-0.5">
+                  <h3 className="text-sm font-black text-white uppercase tracking-tight">Success 🎉 </h3>
+                  <p className="text-[10px] text-white/40 leading-relaxed"> {withdrawAmount} {selectedToken} sent to your wallet .</p>
                 </div>
-                <div className="text-xs text-gray-400">
-                  {selectedPositions.length} position
-                  {selectedPositions.length !== 1 ? "s" : ""} selected
-                </div>
-              </div>
-
-              {/* Breakdown by token */}
-              <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-700/30">
-                {Object.entries(
-                  selectedPositions.reduce(
-                    (acc, position) => {
-                      const tokenSymbol = position.tokenSymbol;
-                      if (!acc[tokenSymbol]) {
-                        acc[tokenSymbol] = { count: 0, amount: 0 };
-                      }
-                      acc[tokenSymbol].count += 1;
-                      acc[tokenSymbol].amount += parseFloat(
-                        position.withdrawableAmount || "0"
-                      );
-                      return acc;
-                    },
-                    {} as Record<string, { count: number; amount: number }>
-                  )
-                ).map(([symbol, data]) => (
-                  <div
-                    key={symbol}
-                    className="flex justify-between items-center"
-                  >
-                    <div className="text-xs text-gray-400">
-                      {data.count} {symbol} position
-                      {data.count !== 1 ? "s" : ""}
-                    </div>
-                    <div className="text-xs font-semibold text-white">
-                      {formatBalance(data.amount)} {symbol}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </InfoCard>
-        )}
-
-        {/* Action Buttons */}
-        <div className="space-y-2">
-          <ActionButton
-            onClick={handleWithdraw}
-            variant="primary"
-            size="md"
-            className="w-full"
-            disabled={selectedPositions.length === 0 || isWithdrawing}
-          >
-            {isWithdrawing ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Processing Withdrawal...
-              </div>
-            ) : selectedPositions.length === 0 ? (
-              "Select positions to withdraw"
+                <ActionButton onClick={onClose} variant="primary" className="w-full h-10 !bg-teal-600 !text-white text-[10px]">Close</ActionButton>
+              </motion.div>
+            ) : stage === "ERROR" ? (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center py-4 text-center space-y-3">
+                <AlertCircle className="w-10 h-10 text-red-500/40" />
+                <p className="text-[10px] text-red-200/50 px-4">{error}</p>
+                <ActionButton onClick={() => setStage("INPUT")} variant="primary" className="w-full h-10 text-[10px]">Try Again</ActionButton>
+              </motion.div>
             ) : (
-              `Withdraw ${formatBalance(totalSelectedAmount)} from ${selectedPositions.length} position${selectedPositions.length !== 1 ? "s" : ""}`
+              <div className="space-y-3">
+                {/* Compact Asset Selector */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Asset</span>
+                    <span className="text-[9px] font-bold text-teal-400/80">{currentTokenData?.total.toFixed(2) || "0.00"} {selectedToken}</span>
+                  </div>
+                  <div className="flex gap-1.5 p-1 bg-black/20 rounded-xl border border-white/5">
+                    {tokenBalances.map((token) => (
+                      <button
+                        key={token.symbol}
+                        onClick={() => { setSelectedToken(token.symbol); setError(null); }}
+                        className={`flex-1 py-1.5 rounded-lg transition-all text-[10px] font-black tracking-widest uppercase ${
+                          selectedToken === token.symbol 
+                            ? "bg-teal-500/20 text-teal-100 border border-teal-500/30" 
+                            : "text-white/20 hover:text-white/40"
+                        }`}
+                      >
+                        {token.symbol}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reduced Numeric Input */}
+                <div className="space-y-2.5">
+                  <div className="relative flex flex-col items-center justify-center py-2 px-2 bg-white/[0.01] rounded-2xl border border-white/5 focus-within:border-teal-500/20 transition-all">
+                    <input
+                      type="number"
+                      value={withdrawAmount}
+                      disabled={stage === "CONFIRMING"}
+                      onChange={(e) => { setWithdrawAmount(e.target.value); setError(null); }}
+                      placeholder="0.00"
+                      className="w-full bg-transparent text-2xl font-black text-center text-white outline-none placeholder:text-white/5"
+                    />
+                    <span className="mt-1 text-[8px] font-black text-white/10 uppercase tracking-[0.3em]">{selectedToken}</span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[25, 50, 75, 100].map((perc) => (
+                      <button
+                        key={perc}
+                        onClick={() => {
+                          const amt = ((currentTokenData?.total || 0) * (perc / 100)).toFixed(4);
+                          setWithdrawAmount(amt);
+                        }}
+                        className="py-1.5 rounded-lg bg-white/5 border border-white/5 text-[9px] font-black text-white/30 hover:text-teal-400 transition-all"
+                      >
+                        {perc === 100 ? "MAX" : `${perc}%`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Compact Confirming View */}
+                {stage === "CONFIRMING" && (
+                  <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-xl bg-teal-500/5 border border-teal-500/10 flex items-start gap-2">
+                    <Info size={12} className="text-teal-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-teal-100/40 leading-snug font-medium">
+                      Zero gas fees. This withdrawal is <span className="text-teal-400">fully sponsored</span>.
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Error Bubble */}
+                {error && stage === "INPUT" && (
+                  <div className="flex items-center gap-2 text-red-400 text-[9px] font-black uppercase bg-red-400/5 p-3 rounded-xl border border-red-400/10">
+                    <AlertCircle size={12} /> {error}
+                  </div>
+                )}
+
+                {/* Main Action - Compressed height */}
+                <div className="pt-1">
+                  <ActionButton
+                    onClick={handleWithdraw}
+                    variant="primary"
+                    className={`w-full h-11 text-[11px] font-black uppercase tracking-[0.15em] rounded-xl ${
+                        stage === "CONFIRMING" ? "!bg-teal-600 !text-white" : "!bg-white !text-black"
+                    }`}
+                    disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0 || isWithdrawing}
+                  >
+                    {isWithdrawing ? (
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    ) : stage === "CONFIRMING" ? (
+                      "Confirm"
+                    ) : (
+                      "Review"
+                    )}
+                  </ActionButton>
+                  
+                  {stage === "CONFIRMING" && !isWithdrawing && (
+                    <button 
+                      onClick={() => setStage("INPUT")}
+                      className="w-full text-center mt-3 text-[9px] font-black uppercase tracking-widest text-white/20 hover:text-white/40 transition"
+                    >
+                      Edit Amount
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
-          </ActionButton>
-
-          {selectedPositions.length > 0 && (
-            <ActionButton
-              onClick={() => setSelectedPositions([])}
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              Clear Selection
-            </ActionButton>
-          )}
-        </div>
-
-        {/* Important Notice */}
-        <InfoCard>
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 text-yellow-400 flex-shrink-0" />
-            <div className="text-xs text-gray-300">
-              <div className="font-medium text-yellow-400 mb-1">Important</div>
-              <p>
-                Withdrawals cannot be undone. Funds will be transferred to your
-                connected wallet.
-              </p>
-            </div>
-          </div>
-        </InfoCard>
-
-        {/* Bottom spacing for safe area */}
-        <div className="h-2"></div>
+          </AnimatePresence>
+        )}
       </div>
     </BottomSheet>
   );

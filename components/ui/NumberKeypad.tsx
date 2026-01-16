@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "@/lib/theme";
 
 interface NumberKeypadProps {
   onNumberPress: (value: string) => void;
@@ -17,7 +18,8 @@ export const NumberKeypad = ({
         <button
           key={key}
           onClick={() => onNumberPress(key)}
-          className="w-14 h-14 text-white text-xl font-medium hover:bg-gray-800 rounded-full transition-colors duration-200 flex items-center justify-center border border-gray-700 hover:border-cyan-400"
+          className="w-14 h-14 text-xl font-medium rounded-full transition-colors duration-200 flex items-center justify-center"
+          style={{ color: theme.colors.text, border: `1px solid ${theme.colors.border}`, backgroundColor: 'transparent' }}
         >
           {key === "⌫" ? "⌫" : key}
         </button>

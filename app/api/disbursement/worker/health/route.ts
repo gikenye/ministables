@@ -4,6 +4,25 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
+type Pm2Env = {
+  status?: string;
+  pm_uptime?: number;
+  restart_time?: number;
+  created_at?: number;
+};
+
+type Pm2Monit = {
+  memory?: number;
+  cpu?: number;
+};
+
+type Pm2Process = {
+  name?: string;
+  pm2_env?: Pm2Env;
+  monit?: Pm2Monit;
+  pid?: number;
+};
+
 /**
  * Worker Health Check API
  * GET /api/disbursement/worker/health
@@ -29,13 +48,13 @@ export async function GET(request: NextRequest) {
     // Check worker status
     try {
       const { stdout } = await execAsync("pm2 jlist");
-      const processes = JSON.parse(stdout);
+      const processes = JSON.parse(stdout) as Pm2Process[];
 
       const worker = processes.find(
-        (p: any) => p.name === "disbursement-worker"
+        (process) => process.name === "disbursement-worker"
       );
 
-      if (!worker) {
+      if (!worker || !worker.pm2_env || !worker.monit) {
         return NextResponse.json(
           {
             status: "error",
@@ -47,24 +66,29 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const isRunning = worker.pm2_env.status === "online";
-      const uptime = worker.pm2_env.pm_uptime;
-      const restarts = worker.pm2_env.restart_time;
-      const memory = Math.round(worker.monit.memory / 1024 / 1024);
-      const cpu = worker.monit.cpu;
+      const status = worker.pm2_env.status || "unknown";
+      const uptime = worker.pm2_env.pm_uptime || 0;
+      const now = Date.now();
+      const uptimeMs = uptime ? now - uptime : 0;
+      const restarts = worker.pm2_env.restart_time || 0;
+      const memory = Math.round((worker.monit.memory || 0) / 1024 / 1024);
+      const cpu = worker.monit.cpu || 0;
+      const createdAt = worker.pm2_env.created_at
+        ? new Date(worker.pm2_env.created_at).toISOString()
+        : null;
 
       return NextResponse.json({
-        status: isRunning ? "healthy" : "unhealthy",
+        status: status === "online" ? "healthy" : "unhealthy",
         worker: {
           name: worker.name,
-          status: worker.pm2_env.status,
-          uptime: new Date().getTime() - uptime,
-          uptimeFormatted: formatUptime(new Date().getTime() - uptime),
+          status,
+          uptime: uptimeMs,
+          uptimeFormatted: formatUptime(uptimeMs),
           restarts,
           pid: worker.pid,
           memory: `${memory}MB`,
           cpu: `${cpu}%`,
-          created: new Date(worker.pm2_env.created_at).toISOString(),
+          created: createdAt,
         },
       });
     } catch (error) {

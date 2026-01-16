@@ -10,11 +10,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid or missing metaGoalId' }, { status: 400 });
   }
   
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
-  
-  const targetUrl = `${appUrl}/goals/${encodeURIComponent(metaGoalId)}`;
+  const url = new URL(request.url);
+  const targetUrl = `${url.origin}/goals/${encodeURIComponent(metaGoalId)}`;
   return NextResponse.redirect(targetUrl, 302);
 }

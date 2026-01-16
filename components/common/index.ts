@@ -5,6 +5,30 @@ export { SaveOptionsModal, type SaveOption } from "./SaveOptionsModal";
 export { TabNavigation } from "./TabNavigation";
 export { ProfileSection } from "./ProfileSection";
 export { StatsCard } from "./StatsCard";
+export { default as SaveActionsModal } from "./SaveActionsModal";
+export { default as WithdrawActionsModal } from "./WithdrawActionsModal";
+export { default as QuickSaveDetailsModal } from "./QuickSaveDetailsModal";
+export { CustomGoalModal } from "./CustomGoalModal";
+export { GoalDetailsModal } from "./GoalDetailsModal";
+export { DepositConfirmationModal } from "./DepositConfirmationModal";
+export { default as ExpandableQuickSaveCard } from "./ExpandableQuickSaveCard";
+
+// Layout Components
+export { DesktopSidebar } from "./DesktopSidebar";
+export { ModalManager } from "./ModalManager";
+export { AppContainer } from "./AppContainer";
+export { MobileBottomNav } from "./MobileBottomNav";
+
+// Skeleton Components
+export * from "./skeletons";
+
+// Goal Invite Components
+export {
+  GoalInviteView,
+  LoadingView,
+  ProcessingView,
+  ErrorView,
+} from "./GoalInviteView";
 
 // Profile Card Components (Legacy)
 export { ProfileHeaderCard } from "./ProfileHeaderCard";

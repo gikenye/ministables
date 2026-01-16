@@ -1,498 +1,352 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Users,
-  Plus,
   ChevronRight,
-  Globe,
+  MessageCircle,
+  Plus,
+  Users,
+  ArrowUpRight,
   Lock,
-  Calendar,
-  DollarSign,
-  Activity,
-  Shield,
-  X,
+  Globe,
   Share2,
-  TrendingUp,
+  X,
+  ArrowDownLeft,
 } from "lucide-react";
-import { ActionButton, InfoCard, ProgressBar } from "@/components/ui";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { GroupSavingsGoal } from "@/lib/services/backendApiService";
 import { Account, MyGroups } from "@/lib/types/shared";
+import { BottomSheet, ModalHeader } from "@/components/ui";
+import SaveMoneyModal from "@/components/SaveMoneyModal";
+import { AmountInputModal } from "@/components/common";
+import SaveActionsModal from "@/components/common/SaveActionsModal";
 
 interface ClanTabProps {
   account?: Account;
-  groupGoals: GroupSavingsGoal[];
   myGroups?: MyGroups;
   groupGoalsLoading: boolean;
   myGroupsLoading: boolean;
   onCreateGroupGoal: () => void;
-  onJoinGroupGoal: (goal: GroupSavingsGoal) => void;
-  onRefreshGroups: () => void;
+  onOpenWithdrawActions?: () => void;
+  onJoinGroupGoalWithAmount: (goal: GroupSavingsGoal, amount: string) => void;
   exchangeRate?: number;
+  isJoinGoalLoading: boolean;
+  joinGoalError: string | null;
+  tokens: any[];
+  tokenInfos: Record<string, any>;
+  supportedStablecoins: string[];
+  defaultToken?: any;
+  copied: boolean;
+  setCopied: (value: boolean) => void;
+  setDepositMethod: (method: "ONCHAIN" | "MPESA") => void;
+  setSelectedTokenForOnramp: (token: string) => void;
+  setShowOnrampModal: (show: boolean) => void;
 }
 
-// Goal Details Modal
-const GoalDetailsModal = ({
-  goal,
-  onClose,
-  exchangeRate,
-}: {
-  goal: GroupSavingsGoal;
-  onClose: () => void;
-  exchangeRate?: number;
-}) => {
-  const progress = goal.progressPercent || 0;
-  const formatAmount = (usdAmount: number) => {
-    if (exchangeRate) {
-      return `KES ${(usdAmount * exchangeRate).toLocaleString()}`;
-    }
-    return `$${usdAmount.toLocaleString()}`;
-  };
-
-  const shareOnWhatsApp = () => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const inviteLink = `${baseUrl}/api/invite/${goal.metaGoalId}`;
-    const message = `Join my savings goal "${goal.name}"!\n\nTarget: ${formatAmount(goal.targetAmountUSD)}\nProgress: ${progress.toFixed(1)}%\nParticipants: ${goal.participants?.length || 0}\n\n${inviteLink}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-white">{goal.name}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {/* Key Metrics */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
-              <div className="text-xs text-gray-400 mb-1">Target</div>
-              <div className="text-lg font-bold text-white">{formatAmount(goal.targetAmountUSD)}</div>
-            </div>
-            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
-              <div className="text-xs text-gray-400 mb-1">Progress</div>
-              <div className="text-lg font-bold text-cyan-400">{progress.toFixed(1)}%</div>
-            </div>
-            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
-              <div className="text-xs text-gray-400 mb-1">Raised</div>
-              <div className="text-lg font-bold text-green-400">{formatAmount(goal.totalProgressUSD || 0)}</div>
-            </div>
-            <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
-              <div className="text-xs text-gray-400 mb-1">Participants</div>
-              <div className="text-lg font-bold text-white">{goal.participants?.length || 0}</div>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3">
-            <ProgressBar progress={progress} height="sm" className="bg-gray-700 rounded-full" />
-          </div>
-
-          {/* Additional Info */}
-          <div className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg p-3 space-y-2">
-            <div className="flex items-center gap-2 text-sm text-gray-300">
-              {goal.isPublic ? <Globe className="w-4 h-4 text-cyan-400" /> : <Lock className="w-4 h-4 text-gray-400" />}
-              <span>{goal.isPublic ? 'Public Goal' : 'Private Goal'}</span>
-            </div>
-            {goal.targetDate && goal.targetDate !== '0' && goal.targetDate !== '' && (
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <span>Target: {new Date(goal.targetDate).toLocaleDateString()}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-sm text-gray-300">
-              <TrendingUp className="w-4 h-4 text-gray-400" />
-              <span>Created: {new Date(goal.createdAt).toLocaleDateString()}</span>
-            </div>
-          </div>
-
-          {/* Share Button */}
-          <ActionButton
-            onClick={shareOnWhatsApp}
-            variant="primary"
-            size="sm"
-            className="w-full flex items-center justify-center gap-2"
-          >
-            <img width="20" height="20" src="https://img.icons8.com/3d-fluency/94/whatsapp.png" alt="whatsapp" />
-            Share on WhatsApp
-          </ActionButton>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Redesigned Group Goal Card - Financial Focus
-const GroupGoalCard = ({
-  goal,
-  isMyGroup = false,
-  onJoin,
-  onView,
-  exchangeRate,
-}: {
-  goal: GroupSavingsGoal;
-  isMyGroup?: boolean;
-  onJoin: () => void;
-  onView: () => void;
-  exchangeRate?: number;
-}) => {
-  const progress = goal.progressPercent || 0;
-
-  const formatAmount = (usdAmount: number) => {
-    if (exchangeRate) {
-      const kesAmount = usdAmount * exchangeRate;
-      return `KES ${kesAmount.toLocaleString()}`;
-    }
-    return `$${usdAmount.toLocaleString()}`;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "text-green-400";
-      case "completed":
-        return "text-blue-400";
-      case "paused":
-        return "text-yellow-400";
-      default:
-        return "text-gray-400";
-    }
-  };
-
-  return (
-    <div
-      onClick={isMyGroup ? onView : onJoin}
-      className="rounded-lg border bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-4 hover:border-cyan-400/50 transition-all duration-300 cursor-pointer"
-    >
-      {/* Header: Clear, focused financial information */}
-      <div className="flex justify-between mb-3">
-        <div>
-          <h3 className="text-white font-medium text-sm">{goal.name}</h3>
-          <div className="mt-1">
-            {/* Status indicator - simplified */}
-            <div className="text-xs text-gray-400">
-              {goal.isPublic ? "Public Goal" : "Private Goal"} •{" "}
-              {goal.status || "Active"}
-            </div>
-          </div>
-        </div>
-
-        {/* Owner indicator - simplified */}
-        {isMyGroup && (
-          <div className="text-xs text-cyan-400 bg-cyan-400/10 px-2 py-1 rounded">
-            Your Goal
-          </div>
-        )}
-      </div>
-
-      {/* Financial Information - Given Priority */}
-      <div className="flex justify-between mb-3">
-        <div>
-          <div className="text-sm text-gray-400">Target</div>
-          <div className="text-lg font-bold text-white">
-            {formatAmount(goal.targetAmountUSD || 0)}
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-sm text-gray-400">Progress</div>
-          <div className="text-lg font-bold text-cyan-400">
-            {progress.toFixed(1)}%
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Indicator - Simplified */}
-      <div className="mb-4">
-        <ProgressBar
-          progress={progress}
-          height="sm"
-          className="bg-gray-700 rounded-full"
-        />
-        <div className="flex justify-between mt-2 text-xs text-gray-400">
-          <span>{formatAmount(goal.totalProgressUSD || 0)} raised</span>
-          <span>{goal.participants?.length || 0} participants</span>
-        </div>
-      </div>
-
-      {/* Key Dates - Added Financial Context */}
-      {goal.targetDate && goal.targetDate !== "0" && goal.targetDate !== "" && (
-        <div className="mb-3 bg-gray-800/20 p-2 rounded border border-gray-700/30">
-          <div className="flex items-center gap-2 text-xs">
-            <Calendar className="w-3 h-3 text-gray-400" />
-            <span>
-              Target completion:{" "}
-              {new Date(goal.targetDate).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Financial Summary Component
-const FinancialSummary = ({
-  account,
-  myGroups,
-  loading,
-}: {
-  account?: Account;
-  myGroups?: MyGroups;
-  loading: boolean;
-}) => {
-  if (loading || !account) {
-    return (
-      <InfoCard variant="stats" className="animate-pulse p-4 mb-6">
-        <div className="h-20 bg-gray-800/50 rounded"></div>
-      </InfoCard>
-    );
+const formatCurrency = (amount: number, rate?: number) => {
+  if (rate) {
+    return `KES ${(amount * rate).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
   }
-
-  // Calculate totals from user's groups
-  const publicGoals = myGroups?.public?.goals || [];
-  const privateGoals = myGroups?.private?.goals || [];
-
-  const totalSaved = [...publicGoals, ...privateGoals].reduce(
-    (total, goal) => total + (goal.totalProgressUSD || 0),
-    0
-  );
-
-  const totalGoals =
-    (myGroups?.public?.total || 0) + (myGroups?.private?.total || 0);
-
-  return (
-    <InfoCard variant="stats" className="p-4 mb-6">
-      <h3 className="text-sm font-medium text-white mb-3">
-        Your Financial Summary
-      </h3>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <div className="text-xs text-gray-400 mb-1">Total Saved</div>
-          <div className="text-lg font-bold text-cyan-400">
-            ${totalSaved.toLocaleString()}
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-gray-400 mb-1">Active Goals</div>
-          <div className="text-lg font-bold text-white">{totalGoals}</div>
-        </div>
-      </div>
-    </InfoCard>
-  );
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 };
 
-// Main Component
+const Badge = ({ children, variant = "default" }: { children: React.ReactNode; variant?: "active" | "default" | "soon" }) => (
+  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+    variant === "active" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : 
+    variant === "soon" ? " bg-[#4ade80] text-[8px] text-black tracking-tighter shadow-lg" : "bg-white/10 text-white/60  bg-[#4ade80] text-[8px] text-black tracking-tighter shadow-lg"
+  }`}>
+    {children}
+  </span>
+);
+
 export const ClanTab: React.FC<ClanTabProps> = ({
   account,
-  groupGoals,
   myGroups,
   groupGoalsLoading,
   myGroupsLoading,
   onCreateGroupGoal,
-  onJoinGroupGoal,
-  onRefreshGroups,
+  onOpenWithdrawActions,
+  onJoinGroupGoalWithAmount,
   exchangeRate,
+  isJoinGoalLoading,
+  joinGoalError,
+  tokens,
+  tokenInfos,
+  supportedStablecoins,
+  defaultToken,
+  copied,
+  setCopied,
+  setDepositMethod,
+  setSelectedTokenForOnramp,
+  setShowOnrampModal,
 }) => {
-  const [activeSection, setActiveSection] = useState<
-    "myGoals" | "availableGoals"
-  >("myGoals");
   const [selectedGoal, setSelectedGoal] = useState<GroupSavingsGoal | null>(null);
+  const [depositAmount, setDepositAmount] = useState("100");
+  const [isSaveActionsOpen, setIsSaveActionsOpen] = useState(false);
+  const [isAmountModalOpen, setIsAmountModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "members">("overview");
+  const isLoading = groupGoalsLoading || myGroupsLoading;
 
-  // Get featured (curated) public goals - limit to 3
-  const featuredPublicGoals = groupGoals
-    .filter((goal) => goal.isPublic === true)
-    .slice(0, 3);
+  const allGoals = useMemo(() => [
+    ...(myGroups?.public?.goals || []),
+    ...(myGroups?.private?.goals || [])
+  ], [myGroups]);
+
+  const handleDepositClick = () => {
+    setIsSaveActionsOpen(true);
+  };
+
+  const handleInvite = async (goal: GroupSavingsGoal) => {
+    const link = goal.inviteLink || `${window.location.origin}/goals/${goal.metaGoalId}?inviter=${goal.creatorAddress}`;
+    const message = `Join my clan "${goal.name}" on NewDay: ${link}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+
+    if (!popup) {
+      window.location.href = whatsappUrl;
+    }
+  };
+
+  if (!account?.address) return (
+    <div className="p-6 text-center bg-black/20 rounded-[40px] border border-white/5 my-8">
+      <Lock className="mx-auto mb-4 text-white/10" size={20} />
+      <h3 className="text-m font-black text-white">Wallet Locked</h3>
+      <p className="text-white/30 mt-2 font-bold text-sm">Connect wallet to view clans.</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Financial Summary */}
-      <FinancialSummary
-        account={account}
-        myGroups={myGroups}
-        loading={myGroupsLoading || groupGoalsLoading}
-      />
-
-      {/* Simplified Navigation */}
-      <div className="flex bg-gray-800/20 backdrop-blur-sm rounded-lg p-1">
-        <button
-          onClick={() => setActiveSection("myGoals")}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-            activeSection === "myGoals"
-              ? "bg-cyan-400 text-gray-900"
-              : "text-gray-400 hover:text-white"
-          }`}
+    <div className="max-w-2xl mx-auto py-8 px-4 space-y-10">
+      {/* Header */}
+      <div className="flex justify-between items-end px-2">
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">Clans</h1>
+          <p className=" bg-emerald-500/10 text-emerald-400 font-bold mt-2 uppercase text-[10px] tracking-[0.025em]">Save with friends and family</p>
+        </div>
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={onCreateGroupGoal}
+          className="h-10 w-10 rounded-full bg-white flex items-center justify-center text-black shadow-1xl"
         >
-          My Goals
-        </button>
-        <button
-          onClick={() => setActiveSection("availableGoals")}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-            activeSection === "availableGoals"
-              ? "bg-cyan-400 text-gray-900"
-              : "text-gray-400 hover:text-white"
-          }`}
-        >
-          Available Goals
-        </button>
+          <Plus size={28} strokeWidth={3} />
+        </motion.button>
       </div>
 
-      {/* Content based on active section */}
-      {activeSection === "myGoals" && (
-        <div className="space-y-6">
-          {/* My Goals Content */}
-          {!account?.address ? (
-            // Not connected state
-            <div className="text-center py-8 bg-gray-800/20 rounded-lg p-6">
-              <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">
-                Connect Your Wallet
-              </h3>
-              <p className="text-gray-400 text-sm max-w-md mx-auto mb-0">
-                Connect your wallet to view and manage your savings goals
-                securely.
-              </p>
+      {/* Goal Cards */}
+      <div className="grid gap-4">
+        {isLoading ? (
+          Array.from({ length: 2 }, (_, index) => (
+            <div
+              key={`clan-skeleton-${index}`}
+              className="rounded-[32px] border border-emerald-500/10 bg-[#1e2923]/60 p-4 animate-pulse"
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex gap-2">
+                  <div className="h-6 w-20 rounded-full bg-white/10" />
+                  <div className="h-6 w-6 rounded-full bg-white/10" />
+                </div>
+                <div className="h-8 w-8 rounded-full bg-white/10" />
+              </div>
+              <div className="h-6 w-36 rounded bg-white/10 mb-2" />
+              <div className="h-4 w-24 rounded bg-white/10 mb-8" />
+              <div className="flex justify-between items-end">
+                <div>
+                  <div className="h-3 w-16 rounded bg-white/10 mb-2" />
+                  <div className="h-6 w-24 rounded bg-white/10" />
+                </div>
+                <div className="text-right">
+                  <div className="h-3 w-10 rounded bg-white/10 mb-2 ml-auto" />
+                  <div className="w-20 h-1.5 rounded-full bg-white/10" />
+                </div>
+              </div>
             </div>
-          ) : myGroupsLoading || groupGoalsLoading ? (
-            // Loading state
-            <div className="space-y-4">
-              {[...Array(2)].map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-gray-800/20 rounded-xl p-4 animate-pulse h-32"
-                ></div>
-              ))}
-            </div>
-          ) : (
-            (() => {
-              // User's groups logic
-              const myPublicGoals = myGroups?.public?.goals || [];
-              const myPrivateGoals = myGroups?.private?.goals || [];
-              const allMyGoals = [...myPublicGoals, ...myPrivateGoals];
-
-              if (allMyGoals.length === 0) {
-                // Empty state - focused on financial guidance
-                return (
-                  <div className="text-center py-8 bg-gray-800/20 rounded-lg p-6">
-                    <DollarSign className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-white mb-2">
-                      Start Your Savings Journey
-                    </h3>
-                    <p className="text-gray-400 text-sm max-w-md mx-auto mb-6">
-                      Create your first group savings goal or join an existing
-                      one to start building wealth together.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                      <ActionButton
-                        onClick={onCreateGroupGoal}
-                        variant="primary"
-                        size="md"
-                      >
-                        Create Your First Goal
-                      </ActionButton>
-                    </div>
-                  </div>
-                );
-              }
-
-              // Display user's goals with financial focus
-              return (
-                <div className="space-y-6">
-                  {/* User's group goals */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">
-                      Your Active Savings Goals
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {allMyGoals.map((goal) => (
-                        <GroupGoalCard
-                          key={goal.metaGoalId}
-                          goal={goal}
-                          isMyGroup={true}
-                          onJoin={() => setSelectedGoal(goal)}
-                          onView={() => setSelectedGoal(goal)}
-                          exchangeRate={exchangeRate}
-                        />
-                      ))}
-                    </div>
+          ))
+        ) : allGoals.length > 0 ? (
+          allGoals.map((goal) => (
+            <motion.div
+              key={goal.metaGoalId}
+              onClick={() => { setSelectedGoal(goal); setActiveTab("overview"); }}
+              className="group relative overflow-hidden rounded-[32px] border border-emerald-500/10 bg-[#1e2923]/80 p-6 cursor-pointer active:scale-[0.98] transition-all"
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex gap-2">
+                  <Badge variant="active">{goal.participantCount || 0} Members</Badge>
+                  <div className="h-6 w-6 rounded-full bg-white/5 flex items-center justify-center">
+                    {goal.isPublic ? <Globe size={12} className="text-white/40" /> : <Lock size={12} className="text-white/40" />}
                   </div>
                 </div>
-              );
-            })()
-          )}
-        </div>
-      )}
+                <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white group-hover:text-black transition-colors">
+                  <ChevronRight size={18} strokeWidth={3} />
+                </div>
+              </div>
+              <h3 className="text-2xl font-black text-white mb-1 tracking-tight">{goal.name}</h3>
+              <p className="text-white/20 text-sm mb-8 font-bold line-clamp-1">{goal.description || "Active Savings Clan"}</p>
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Total Vault</p>
+                  <p className="text-2xl font-black text-white tracking-tight">{formatCurrency(goal.totalProgressUSD || 0, exchangeRate)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black text-emerald-400 mb-2">
+                    {Math.min(((goal.totalProgressUSD || 0) / (goal.targetAmountUSD || 1)) * 100, 100).toFixed(0)}%
+                  </p>
+                  <div className="w-20 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-400" style={{ width: `${Math.min(((goal.totalProgressUSD || 0) / (goal.targetAmountUSD || 1)) * 100, 100)}%` }} />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))
+        ) : (
+          <div className="p-8 text-center bg-[#1e2923]/60 rounded-[32px] border border-emerald-500/10">
+            <p className="text-xs font-black text-white/60 uppercase tracking-[0.2em]">No clans yet</p>
+            <p className="text-white/30 mt-2 font-bold text-sm">Create or join a clan to get started.</p>
+          </div>
+        )}
+      </div>
 
-      {activeSection === "availableGoals" && (
-        <div className="space-y-6">
-          <div>
-          
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">
-                Available Savings Goals
-              </h3>
-              <button
-                onClick={onRefreshGroups}
-                className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors"
-                disabled={groupGoalsLoading}
+      {/* Detail Drawer */}
+      <BottomSheet
+        isOpen={
+          !!selectedGoal &&
+          !isDepositModalOpen &&
+          !isAmountModalOpen &&
+          !isSaveActionsOpen
+        }
+        onClose={() => setSelectedGoal(null)}
+      >
+        {selectedGoal && (
+          <div className="p-6 pt-0 pb-20">
+            <ModalHeader title={selectedGoal.name} onClose={() => setSelectedGoal(null)} />
+            
+            <div className="grid grid-cols-2 gap-3 mt-4 mb-8">
+              <button 
+                onClick={handleDepositClick}
+                className="flex flex-col items-center justify-center gap-2 py-6 rounded-[28px] bg-white text-black font-black active:scale-95 transition-all shadow-xl"
               >
-                {groupGoalsLoading ? "Updating..." : "Update"}
+                <ArrowUpRight size={24} strokeWidth={3} />
+                <span className="text-sm">Deposit</span>
               </button>
+              <div className="relative flex flex-col items-center justify-center gap-2 py-6 rounded-[28px] bg-black/40 text-white/10 font-black border border-white/5">
+                <MessageCircle size={24} />
+                <span className="text-sm">Chat</span>
+                <div className="absolute top-4 right-4 "><Badge variant="soon">Soon</Badge></div>
+              </div>
             </div>
 
-            {groupGoalsLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[...Array(2)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="bg-gray-800/20 rounded-xl p-4 animate-pulse h-32"
-                  ></div>
-                ))}
-              </div>
-            ) : featuredPublicGoals.length === 0 ? (
-              <div className="text-center py-8 bg-gray-800/20 rounded-lg p-6">
-                <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  No Available Goals
-                </h3>
-                <p className="text-gray-400 text-sm max-w-md mx-auto mb-6">
-                  There are no public savings goals available to join at the
-                  moment.
-                </p>
-                <ActionButton
-                  onClick={onCreateGroupGoal}
-                  variant="primary"
-                  size="md"
+            {/* Tabs & Content */}
+            <div className="flex gap-1 p-1.5 bg-black/40 rounded-[20px] mb-2 border border-white/5">
+              {["overview", "members"].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t as any)}
+                  className={`flex-1 py-3 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                    activeTab === t ? "bg-white text-black shadow-md" : "text-white/40"
+                  }`}
                 >
-                  Create First Public Goal
-                </ActionButton>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {featuredPublicGoals.map((goal) => (
-                  <GroupGoalCard
-                    key={goal.metaGoalId}
-                    goal={goal}
-                    onJoin={() => onJoinGroupGoal(goal)}
-                    onView={() => onJoinGroupGoal(goal)}
-                    exchangeRate={exchangeRate}
-                  />
-                ))}
-              </div>
-            )}
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="max-h-[250px]">
+              {activeTab === "overview" ? (
+                <div className="space-y-2">
+                  <div className="bg-black/40 p-6 rounded-[32px] border border-white/5">
+                    <p className="text-white/30 font-black uppercase text-[10px] tracking-widest mb-2">Total Progress</p>
+                    <span className="text-2xl font-black text-white">{formatCurrency(selectedGoal.totalProgressUSD || 0, exchangeRate)}</span>
+                    <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden mt-4">
+                      <div className="h-full bg-emerald-400" style={{ width: `${Math.min(((selectedGoal.totalProgressUSD || 0) / (selectedGoal.targetAmountUSD || 1)) * 100, 100)}%` }} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => handleInvite(selectedGoal)} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
+                      <Share2 size={16} /> Invite
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!onOpenWithdrawActions) {
+                          toast.info("Contact clan admin to withdraw");
+                          return;
+                        }
+                        onOpenWithdrawActions();
+                        setSelectedGoal(null);
+                      }}
+                      className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all"
+                    >
+                      <ArrowDownLeft size={16} /> Withdraw
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(selectedGoal.participants || []).map((p, i) => (
+                    <div key={i} className="flex justify-between items-center p-4 bg-black/20 rounded-[20px] border border-white/5">
+                      <span className="text-xs font-black text-white/80 font-mono">{p.substring(0, 8)}...{p.substring(p.length-4)}</span>
+                      <Badge variant="active">Member</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+      </BottomSheet>
+
+      <SaveActionsModal
+        isOpen={isSaveActionsOpen}
+        onClose={() => setIsSaveActionsOpen(false)}
+        onActionSelect={(actionId) => {
+          setIsSaveActionsOpen(false);
+          if (actionId === "onramp") {
+            setDepositMethod("MPESA");
+            setShowOnrampModal(true);
+            return;
+          }
+          if (actionId === "onchain") {
+            setDepositMethod("ONCHAIN");
+            setIsAmountModalOpen(true);
+          }
+        }}
+      />
+
+      {selectedGoal && (
+        <AmountInputModal
+          isOpen={isAmountModalOpen}
+          onClose={() => setIsAmountModalOpen(false)}
+          onContinue={(amount: string) => {
+            setDepositAmount(amount);
+            setIsAmountModalOpen(false);
+            setIsDepositModalOpen(true);
+          }}
+          title="How much do you want to add?"
+          initialAmount={depositAmount}
+          currency="KES"
+        />
       )}
 
-      {/* Goal Details Modal */}
       {selectedGoal && (
-        <GoalDetailsModal
-          goal={selectedGoal}
-          onClose={() => setSelectedGoal(null)}
-          exchangeRate={exchangeRate}
+        <SaveMoneyModal
+          isOpen={isDepositModalOpen}
+          onClose={() => setIsDepositModalOpen(false)}
+          amount={depositAmount}
+          goal={{ title: selectedGoal.name, ...selectedGoal }}
+          account={account}
+          isLoading={isJoinGoalLoading}
+          error={joinGoalError}
+          tokenSymbol={defaultToken?.symbol || "USDC"}
+          tokens={tokens}
+          tokenInfos={tokenInfos}
+          supportedStablecoins={supportedStablecoins}
+          copied={copied}
+          setCopied={setCopied}
+          setSelectedTokenForOnramp={setSelectedTokenForOnramp}
+          setShowOnrampModal={setShowOnrampModal}
+          onDeposit={() => {
+            onJoinGroupGoalWithAmount(selectedGoal, depositAmount);
+          }}
         />
       )}
     </div>

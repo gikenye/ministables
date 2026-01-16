@@ -1,4 +1,5 @@
 import React from "react";
+import { theme } from "@/lib/theme";
 
 interface InfoCardProps {
   children: React.ReactNode;
@@ -14,14 +15,13 @@ export const InfoCard = ({
   const baseClasses = "rounded-lg border";
 
   const variantClasses = {
-    default: "bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-3",
-    stats: "bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-2",
-    action:
-      "bg-gray-800/20 backdrop-blur-sm border-gray-700/30 p-3 hover:bg-gray-700/30 transition-colors duration-200",
+    default: "p-3",
+    stats: "p-2",
+    action: "p-3 transition-colors duration-200",
   };
 
   return (
-    <div className={`${baseClasses} ${variantClasses[variant]} ${className}`}>
+    <div className={`${baseClasses} ${variantClasses[variant]} ${className} backdrop-blur-sm`} style={{ backgroundColor: theme.colors.cardButton, border: `1px solid ${theme.colors.cardButtonBorder}` }}>
       {children}
     </div>
   );
