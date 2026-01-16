@@ -4,6 +4,9 @@ import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
 export function useAppState() {
   // UI State
   const [saveActionsModalOpen, setSaveActionsModalOpen] = useState(false);
+  const [depositMethod, setDepositMethod] = useState<"ONCHAIN" | "MPESA">(
+    "ONCHAIN"
+  );
   const [showBalances, setShowBalances] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState<"goals" | "groups" | "leaderboard" | "profile">("goals");
@@ -73,6 +76,8 @@ export function useAppState() {
 
   // Withdrawal Modal State
   const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
+  const [withdrawActionsModalOpen, setWithdrawActionsModalOpen] = useState(false);
+  const [mobileOfframpModalOpen, setMobileOfframpModalOpen] = useState(false);
 
   // Onramp Modal State
   const [showOnrampModal, setShowOnrampModal] = useState(false);
@@ -85,6 +90,8 @@ export function useAppState() {
     // UI State
     saveActionsModalOpen,
     setSaveActionsModalOpen,
+    depositMethod,
+    setDepositMethod,
     showBalances,
     setShowBalances,
     isOnline,
@@ -184,6 +191,10 @@ export function useAppState() {
     // Withdrawal Modal State
     withdrawalModalOpen,
     setWithdrawalModalOpen,
+    withdrawActionsModalOpen,
+    setWithdrawActionsModalOpen,
+    mobileOfframpModalOpen,
+    setMobileOfframpModalOpen,
 
     // Onramp Modal State
     showOnrampModal,

@@ -1,216 +1,130 @@
 "use client";
 import { useState } from "react";
-import { BottomSheet, ActionButton } from "@/components/ui";
-
-interface CustomGoalModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onCreateGoal: () => void;
-  form: {
-    name: string;
-    amount: string;
-    timeline: string;
-    category: string;
-  };
-  setForm: (form: any) => void;
-  isLoading?: boolean;
-  error?: string | null;
-  exchangeRate?: number | null;
-}
+import { motion, AnimatePresence } from "framer-motion";
+import { BottomSheet } from "@/components/ui";
+import { theme } from "@/lib/theme";
+import { Loader2, ChevronLeft, ChevronDown } from "lucide-react";
 
 export const CustomGoalModal = ({
-  isOpen,
-  onClose,
-  onCreateGoal,
-  form,
-  setForm,
-  isLoading = false,
-  error = null,
-  exchangeRate = null,
-}: CustomGoalModalProps) => {
+  isOpen, onClose, onCreateGoal, form, setForm, isLoading, error, exchangeRate
+}: any) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [isShaking, setIsShaking] = useState(false);
 
   const steps = [
-    { key: "name", label: "Goal Name", required: true },
-    { key: "amount", label: "Target Amount", required: true },
-    { key: "timeline", label: "Timeline", required: false },
-    { key: "category", label: "Category", required: false },
+    { key: "name", label: "Goal Name", subLabel: "What are you saving for?", placeholder: "e.g. Vacation Fund", required: true },
+    { key: "amount", label: "Target Amount", subLabel: "How much do you need?", placeholder: "0", required: true },
+    { key: "timeline", label: "Timeline", subLabel: "When do you need it?", required: true },
   ];
 
   const currentField = steps[currentStep];
   const isLastStep = currentStep === steps.length - 1;
-  const canProceed =
-    !currentField.required ||
-    (form[currentField.key as keyof typeof form] &&
-      form[currentField.key as keyof typeof form].trim() !== "");
-
-  // Convert KES amount to USD for contract
-  const convertKESToUSD = (kesAmount: string): string => {
-    if (!exchangeRate || !kesAmount) return "0";
-    const kesValue = parseFloat(kesAmount);
-    const usdValue = kesValue / exchangeRate;
-    return usdValue.toFixed(2);
-  };
+  const isDisabled = isLoading;
 
   const handleNext = () => {
-    if (isLastStep) {
-      onCreateGoal();
-    } else {
-      setCurrentStep(currentStep + 1);
+    if (isDisabled) return;
+    const value = form[currentField.key];
+    if (currentField.required && (!value || value.trim() === "" || value === "0")) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 400);
+      return;
     }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setForm((prev: any) => ({ ...prev, [field]: value }));
+    if (isLastStep) onCreateGoal();
+    else setCurrentStep(s => s + 1);
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[95vh]">
-      <div className="bg-gray-800/20 backdrop-blur-sm min-h-full p-2 space-y-3 overflow-y-auto">
-        {/* Progress Indicator */}
-        <div className="flex items-center justify-center space-x-1 py-1">
-          {steps.map((_, index) => (
-            <div
-              key={index}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                index <= currentStep ? "bg-cyan-400" : "bg-gray-600"
-              }`}
-            />
+    <BottomSheet isOpen={isOpen} onClose={isDisabled ? () => {} : onClose} maxHeight="max-h-[500px]">
+      {/* Removed the background gradient here to prevent mirroring */}
+      <div className="p-6 flex flex-col h-full bg-transparent">
+        
+        {/* Step Indicator */}
+        <div className="flex gap-1.5 mb-8">
+          {steps.map((_, i) => (
+            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-500 ${i <= currentStep ? 'bg-[#4ade80]' : 'bg-white/5'}`} />
           ))}
         </div>
 
-        {/* Step Header */}
-        <div className="text-center py-2">
-          <div className="text-2xl mb-2">🎯</div>
-          <h2 className="text-lg font-bold text-white mb-1">
-            {currentField.label}
-          </h2>
-          <p className="text-sm text-gray-400">
-            Step {currentStep + 1} of {steps.length}
-          </p>
-        </div>
+        <div className="flex-1">
+          <header className="mb-6">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#4ade80] mb-1">{currentField.label}</p>
+            <h2 className="text-xl font-semibold text-white tracking-tight">{currentField.subLabel}</h2>
+          </header>
 
-        {/* Dynamic Form Field */}
-        <div className="space-y-2">
-          {currentField.key === "name" && (
-            <div>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                placeholder="e.g., New Car, Vacation"
-                className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-base font-medium"
-                maxLength={50}
-                autoFocus
-              />
-              <div className="text-xs text-gray-500 text-right mt-1">
-                {form.name.length}/50
-              </div>
-            </div>
-          )}
-
-          {currentField.key === "amount" && (
-            <div>
-              <div className="text-center mb-2">
-                <span className="text-2xl font-bold text-cyan-400">KES</span>
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={form.amount}
-                onChange={(e) =>
-                  handleInputChange(
-                    "amount",
-                    e.target.value.replace(/[^0-9]/g, "")
-                  )
-                }
-                placeholder="0"
-                className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-center text-xl font-bold"
-                autoFocus
-              />
-              {form.amount && exchangeRate && (
-                <div className="text-center mt-2 text-sm text-gray-400">
-                  ≈ ${convertKESToUSD(form.amount)} USD
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ x: 10, opacity: 0 }}
+              animate={isShaking ? { x: [-4, 4, -4, 4, 0] } : { x: 0, opacity: 1 }}
+              exit={{ x: -10, opacity: 0 }}
+              className="w-full"
+            >
+              {currentField.key === "amount" ? (
+                <div className="space-y-4">
+                  <div className="relative flex items-center bg-white/[0.03] border border-white/10 rounded-2xl px-3 py-3 focus-within:border-[#4ade80]/40 transition-all">
+                    <span className="text-sm font-bold text-[#4ade80] mr-3">KES</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={isDisabled}
+                      value={form.amount}
+                      onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/\D/g, '') })}
+                      className="w-full bg-transparent text-2xl font-bold text-white focus:outline-none disabled:opacity-50"
+                      placeholder="0"
+                    />
+                  </div>
+                  {exchangeRate && form.amount && (
+                    <p className="text-xs text-white/40 ml-1">
+                      Value: <span className="text-white/60">${(Number(form.amount) / exchangeRate).toFixed(2)} USD</span>
+                    </p>
+                  )}
                 </div>
+              ) : currentField.key === "timeline" ? (
+                <div className="relative">
+                  <select
+                    disabled={isDisabled}
+                    value={form[currentField.key]}
+                    onChange={(e) => setForm({ ...form, [currentField.key]: e.target.value })}
+                    className="w-full bg-white/[0.03] border border-white/10 p-4 rounded-2xl text-base text-white appearance-none outline-none focus:border-[#4ade80]/40"
+                  >
+                    <option value="3" className="bg-black">3 Months</option>
+                    <option value="6" className="bg-black">6 Months</option>
+                    <option value="12" className="bg-black">12 Months</option>
+                  </select>
+                  <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  disabled={isDisabled}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full bg-white/[0.03] border border-white/10 p-4 rounded-2xl text-base font-medium text-white transition-all focus:outline-none focus:border-[#4ade80]/40 placeholder:text-white/20"
+                  placeholder={currentField.placeholder}
+                />
               )}
-            </div>
-          )}
-
-          {currentField.key === "timeline" && (
-            <select
-              value={form.timeline}
-              onChange={(e) => handleInputChange("timeline", e.target.value)}
-              className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-base"
-            >
-              <option value="3">3 months</option>
-              <option value="6">6 months</option>
-              <option value="12">12 months</option>
-            </select>
-          )}
-
-          {currentField.key === "category" && (
-            <select
-              value={form.category}
-              onChange={(e) => handleInputChange("category", e.target.value)}
-              className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white focus:outline-none focus:border-cyan-400 text-base"
-            >
-              <option value="personal">Personal</option>
-              <option value="emergency">Emergency Fund</option>
-              <option value="travel">Travel</option>
-              <option value="education">Education</option>
-              <option value="business">Business</option>
-              <option value="health">Health</option>
-              <option value="home">Home</option>
-              <option value="other">Other</option>
-            </select>
-          )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-            <p className="text-red-400 text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Navigation Buttons */}
-        <div className="flex gap-2 pt-2">
-          <ActionButton
-            onClick={handleBack}
-            variant="outline"
-            size="lg"
-            className="flex-1"
+        {/* Buttons */}
+        <div className="flex gap-3 mt-10">
+          <button 
+            disabled={isDisabled}
+            onClick={() => currentStep === 0 ? onClose() : setCurrentStep(s => s - 1)} 
+            className="flex-1 py-2 bg-white/5 text-white/60 rounded-xl text-xs font-bold uppercase tracking-widest transition active:scale-95 disabled:opacity-30"
           >
             {currentStep === 0 ? "Cancel" : "Back"}
-          </ActionButton>
-          <ActionButton
-            onClick={handleNext}
-            variant="primary"
-            size="lg"
-            className="flex-1"
-            disabled={
-              !canProceed ||
-              isLoading ||
-              (currentField.key === "amount" && !exchangeRate)
-            }
+          </button>
+          
+          <button 
+            disabled={isDisabled}
+            onClick={handleNext} 
+            className="flex-[1.5] py-2 bg-[#4ade80] text-black rounded-xl text-xs font-black uppercase tracking-widest transition active:scale-95 disabled:opacity-50"
           >
-            {isLoading ? "Creating..." : isLastStep ? "Create Goal" : "Next"}
-          </ActionButton>
+            {isLoading ? <Loader2 className="animate-spin mx-auto" size={18} /> : (isLastStep ? "Create Goal" : "Continue")}
+          </button>
         </div>
-
-        {currentField.key === "amount" && !exchangeRate && (
-          <div className="text-center mt-2">
-            <p className="text-xs text-yellow-400">Loading exchange rate...</p>
-          </div>
-        )}
       </div>
     </BottomSheet>
   );

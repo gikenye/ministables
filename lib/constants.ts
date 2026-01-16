@@ -23,6 +23,17 @@ export const withdrawMethodABI = {
   type: "function",
 } as const;
 
+export const erc20TransferABI = {
+  inputs: [
+    { internalType: "address", name: "to", type: "address" },
+    { internalType: "uint256", name: "value", type: "uint256" },
+  ],
+  name: "transfer",
+  outputs: [{ internalType: "bool", name: "", type: "bool" }],
+  stateMutability: "nonpayable",
+  type: "function",
+} as const;
+
 // Default lock tier IDs
 export const LOCK_TIERS = {
   THIRTY_DAY: 1,

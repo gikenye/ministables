@@ -38,10 +38,11 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Allocation successful:', data);
     return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('❌ Allocation error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Allocation failed";
+    console.error('❌ Allocation error:', message);
     return NextResponse.json(
-      { error: error.message || 'Allocation failed' },
+      { error: message },
       { status: 500 }
     );
   }

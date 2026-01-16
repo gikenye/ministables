@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
+const rawBackendUrl = process.env.ALLOCATE_API_URL;
+const BACKEND_API_URL =
+  rawBackendUrl && rawBackendUrl.trim() ? rawBackendUrl.trim() : undefined;
 
 export async function POST(request: NextRequest) {
   try {
+    if (!BACKEND_API_URL) {
+      return NextResponse.json(
+        { error: "ALLOCATE_API_URL is not configured" },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { metaGoalId, invitedAddress, inviterAddress } = body;
 

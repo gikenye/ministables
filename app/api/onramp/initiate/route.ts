@@ -18,8 +18,6 @@ const ASSET_DECIMALS: Record<string, number> = {
   USDT: 6,
   cUSD: 18,
   CUSD: 18,
-  cKES: 18,
-  CKES: 18,
 };
 
 // Map chain names to Pretium API format
@@ -146,7 +144,15 @@ export async function POST(request: NextRequest) {
         statusText: response.statusText,
         data: JSON.stringify(data, null, 2),
       });
-      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      return NextResponse.json({
+        success: false,
+        error:
+          data?.message || data?.error || "Ensure the amount is greater than 100 KES",
+          code: data?.code || response.status
+      },
+      { status: 200}
+    );
+
     }
 
     const transactionCode =

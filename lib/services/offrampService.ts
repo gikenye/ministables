@@ -1,17 +1,17 @@
 // Offramp service for Pretium API integration - Mobile Money Withdrawals
+
 export interface OfframpQuoteRequest {
-  amount: string;
+  amount: string; // crypto amount input by user
   fiatCurrency: string;
   cryptoCurrency: string;
   network: string;
-  category?: string;
 }
 
 export interface OfframpQuoteResponse {
   success: boolean;
   data?: {
-    inputAmount: string;
-    outputAmount: string;
+    inputAmount: string; // crypto amount
+    outputAmount: string; // fiat output after fees
     inputCurrency: string;
     outputCurrency: string;
     exchangeRate: number;
@@ -35,24 +35,24 @@ export interface OfframpQuoteResponse {
 
 export interface OfframpInitiateRequest {
   chain: string;
-  hash: string;
-  partyB: string; // Phone number
-  tokenAddress: string;
-  project?: string;
+  transactionHash: string; // settlement transfer hash
+  shortcode: string; // formatted phone number
+  amount: string; // fiat amount to pay out
+  type?: "MOBILE" | "PAYBILL" | "BUY_GOODS";
+  mobileNetwork?: string;
+  callbackUrl?: string;
 }
 
 export interface OfframpInitiateResponse {
   success: boolean;
-  data?: {
-    orderID: string;
-  };
+  data?: { orderID: string };
   error?: string;
 }
 
 export interface OfframpStatusResponse {
   success: boolean;
   data?: {
-    status: 'PENDING' | 'SUCCESS' | 'FAILED';
+    status: "PENDING" | "SUCCESS" | "FAILED";
     message: string;
     details: {
       phoneNumber: string;
@@ -69,93 +69,25 @@ export interface OfframpStatusResponse {
   error?: string;
 }
 
-// Pretium API interfaces
 export interface PretiumExchangeRateRequest {
   currency_code: string;
-}
-
-export interface PretiumValidationRequest {
-  type: 'MOBILE' | 'PAYBILL' | 'BUY_GOODS';
-  shortcode: string;
-  mobile_network?: string;
-  account_number?: string;
-  bank_code?: string;
-}
-
-export interface PretiumPayRequest {
-  transaction_hash: string;
-  amount: string;
-  fee?: string;
-  shortcode: string;
-  account_number?: string;
-  type?: 'MOBILE' | 'PAYBILL' | 'BUY_GOODS';
-  mobile_network?: string;
-  account_name?: string;
-  bank_name?: string;
-  bank_code?: string;
-  chain?: string;
-  callback_url?: string;
 }
 
 export interface PretiumStatusRequest {
   transaction_code: string;
 }
 
-// Supported networks for offramp
-export const OFFRAMP_SUPPORTED_NETWORKS = [
-  'CELO',
-  'BASE',
-  'STELLAR'
-] as const;
+export interface PretiumPayRequest {
+  transaction_hash: string;
+  amount: string;
+  fee?: string;
+  shortcode: string; // phone
+  type?: "MOBILE" | "PAYBILL" | "BUY_GOODS";
+  mobile_network?: string;
+  chain?: string;
+  callback_url?: string;
+}
 
-// Supported cryptocurrencies for offramp
-export const OFFRAMP_SUPPORTED_CRYPTOS = [
-  'USDT',
-  'USDC', 
-  'cUSD'
-] as const;
-
-// Supported fiat currencies for offramp
-export const OFFRAMP_SUPPORTED_FIAT = [
-  'KES',
-  'NGN',
-  'UGX',
-  'CDF',
-  'MWK',
-  'ETB',
-  'GHS'
-] as const;
-
-// Mobile networks supported by Pretium
-export const MOBILE_NETWORKS = [
-  'Safaricom',
-  'Airtel',
-  'MTN',
-  'AirtelTigo',
-  'Airtel Money',
-  'Orange Money',
-  'MPESA',
-  'Telcel',
-  'Telebirr',
-  'Cbe Birr'
-] as const;
-
-// Network to token address mapping for Pretium supported tokens
-export const NETWORK_TOKEN_ADDRESSES = {
-  CELO: {
-    cUSD: '0x765DE816845861e75A25fCA122bb6898B8B1282a',
-    USDC: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C',
-    USDT: '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e'
-  },
-  BASE: {
-    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-  },
-  STELLAR: {
-    USDC: 'USDC'
-  }
-} as const;
-
-// Phone number validation patterns for Pretium supported countries
 export const PHONE_PATTERNS = {
   KES: /^(?:\+254|254|0)?([17]\d{8})$/,
   NGN: /^(?:\+234|234|0)?([789]\d{9})$/,
@@ -163,16 +95,14 @@ export const PHONE_PATTERNS = {
   CDF: /^(?:\+243|243|0)?(\d{9})$/,
   MWK: /^(?:\+265|265|0)?(\d{8,9})$/,
   ETB: /^(?:\+251|251|0)?(\d{9})$/,
-  GHS: /^(?:\+233|233|0)?(\d{9})$/
+  GHS: /^(?:\+233|233|0)?(\d{9})$/,
 } as const;
 
 class OfframpService {
   private baseUrl: string;
-  private apiKey: string;
 
   constructor() {
-    this.baseUrl = process.env.PRETIUM_BASE_URL || "";
-    this.apiKey = process.env.PRETIUM_API_KEY || "";
+    this.baseUrl = "/api";
   }
 
   private async makeRequest<T>(
@@ -180,346 +110,268 @@ class OfframpService {
     method: "GET" | "POST" = "POST",
     data?: any
   ): Promise<T> {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.apiKey,
-        },
-        body: data ? JSON.stringify(data) : undefined,
-      });
+    const res = await fetch(`${this.baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: data ? JSON.stringify(data) : undefined,
+    });
 
-      const result = await response.json();
+    const json = await res.json().catch(() => ({}));
 
-      if (!response.ok) {
-        throw new Error(result.error || `HTTP error! status: ${response.status}`);
-      }
-
-      return result;
-    } catch (error: any) {
-      console.error("Offramp API error:", error);
-      throw new Error(error.message || "Failed to communicate with offramp service");
+    if (!res.ok) {
+      // Pretium sometimes returns { message } or { error }
+      const msg = json?.error || json?.message || `HTTP error! status: ${res.status}`;
+      throw new Error(msg);
     }
+
+    return json as T;
   }
 
-  // Get quote for offramp transaction using Pretium exchange rate
+  // --- Constraints (used by UI) ---
+  // Keep signature your component expects.
+  validateWithdrawalConstraints(
+    tokenAddress: string,
+    amount: string,
+    userDeposits: string,
+    userBorrows: string,
+    allowBorrow: boolean
+  ): { ok: boolean; error?: string } {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return { ok: false, error: "Enter a valid amount" };
+
+    // Simple available = deposits - borrows unless allowBorrow
+    const deposits = Number(userDeposits || "0");
+    const borrows = Number(userBorrows || "0");
+    const available = allowBorrow ? deposits : Math.max(deposits - borrows, 0);
+
+    if (amt > available) {
+      return { ok: false, error: "Insufficient available balance" };
+    }
+
+    return { ok: true };
+  }
+
+  // --- Quote ---
   async getOfframpQuote(request: OfframpQuoteRequest): Promise<OfframpQuoteResponse> {
     try {
-      const exchangeRateData: PretiumExchangeRateRequest = {
-        currency_code: request.fiatCurrency
+      const rateReq: PretiumExchangeRateRequest = {
+        currency_code: request.fiatCurrency,
       };
-      
-      const result = await this.makeRequest<any>("/v1/exchange-rate", "POST", exchangeRateData);
-      
-      const exchangeRate = result.rate || 1;
-      const inputAmount = parseFloat(request.amount);
-      const outputAmount = inputAmount * exchangeRate;
-      const fee = outputAmount * 0.025; // 2.5% fee
-      
+      const rateRes = await this.makeRequest<any>(
+        "/onramp/exchange-rate",
+        "POST",
+        rateReq
+      );
+
+      const exchangeRate = Number(
+        rateRes?.data?.data?.quoted_rate ||
+          rateRes?.data?.data?.selling_rate ||
+          rateRes?.data?.rate ||
+          rateRes?.rate ||
+          1
+      );
+      const inputAmount = Number(request.amount);
+      const grossOut = inputAmount * exchangeRate;
+
+      // Simplified fee model (keep as you had)
+      const feeOut = grossOut * 0.025;
+      const netOut = Math.max(grossOut - feeOut, 0);
+
       return {
         success: true,
         data: {
           inputAmount: request.amount,
-          outputAmount: (outputAmount - fee).toString(),
+          outputAmount: netOut.toString(),
           inputCurrency: request.cryptoCurrency,
           outputCurrency: request.fiatCurrency,
           exchangeRate,
           type: "offramp",
           network: request.network,
           fee: {
-            feeInInputCurrency: (fee / exchangeRate).toString(),
+            feeInInputCurrency: (feeOut / exchangeRate).toString(),
             currency: request.fiatCurrency,
-            feeInOutputCurrency: fee,
-            estimatedOutputKES: request.fiatCurrency === 'KES' ? outputAmount - fee : 0,
-            decimals: 2
+            feeInOutputCurrency: feeOut,
+            estimatedOutputKES: request.fiatCurrency === "KES" ? netOut : 0,
+            decimals: 2,
           },
           limits: {
             min: this.getMinimumWithdrawalAmount(request.fiatCurrency),
             max: this.getMaximumWithdrawalAmount(request.fiatCurrency),
-            currency: request.fiatCurrency
-          }
-        }
+            currency: request.fiatCurrency,
+          },
+        },
       };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || "Failed to fetch quote" };
     }
   }
 
-  // Initiate offramp transaction using Pretium pay API
+  // --- Initiate Offramp ---
   async initiateOfframp(request: OfframpInitiateRequest): Promise<OfframpInitiateResponse> {
     try {
       const payData: PretiumPayRequest = {
-        transaction_hash: request.hash,
-        shortcode: request.partyB,
-        amount: "0", // Will be calculated from blockchain transaction
-        type: "MOBILE",
-        mobile_network: this.detectMobileNetwork(request.partyB),
+        transaction_hash: request.transactionHash,
+        shortcode: request.shortcode,
+        amount: request.amount,
+        type: request.type || "MOBILE",
+        mobile_network:
+          request.mobileNetwork ||
+          this.detectMobileNetwork(
+            request.shortcode,
+            this.getCurrencyFromChain(request.chain)
+          ),
         chain: request.chain.toUpperCase(),
-        callback_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/pretium/callback`
+        callback_url:
+          request.callbackUrl ||
+          `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/pretium/callback`,
       };
-      
-      const endpoint = request.chain === 'celo' ? '/v1/pay' : `/v1/pay/${this.getCurrencyFromChain(request.chain)}`;
-      const result = await this.makeRequest<any>(endpoint, "POST", payData);
-      
+
+      const result = await this.makeRequest<any>("/pretium/pay", "POST", payData);
+
+      const orderID =
+        result.transaction_code ||
+        result.id ||
+        result?.data?.transaction_code ||
+        result?.data?.data?.transaction_code;
+
+      if (!orderID) {
+        return { success: false, error: "Offramp initiation returned no order ID" };
+      }
+
       return {
         success: true,
-        data: {
-          orderID: result.transaction_code || result.id
-        }
+        data: { orderID },
       };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || "Failed to initiate offramp" };
     }
   }
 
-  // Check offramp transaction status using Pretium status API
+  // --- Status ---
   async getOfframpStatus(orderID: string): Promise<OfframpStatusResponse> {
     try {
-      const statusData: PretiumStatusRequest = {
-        transaction_code: orderID
-      };
-      
-      const result = await this.makeRequest<any>("/v1/status", "POST", statusData);
-      
+      const statusReq: PretiumStatusRequest = { transaction_code: orderID };
+      const result = await this.makeRequest<any>(
+        "/pretium/status",
+        "POST",
+        statusReq
+      );
+
       return {
         success: true,
         data: {
           status: this.mapPretiumStatus(result.status),
-          message: result.message || 'Transaction processed',
+          message: result.message || "Transaction processed",
           details: {
-            phoneNumber: result.phone_number || '',
+            phoneNumber: result.phone_number || "",
             ReceiverPartyPublicName: result.receiver_name,
-            transactionSize: result.amount || '0',
-            transactionSide: 'offramp',
+            transactionSize: result.amount || "0",
+            transactionSide: "offramp",
             initiatedAt: result.created_at || new Date().toISOString(),
             mpesaReceipt: result.receipt_number,
             completedAt: result.completed_at,
             failureReason: result.failure_reason,
-            resultCode: result.result_code
-          }
-        }
+            resultCode: result.result_code,
+          },
+        },
       };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || "Failed to fetch status" };
     }
   }
 
-  // Helper method to map Pretium status to our status format
-  private mapPretiumStatus(status: string): 'PENDING' | 'SUCCESS' | 'FAILED' {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-      case 'success':
-        return 'SUCCESS';
-      case 'failed':
-      case 'error':
-        return 'FAILED';
+  private mapPretiumStatus(status: string): "PENDING" | "SUCCESS" | "FAILED" {
+    switch ((status || "").toLowerCase()) {
+      case "completed":
+      case "success":
+        return "SUCCESS";
+      case "failed":
+      case "error":
+        return "FAILED";
       default:
-        return 'PENDING';
+        return "PENDING";
     }
   }
 
-  // Helper method to get currency code from chain
   private getCurrencyFromChain(chain: string): string {
-    const chainCurrencyMap: { [key: string]: string } = {
-      'celo': 'KES',
-      'base': 'USD',
-      'stellar': 'USD'
+    const map: Record<string, string> = {
+      celo: "KES",
+      base: "USD",
+      stellar: "USD",
     };
-    return chainCurrencyMap[chain.toLowerCase()] || 'KES';
-  }romChain(chain: string): string {
-    const chainCurrencyMap: { [key: string]: string } = {
-      'celo': 'KES',
-      'base': 'USD',
-      'stellar': 'USD'
-    };
-    return chainCurrencyMap[chain.toLowerCase()] || 'KES';
+    return map[(chain || "").toLowerCase()] || "KES";
   }
 
-  // Validate mobile number using Pretium validation API
-  async validateMobileNumber(phone: string, mobileNetwork: string, currency: string = 'KES'): Promise<{ success: boolean; data?: any; error?: string }> {
-    try {
-      const validationData: PretiumValidationRequest = {
-        type: 'MOBILE',
-        shortcode: phone,
-        mobile_network: mobileNetwork
-      };
-      
-      const endpoint = currency === 'KES' ? '/v1/validation' : `/v1/validation/${currency}`;
-      const result = await this.makeRequest<any>(endpoint, "POST", validationData);
-      
-      return {
-        success: true,
-        data: result
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message
-      };
+  detectMobileNetwork(phone: string, currency: string = "KES"): string {
+    const cleaned = phone.replace(/\D/g, "");
+
+    if (currency === "KES") {
+      if (cleaned.startsWith("2547") || cleaned.startsWith("2541")) return "Safaricom";
     }
+
+    return "Safaricom";
   }
 
-  // Detect mobile network from phone number
-  detectMobileNetwork(phone: string, currency: string = 'KES'): string {
-    const cleaned = phone.replace(/\D/g, '');
-    
-    if (currency === 'KES') {
-      if (cleaned.startsWith('254701') || cleaned.startsWith('254702') || cleaned.startsWith('254703') || 
-          cleaned.startsWith('254704') || cleaned.startsWith('254705') || cleaned.startsWith('254706') ||
-          cleaned.startsWith('254707') || cleaned.startsWith('254708') || cleaned.startsWith('254709') ||
-          cleaned.startsWith('254710') || cleaned.startsWith('254711') || cleaned.startsWith('254712') ||
-          cleaned.startsWith('254713') || cleaned.startsWith('254714') || cleaned.startsWith('254715') ||
-          cleaned.startsWith('254716') || cleaned.startsWith('254717') || cleaned.startsWith('254718') ||
-          cleaned.startsWith('254719') || cleaned.startsWith('254720') || cleaned.startsWith('254721') ||
-          cleaned.startsWith('254722') || cleaned.startsWith('254723') || cleaned.startsWith('254724') ||
-          cleaned.startsWith('254725') || cleaned.startsWith('254726') || cleaned.startsWith('254727') ||
-          cleaned.startsWith('254728') || cleaned.startsWith('254729')) {
-        return 'Safaricom';
-      }
-      if (cleaned.startsWith('254730') || cleaned.startsWith('254731') || cleaned.startsWith('254732') ||
-          cleaned.startsWith('254733') || cleaned.startsWith('254734') || cleaned.startsWith('254735') ||
-          cleaned.startsWith('254736') || cleaned.startsWith('254737') || cleaned.startsWith('254738') ||
-          cleaned.startsWith('254739')) {
-        return 'Airtel';
-      }
-    }
-    
-    return 'Safaricom'; // Default
-  }
-
-  // Helper method to validate phone number format
-  validatePhoneNumber(phone: string, currency: string = 'KES'): boolean {
+  validatePhoneNumber(phone: string, currency: string = "KES"): boolean {
     const pattern = PHONE_PATTERNS[currency as keyof typeof PHONE_PATTERNS];
-    if (!pattern) return false;
-    return pattern.test(phone);
+    return pattern ? pattern.test(phone) : false;
   }
 
-  // Helper method to format phone number for API
-  formatPhoneNumber(phone: string, currency: string = 'KES'): string {
-    // Remove any non-digit characters
+  formatPhoneNumber(phone: string, currency: string = "KES"): string {
     let cleaned = phone.replace(/\D/g, "");
-    
-    if (currency === 'KES') {
-      // Kenya: Convert to 254XXXXXXXXX format
-      if (cleaned.startsWith("0")) {
-        cleaned = "254" + cleaned.substring(1);
-      } else if (!cleaned.startsWith("254")) {
-        cleaned = "254" + cleaned;
-      }
+
+    if (currency === "KES") {
+      if (cleaned.startsWith("0")) cleaned = "254" + cleaned.slice(1);
+      else if (!cleaned.startsWith("254")) cleaned = "254" + cleaned;
     }
-    
+
     return cleaned;
   }
 
-  // Helper method to check if crypto is supported for offramp
-  isCryptoSupportedForOfframp(crypto: string): boolean {
-    return OFFRAMP_SUPPORTED_CRYPTOS.includes(crypto as any);
-  }
-
-  // Helper method to check if network is supported for offramp
-  isNetworkSupportedForOfframp(network: string): boolean {
-    return OFFRAMP_SUPPORTED_NETWORKS.includes(network as any);
-  }
-
-  // Helper method to get token address for network and symbol
-  getTokenAddress(network: string, symbol: string): string | null {
-    const networkTokens = NETWORK_TOKEN_ADDRESSES[network as keyof typeof NETWORK_TOKEN_ADDRESSES];
-    if (!networkTokens) return null;
-    return networkTokens[symbol as keyof typeof networkTokens] || null;
-  }
-
-  // Helper method to get supported tokens for a network
-  getSupportedTokensForNetwork(network: string): string[] {
-    const networkTokens = NETWORK_TOKEN_ADDRESSES[network as keyof typeof NETWORK_TOKEN_ADDRESSES];
-    return networkTokens ? Object.keys(networkTokens) : [];
-  }
-
-  // Helper method to detect network from token address
-  detectNetworkFromTokenAddress(tokenAddress: string): string | null {
-    for (const [network, tokens] of Object.entries(NETWORK_TOKEN_ADDRESSES)) {
-      for (const [symbol, address] of Object.entries(tokens)) {
-        if (address.toLowerCase() === tokenAddress.toLowerCase()) {
-          return network;
-        }
-      }
-    }
-    return null;
-  }
-
-  // Helper method to detect token symbol from address and network
-  detectTokenSymbolFromAddress(tokenAddress: string, network: string): string | null {
-    const networkTokens = NETWORK_TOKEN_ADDRESSES[network as keyof typeof NETWORK_TOKEN_ADDRESSES];
-    if (!networkTokens) return null;
-    
-    for (const [symbol, address] of Object.entries(networkTokens)) {
-      if (address.toLowerCase() === tokenAddress.toLowerCase()) {
-        return symbol;
-      }
-    }
-    return null;
-  }
-
-  // Helper method to get minimum withdrawal amounts by currency (Pretium limits)
-  getMinimumWithdrawalAmount(currency: string): number {
-    const minimums = {
+  private getMinimumWithdrawalAmount(currency: string): number {
+    const minimums: Record<string, number> = {
       KES: 20,
       NGN: 100,
       MWK: 100,
       UGX: 500,
       GHS: 5,
       CDF: 100,
-      ETB: 100
+      ETB: 100,
     };
-    return minimums[currency as keyof typeof minimums] || 20;
+    return minimums[currency] ?? 20;
   }
 
-  // Helper method to get maximum withdrawal amounts by currency (Pretium limits)
-  getMaximumWithdrawalAmount(currency: string): number {
-    const maximums = {
+  private getMaximumWithdrawalAmount(currency: string): number {
+    const maximums: Record<string, number> = {
       KES: 250000,
       NGN: 2000000,
       MWK: 5000000,
       UGX: 5000000,
       GHS: 1000,
       CDF: 5000000,
-      ETB: 5000000
+      ETB: 5000000,
     };
-    return maximums[currency as keyof typeof maximums] || 250000;
+    return maximums[currency] ?? 250000;
   }
 }
 
-// Export singleton instance
+// Singleton
 export const offrampService = new OfframpService();
 
-// Helper function to estimate fees (simplified)
-export function estimateOfframpFee(amount: number, currency: string = 'KES'): number {
-  // Basic fee structure - in real implementation this would come from the quote
-  const feeRates = {
-    KES: 0.025, // 2.5%
-    USD: 0.03   // 3%
-  };
-  
-  const rate = feeRates[currency as keyof typeof feeRates] || 0.025;
-  return Math.max(amount * rate, currency === 'KES' ? 1 : 0.1);
+// Helpers (used by UI)
+export function estimateOfframpFee(amount: number, currency: string = "KES"): number {
+  const feeRates: Record<string, number> = { KES: 0.025, USD: 0.03 };
+  const rate = feeRates[currency] ?? 0.025;
+  return Math.max(amount * rate, currency === "KES" ? 1 : 0.1);
 }
 
-// Helper function to format currency amounts
 export function formatCurrencyAmount(amount: number, currency: string): string {
-  const formatters = {
-    KES: new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }),
-    USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+  const formatters: Record<string, Intl.NumberFormat> = {
+    KES: new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES" }),
+    USD: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }),
   };
-  
-  const formatter = formatters[currency as keyof typeof formatters];
+  const formatter = formatters[currency];
   return formatter ? formatter.format(amount) : `${amount} ${currency}`;
 }

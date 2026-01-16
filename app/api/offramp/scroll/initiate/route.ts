@@ -104,15 +104,18 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ fiat collection initiated successfully:", data);
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to initiate onramp";
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error("❌ fiat collection initiation error details:", {
-      message: error.message,
-      stack: error.stack,
+      message,
+      stack,
     });
 
     return NextResponse.json(
       {
-        error: error.message || "Failed to initiate onramp",
+        error: message,
       },
       { status: 500 }
     );

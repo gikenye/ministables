@@ -6,6 +6,7 @@ export { TabNavigation } from "./TabNavigation";
 export { ProfileSection } from "./ProfileSection";
 export { StatsCard } from "./StatsCard";
 export { default as SaveActionsModal } from "./SaveActionsModal";
+export { default as WithdrawActionsModal } from "./WithdrawActionsModal";
 export { default as QuickSaveDetailsModal } from "./QuickSaveDetailsModal";
 export { CustomGoalModal } from "./CustomGoalModal";
 export { GoalDetailsModal } from "./GoalDetailsModal";
@@ -14,7 +15,6 @@ export { default as ExpandableQuickSaveCard } from "./ExpandableQuickSaveCard";
 
 // Layout Components
 export { DesktopSidebar } from "./DesktopSidebar";
-export { AppHeader } from "./AppHeader";
 export { ModalManager } from "./ModalManager";
 export { AppContainer } from "./AppContainer";
 export { MobileBottomNav } from "./MobileBottomNav";

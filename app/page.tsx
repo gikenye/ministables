@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -10,16 +10,17 @@ import {
 } from "thirdweb/react";
 import { client } from "@/lib/thirdweb/client";
 import { useChain } from "@/components/ChainProvider";
+import { WelcomeHeader } from "@/components/common/WelcomeHeader";
 
 import {
   AppContainer,
-  AppHeader,
   DesktopSidebar,
   MobileBottomNav,
   ModalManager,
 } from "@/components/common";
 import { GoalsSection } from "@/components/sections/GoalsSection";
 import { LeaderboardSection } from "@/components/sections/LeaderboardSection";
+import { RecentActivitySection } from "@/components/sections/RecentActivitySection";
 import { ClanTab } from "@/components/clan/ClanTab";
 import { NewProfile } from "@/components/common";
 import { NetworkStatusBar } from "@/components/common/NetworkStatusBar";
@@ -35,7 +36,6 @@ import { useGoalOperations } from "@/hooks/useGoalOperations";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useCombinedGoals } from "@/hooks/useCombinedGoals";
-
 import type { MyGroups } from "@/lib/types/shared";
 
 export default function AppPage() {
@@ -71,7 +71,7 @@ export default function AppPage() {
         .map((t) => t.address);
     } else if (chain?.id === 534352) {
       return tokens
-        .filter((t) => ["USDC", "WETH"].includes(t.symbol.toUpperCase()))
+        .filter((t) => ["USDC"].includes(t.symbol.toUpperCase()))
         .map((t) => t.address);
     }
     return tokens.map((t) => t.address);
@@ -129,6 +129,12 @@ export default function AppPage() {
     setCustomGoalModalOpen: state.setCustomGoalModalOpen,
     setCustomGoalForm: state.setCustomGoalForm,
     setSaveActionsModalOpen: state.setSaveActionsModalOpen,
+    setWithdrawActionsModalOpen: state.setWithdrawActionsModalOpen,
+    setShowOnrampModal: state.setShowOnrampModal,
+    setDepositMethod: state.setDepositMethod,
+    setWithdrawalModalOpen: state.setWithdrawalModalOpen,
+    setMobileOfframpModalOpen: state.setMobileOfframpModalOpen,
+    walletBalance: walletBalanceData?.value,
     setJoinGoalModalOpen: state.setJoinGoalModalOpen,
     setSelectedGoalToJoin: state.setSelectedGoalToJoin,
     setJoinGoalError: state.setJoinGoalError,
@@ -188,19 +194,41 @@ export default function AppPage() {
     }
   }, [account, walletOperations.pendingDeposit]);
 
-  useEffect(() => {
-    if (state.activeTab === "groups") {
-      dataFetching.fetchGroupGoals();
-      dataFetching.fetchMyGroups();
-    }
-  }, [state.activeTab, account?.address]);
+  const prefetchedGroupsFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (state.withdrawalModalOpen && account?.address && chain && tokens) {
+    if (!account?.address || prefetchedGroupsFor.current === account.address) {
+      return;
+    }
+    prefetchedGroupsFor.current = account.address;
+    dataFetching.fetchGroupGoals();
+    dataFetching.fetchMyGroups();
+  }, [account?.address]);
+
+  useEffect(() => {
+    if (state.activeTab !== "groups" || !account?.address) return;
+    if (state.myGroups || state.myGroupsLoading) return;
+    dataFetching.fetchGroupGoals();
+    dataFetching.fetchMyGroups();
+  }, [state.activeTab, account?.address, state.myGroups, state.myGroupsLoading]);
+
+  useEffect(() => {
+    const shouldFetch =
+      state.withdrawalModalOpen ||
+      state.mobileOfframpModalOpen ||
+      state.withdrawActionsModalOpen;
+    if (shouldFetch && account?.address && chain && tokens) {
       const tokenSymbols = tokens.map((token) => token.symbol);
       fetchVaultPositions(chain, account.address, tokenSymbols);
     }
-  }, [state.withdrawalModalOpen, account?.address, chain, tokens]);
+  }, [
+    state.withdrawalModalOpen,
+    state.mobileOfframpModalOpen,
+    state.withdrawActionsModalOpen,
+    account?.address,
+    chain,
+    tokens,
+  ]);
 
   const handleQuickSaveDeposit = async () => {
     const depositAmount = state.goalConfirmationOpen
@@ -277,12 +305,9 @@ export default function AppPage() {
       />
 
       <div className="lg:pl-72 relative z-10">
-        <AppHeader
-          activeTab={state.activeTab}
-          onRefresh={dataFetching.forceRefresh}
-          onNewGoal={() => state.setCustomGoalModalOpen(true)}
-          onNewGroup={() => state.setCreateGroupGoalModalOpen(true)}
-        />
+        <div className="px-4 sm:px-6 lg:px-8 pt-4">
+          {state.activeTab === "goals" && <WelcomeHeader />}
+        </div>
 
         <main
           id="main-content"
@@ -312,26 +337,36 @@ export default function AppPage() {
               fetchUserPortfolio={dataFetching.fetchUserPortfolio}
               fetchUserGoals={dataFetching.fetchUserGoals}
               toggleBalanceVisibility={state.toggleBalanceVisibility}
-              setQuickSaveDetailsOpen={state.setQuickSaveDetailsOpen}
-              setWithdrawalModalOpen={state.setWithdrawalModalOpen}
+              setSaveActionsModalOpen={state.setSaveActionsModalOpen}
+              setWithdrawActionsModalOpen={state.setWithdrawActionsModalOpen}
               sendTransaction={sendTransaction}
             />
           )}
-
           {state.activeTab === "groups" && (
             <ClanTab
               account={account}
-              groupGoals={state.groupGoals}
               myGroups={state.myGroups as MyGroups | undefined}
               groupGoalsLoading={state.groupGoalsLoading}
               myGroupsLoading={state.myGroupsLoading}
               onCreateGroupGoal={() => state.setCreateGroupGoalModalOpen(true)}
-              onJoinGroupGoal={modalHandlers.handleJoinGroupGoal}
-              onRefreshGroups={() => {
-                dataFetching.fetchGroupGoals();
-                dataFetching.fetchMyGroups();
-              }}
+              onOpenWithdrawActions={() =>
+                state.setWithdrawActionsModalOpen(true)
+              }
+              onJoinGroupGoalWithAmount={
+                goalOperations.handleJoinGoalWithAmount
+              }
               exchangeRate={getKESRate() || undefined}
+              isJoinGoalLoading={state.joinGoalLoading}
+              joinGoalError={state.joinGoalError}
+              tokens={tokens}
+              tokenInfos={tokenInfos}
+              supportedStablecoins={supportedStablecoins}
+              defaultToken={defaultToken}
+              copied={state.copied}
+              setCopied={state.setCopied}
+              setDepositMethod={state.setDepositMethod}
+              setSelectedTokenForOnramp={state.setSelectedTokenForOnramp}
+              setShowOnrampModal={state.setShowOnrampModal}
             />
           )}
 
@@ -346,10 +381,12 @@ export default function AppPage() {
           )}
 
           {state.activeTab === "profile" && (
-            <NewProfile
-              showBalance={state.showBalances}
-              onToggleBalance={state.toggleBalanceVisibility}
-            />
+            <>
+              <NewProfile
+                showBalance={state.showBalances}
+                onToggleBalance={state.toggleBalanceVisibility}
+              />
+            </>
           )}
         </main>
 
@@ -364,6 +401,9 @@ export default function AppPage() {
           saveActionsModalOpen={state.saveActionsModalOpen}
           onSaveActionsClose={() => state.setSaveActionsModalOpen(false)}
           onSaveActionSelect={modalHandlers.handleSaveActionSelect}
+          withdrawActionsModalOpen={state.withdrawActionsModalOpen}
+          onWithdrawActionsClose={() => state.setWithdrawActionsModalOpen(false)}
+          onWithdrawActionSelect={modalHandlers.handleWithdrawActionSelect}
           quickSaveDetailsOpen={state.quickSaveDetailsOpen}
           quickSaveAmountOpen={state.quickSaveAmountOpen}
           quickSaveConfirmationOpen={state.quickSaveConfirmationOpen}
@@ -416,10 +456,13 @@ export default function AppPage() {
             )
           }
           withdrawalModalOpen={state.withdrawalModalOpen}
+          setWithdrawalModalOpen={state.setWithdrawalModalOpen}
           vaultPositions={vaultPositions}
           vaultPositionsLoading={vaultPositionsLoading}
           onWithdrawalClose={() => state.setWithdrawalModalOpen(false)}
           onWithdraw={walletOperations.handleVaultWithdrawal}
+          mobileOfframpModalOpen={state.mobileOfframpModalOpen}
+          onMobileOfframpClose={() => state.setMobileOfframpModalOpen(false)}
           showOnrampModal={state.showOnrampModal}
           selectedTokenForOnramp={state.selectedTokenForOnramp}
           tokenInfos={tokenInfos}
@@ -431,12 +474,15 @@ export default function AppPage() {
           depositSuccess={transactionHandlers.depositSuccess}
           defaultToken={defaultToken}
           account={account}
+          chain={chain}
           tokens={tokens}
           supportedStablecoins={supportedStablecoins}
           copied={state.copied}
           setCopied={state.setCopied}
           setSelectedTokenForOnramp={state.setSelectedTokenForOnramp}
           setShowOnrampModal={state.setShowOnrampModal}
+          depositMethod={state.depositMethod}
+          onSettlementTransfer={walletOperations.handleSettlementTransfer}
         />
       </div>
     </AppContainer>

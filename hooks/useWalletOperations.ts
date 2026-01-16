@@ -5,8 +5,9 @@ import { parseUnits } from "viem";
 import { reportInfo, reportError } from "@/lib/services/errorReportingService";
 import { getBestStablecoinForDeposit } from "@/lib/services/balanceService";
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
-import { vaultABI, withdrawMethodABI } from "@/lib/constants";
+import { erc20TransferABI, vaultABI, withdrawMethodABI } from "@/lib/constants";
 import { executeWithGasSponsorship, logGasInfo } from "@/lib/utils/gasSponsorship";
+import { activityService } from "@/lib/services/activityService";
 
 interface WalletOperationsProps {
   account: any;
@@ -260,9 +261,9 @@ export function useWalletOperations({
     try {
       await logGasInfo(userAddress);
 
-      await executeWithGasSponsorship(
-        userAddress,
-        async () => {
+        await executeWithGasSponsorship(
+          userAddress,
+          async () => {
           for (const depositId of depositIds) {
             const vaultContract = getContract({ client, chain, address: vaultAddress });
             const withdrawTx = prepareContractCall({
@@ -272,6 +273,16 @@ export function useWalletOperations({
             });
             const result = await sendTransaction(withdrawTx);
             await waitForReceipt({ client, chain, transactionHash: result.transactionHash });
+            
+            // Track withdrawal activity
+            activityService.trackWithdrawal(
+              0, // Amount will be updated when we get the actual withdrawal amount
+              tokenSymbol,
+              result.transactionHash,
+              undefined,
+              userAddress
+            );
+            
             await fetch(`/api/goals/vault-withdraw`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -286,7 +297,7 @@ export function useWalletOperations({
             });
           }
         },
-        { sponsorGas }
+        { sponsorGas, chainId: chain.id }
       );
     } catch (error) {
       reportError("Vault withdrawal failed", {
@@ -300,10 +311,68 @@ export function useWalletOperations({
     }
   };
 
+  const handleSettlementTransfer = async (
+    tokenAddress: string,
+    amount: string,
+    toAddress: string,
+    decimals?: number
+  ): Promise<string> => {
+    if (!account?.address) {
+      throw new Error("Wallet not connected. Please connect your wallet to transfer.");
+    }
+    if (!chain?.id) {
+      throw new Error("Network not detected. Please ensure you're connected to a supported network.");
+    }
+    if (!tokenAddress || !toAddress) {
+      throw new Error("Missing token or destination address.");
+    }
+
+    const tokenDecimals = typeof decimals === "number" ? decimals : defaultToken?.decimals || 18;
+    const amountWei = parseUnits(amount, tokenDecimals);
+
+    try {
+      const tokenContract = getContract({
+        client,
+        chain,
+        address: tokenAddress,
+        abi: [erc20TransferABI],
+      });
+
+      const transferTx = prepareContractCall({
+        contract: tokenContract,
+        method: erc20TransferABI,
+        params: [toAddress, amountWei],
+      });
+
+      const result = await sendTransaction(transferTx);
+      if (!result?.transactionHash) {
+        throw new Error("Transfer failed to submit");
+      }
+
+      await waitForReceipt({
+        client,
+        chain,
+        transactionHash: result.transactionHash,
+      });
+
+      return result.transactionHash;
+    } catch (error) {
+      reportError("Settlement transfer failed", {
+        component: "useWalletOperations",
+        operation: "handleSettlementTransfer",
+        chainId: chain?.id,
+        tokenSymbol: defaultToken?.symbol,
+        additional: { error, tokenAddress, toAddress },
+      });
+      throw error;
+    }
+  };
+
   return {
     prepareQuickSaveDepositTransaction,
     handleQuickSaveDeposit,
     handleVaultWithdrawal,
+    handleSettlementTransfer,
     pendingDeposit,
     setPendingDeposit,
   };

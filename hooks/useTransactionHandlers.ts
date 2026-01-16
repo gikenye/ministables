@@ -8,6 +8,7 @@ import {
 import { mapTokenSymbolToAsset } from "@/lib/services/backendApiService";
 import { reportTransactionToDivvi } from "@/lib/services/divviService";
 import { backendApiClient } from "@/lib/services/backendApiService";
+import { activityService } from "@/lib/services/activityService";
 
 interface DepositSuccess {
   amount: string;
@@ -79,6 +80,16 @@ export function useTransactionHandlers() {
       amount,
       transactionHash: receipt.transactionHash,
     });
+
+    // Track activity
+    const goalName = goalConfirmationOpen && selectedGoal?.name ? selectedGoal.name : undefined;
+    activityService.trackDeposit(
+      parseFloat(amount),
+      selectedToken?.symbol || defaultToken?.symbol || "USDC",
+      receipt.transactionHash,
+      goalName,
+      account?.address
+    );
 
     // Call backend allocation API
     try {

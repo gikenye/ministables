@@ -9,6 +9,7 @@ import {
   ExpandableQuickSaveCard,
   type FrontendGoal,
 } from "@/components/common";
+import { RecentActivitySection } from "@/components/sections/RecentActivitySection";
 
 interface GoalsSectionProps {
   combinedGoals: any[];
@@ -30,12 +31,12 @@ interface GoalsSectionProps {
   fetchUserPortfolio: () => void;
   fetchUserGoals: () => void;
   toggleBalanceVisibility: () => void;
-  setQuickSaveDetailsOpen: (open: boolean) => void;
-  setWithdrawalModalOpen: (open: boolean) => void;
+  setSaveActionsModalOpen: (open: boolean) => void;
+  setWithdrawActionsModalOpen: (open: boolean) => void;
   sendTransaction: any;
 }
 
-export function GoalsSection({
+export function GoalsSection({ 
   combinedGoals,
   combinedLoading,
   combinedError,
@@ -55,8 +56,8 @@ export function GoalsSection({
   fetchUserPortfolio,
   fetchUserGoals,
   toggleBalanceVisibility,
-  setQuickSaveDetailsOpen,
-  setWithdrawalModalOpen,
+  setSaveActionsModalOpen,
+  setWithdrawActionsModalOpen,
   sendTransaction,
 }: GoalsSectionProps) {
   const getKESRate = () => exchangeRate;
@@ -106,8 +107,8 @@ export function GoalsSection({
                 isLoading={combinedLoading}
                 showBalance={showBalances}
                 onToggleBalance={toggleBalanceVisibility}
-                onDeposit={() => setQuickSaveDetailsOpen(true)}
-                onWithdraw={() => setWithdrawalModalOpen(true)}
+                onDeposit={() => setSaveActionsModalOpen(true)}
+                onWithdraw={() => setWithdrawActionsModalOpen(true)}
                 defaultToken={defaultToken}
                 chain={chain}
                 tokenInfo={tokenInfos}
@@ -117,6 +118,8 @@ export function GoalsSection({
                   fetchUserGoals();
                 }}
                 sendTransaction={sendTransaction}
+                onCreateGoal={handleCreateFirstGoal}
+                onGoalClick={handleGoalCardClick}
               />
             )}
           </div>
@@ -131,84 +134,11 @@ export function GoalsSection({
             </div>
           )}
 
-          {/* User Goals Section */}
-          <section className="mb-20 pb-4" aria-labelledby="goals-heading">
-            <div className="flex items-center space-x-2 mb-4">
-              <TrendingUp
-                className="w-5 h-5 text-gray-400"
-                aria-hidden="true"
-              />
-              <h2
-                id="goals-heading"
-                className="text-lg font-semibold text-white"
-              >
-                My Goals
-              </h2>
-            </div>
-
-            <div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"
-              role="grid"
-              aria-label="Savings goals"
-            >
-              {goalsLoading ? (
-                // Show skeleton cards while loading
-                <>
-                  <GoalCardSkeleton />
-                  <GoalCardSkeleton />
-                  <GoalCardSkeleton />
-                </>
-              ) : (
-                <>
-                  {combinedGoals
-                    .filter((g) => g.category !== "quick")
-                    .map((goal, index) => (
-                      <div
-                        key={goal.metaGoalId || goal.id}
-                        role="gridcell"
-                        aria-label={`Goal ${index + 1}: ${
-                          goal.name || goal.title
-                        }`}
-                      >
-                        <GoalCard
-                          goal={goal as unknown as FrontendGoal}
-                          showBalance={showBalances}
-                          onCardClick={() => handleGoalCardClick(goal)}
-                          exchangeRate={getKESRate() || undefined}
-                        />
-                      </div>
-                    ))}
-
-                  {/* Show empty state if no user goals exist */}
-                  {combinedGoals.filter((g) => g.category !== "quick")
-                    .length === 0 && (
-                    <div
-                      className="col-span-full text-center py-8"
-                      role="region"
-                      aria-label="No goals available"
-                    >
-                      <p className="text-gray-400 mb-4">
-                        No custom goals created yet
-                      </p>
-                      <ActionButton
-                        onClick={handleCreateFirstGoal}
-                        variant="primary"
-                        size="lg"
-                        className="w-full max-w-xs mx-auto"
-                        aria-describedby="create-goal-description"
-                      >
-                        <Plus className="w-5 h-5 mr-2" />
-                        Create Your First Goal
-                      </ActionButton>
-                      <div id="create-goal-description" className="sr-only">
-                        Opens a form to create your first savings goal
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </section>
+          {/* Recent Activity Section - Replace My Goals */}
+          <RecentActivitySection 
+            account={account}
+            exchangeRate={exchangeRate}
+          />
         </>
       )}
     </div>
