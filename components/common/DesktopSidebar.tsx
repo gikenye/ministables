@@ -97,7 +97,6 @@ export function DesktopSidebar({ activeTab, onTabChange, onQuickSave, onNewGoal 
                 onClick={onQuickSave}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-3 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30"
               >
-                <Sparkles size={16} />
                 Quick Save
               </button>
               <button
