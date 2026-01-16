@@ -14,6 +14,11 @@ interface UseModalHandlersProps {
   setCustomGoalModalOpen: (open: boolean) => void;
   setCustomGoalForm: (form: any) => void;
   setSaveActionsModalOpen: (open: boolean) => void;
+  setWithdrawActionsModalOpen: (open: boolean) => void;
+  setShowOnrampModal: (open: boolean) => void;
+  setDepositMethod: (method: "ONCHAIN" | "MPESA") => void;
+  setWithdrawalModalOpen: (open: boolean) => void;
+  setMobileOfframpModalOpen: (open: boolean) => void;
   setJoinGoalModalOpen: (open: boolean) => void;
   setSelectedGoalToJoin: (goal: GroupSavingsGoal | null) => void;
   setJoinGoalError: (error: string | null) => void;
@@ -21,6 +26,7 @@ interface UseModalHandlersProps {
   setDepositError: (error: string | null) => void;
   setTransactionStatus: (status: string | null) => void;
   setDepositSuccess: (success: any) => void;
+  walletBalance?: bigint;
 }
 
 export function useModalHandlers(props: UseModalHandlersProps) {
@@ -28,6 +34,7 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setQuickSaveDetailsOpen,
     setQuickSaveAmountOpen,
     setQuickSaveConfirmationOpen,
+    walletBalance,
     setQuickSaveAmount,
     setGoalDetailsOpen,
     setGoalAmountOpen,
@@ -37,6 +44,11 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setCustomGoalModalOpen,
     setCustomGoalForm,
     setSaveActionsModalOpen,
+    setWithdrawActionsModalOpen,
+    setShowOnrampModal,
+    setDepositMethod,
+    setWithdrawalModalOpen,
+    setMobileOfframpModalOpen,
     setJoinGoalModalOpen,
     setSelectedGoalToJoin,
     setJoinGoalError,
@@ -46,20 +58,64 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setDepositSuccess,
   } = props;
 
-  const handleSaveActionSelect = useCallback(
+const handleSaveActionSelect = useCallback(
     (actionId: string) => {
       setSaveActionsModalOpen(false);
-      if (actionId === "quick") {
-        setQuickSaveDetailsOpen(true);
+
+      if (actionId === "onramp") {
+        setDepositMethod("MPESA");
+        setShowOnrampModal(true);
+      } 
+      else if (actionId === "onchain") {
+        setDepositMethod("ONCHAIN");
+       
+        const hasFunds = walletBalance && walletBalance > BigInt(0);
+
+        if (hasFunds) {
+          // Proceed with normal deposit flow
+          setQuickSaveAmountOpen(true);
+        } else {
+          // No funds: Go straight to the "Deposit Confirmation" 
+          // which contains the wallet address/QR code for them to copy
+          setQuickSaveAmount("0"); // Default amount for display
+          setQuickSaveConfirmationOpen(true);
+        }
       }
     },
-    [setSaveActionsModalOpen, setQuickSaveDetailsOpen]
+    [
+      setSaveActionsModalOpen,
+      setShowOnrampModal,
+      setDepositMethod,
+      setQuickSaveAmountOpen,
+      setQuickSaveConfirmationOpen,
+      walletBalance,
+    ]
   );
 
   const handleQuickSaveSaveNow = useCallback(() => {
     setQuickSaveDetailsOpen(false);
     setQuickSaveAmountOpen(true);
   }, [setQuickSaveDetailsOpen, setQuickSaveAmountOpen]);
+
+  const handleWithdrawActionSelect = useCallback(
+    (actionId: string) => {
+      setWithdrawActionsModalOpen(false);
+
+      if (actionId === "wallet") {
+        setWithdrawalModalOpen(true);
+        return;
+      }
+
+      if (actionId === "offramp") {
+        setMobileOfframpModalOpen(true);
+      }
+    },
+    [
+      setWithdrawActionsModalOpen,
+      setWithdrawalModalOpen,
+      setMobileOfframpModalOpen,
+    ]
+  );
 
   const handleQuickSaveAmountContinue = useCallback(
     (amount: string) => {
@@ -138,6 +194,7 @@ export function useModalHandlers(props: UseModalHandlersProps) {
 
   return {
     handleSaveActionSelect,
+    handleWithdrawActionSelect,
     handleQuickSaveSaveNow,
     handleQuickSaveAmountContinue,
     closeAllQuickSaveModals,

@@ -1,69 +1,103 @@
+"use client";
 import React, { useState, useEffect } from "react";
-import { BottomSheet } from "../ui/BottomSheet";
-import { ModalHeader } from "../ui/ModalHeader";
-import { AmountDisplay } from "../ui/AmountDisplay";
-import { NumberKeypad } from "../ui/NumberKeypad";
-import { ActionButton } from "../ui/ActionButton";
-import { theme } from "@/lib/theme";
+import { motion, PanInfo, useAnimation } from "framer-motion";
+import { BottomSheet, ActionButton } from "@/components/ui";
 
-interface AmountInputModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onContinue: (amount: string) => void;
-  title?: string;
-  initialAmount?: string;
-  currency?: string;
-  icon?: string;
-}
+const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "⌫"];
 
 export const AmountInputModal = ({
-  isOpen,
-  onClose,
-  onContinue,
-  title = "Enter Amount",
-  initialAmount = "100",
-  currency = "KES",
-  icon = "🐷",
-}: AmountInputModalProps) => {
+  isOpen, onClose, onContinue, title = "HOW MUCH DO YOU WANT TO SAVE?", initialAmount = "100", currency = "KES"
+}: any) => {
   const [amount, setAmount] = useState(initialAmount);
+  const controls = useAnimation();
 
-  // Reset amount when modal opens or initialAmount changes
-  useEffect(() => {
+  useEffect(() => { 
     if (isOpen) {
       setAmount(initialAmount);
-    }
-  }, [isOpen, initialAmount]);
+      // Ensure the motion div is reset to its base state when opening
+      controls.set({ y: 0 });
+    } 
+  }, [isOpen, initialAmount, controls]);
 
-  const handleNumberPress = (num: string) => {
-    if (num === "00") {
-      setAmount((prev) => prev + "00");
-    } else if (num === "⌫") {
-      setAmount((prev) => prev.slice(0, -1) || "0");
-    } else {
-      setAmount((prev) => (prev === "0" ? num : prev + num));
-    }
+  const handlePress = (num: string) => {
+    if (num === "⌫") setAmount(prev => prev.length <= 1 ? "0" : prev.slice(0, -1));
+    else if (amount.length < 9) setAmount(prev => prev === "0" ? num : prev + num);
   };
 
-  const handleContinue = () => {
-    onContinue(amount);
+  const onDragEnd = (_: any, info: PanInfo) => {
+    // If user swipes down fast or far enough, close the modal
+    if (info.offset.y > 150 || info.velocity.y > 600) {
+      onClose();
+    } else {
+      // Recoil effect: Snaps back to position if drag wasn't enough to close
+      controls.start({ y: 0, transition: { type: "spring", damping: 25, stiffness: 500 } });
+    }
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[85vh]">
-      <ModalHeader title={title} onClose={onClose} />
-
-      <div className="p-3 space-y-3 overflow-y-auto pb-6" style={{ backgroundColor: theme.colors.backgroundSecondary }}>
-        <div className="text-center py-3">
-          <div className="text-3xl mb-3">{icon}</div>
-          <AmountDisplay amount={amount} currency={currency} size="lg" />
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[80vh]">
+      <motion.div 
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.15}
+        onDragEnd={onDragEnd}
+        animate={controls}
+        // STABILIZATION: Lock these properties to prevent mirroring/flipping
+        style={{ x: 0, scaleX: 1, touchAction: "none" }}
+        className="flex flex-col bg-transparent px-5 pb-8 space-y-4"
+      >
+        {/* Compressed Header Display */}
+        <div className="text-center py-2">
+          <p className="font-black text-[#0d9488] uppercase tracking-[0.2em] text-[9px] mb-1">
+            {title}
+          </p>
+          <div className="flex items-baseline justify-center tracking-tighter">
+            <span className="text-base font-black text-[#0d9488] mr-1.5 uppercase">
+              {currency}
+            </span>
+            <motion.span 
+              key={amount}
+              initial={{ scale: 1.05, opacity: 0.8 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.1 }}
+              className="text-3xl font-black text-white truncate"
+            >
+              {Number(amount).toLocaleString()}
+            </motion.span>
+          </div>
         </div>
 
-        <ActionButton onClick={handleContinue} variant="primary" size="md" className="w-full">
-          CONTINUE
-        </ActionButton>
+        {/* Compact Keypad Grid */}
+        <div className="grid grid-cols-3 gap-1.5 pt-1">
+          {KEYS.map(key => (
+            <motion.button
+              key={key}
+              // Motion: High-response "Haptic" tap effect
+              whileTap={{ 
+                scale: 0.92, 
+                backgroundColor: "rgba(13, 148, 136, 0.15)",
+                transition: { duration: 0.05 } 
+              }}
+              onClick={() => handlePress(key)}
+              // Prevents the tap from being interpreted as a drag start
+              onPointerDown={(e) => e.stopPropagation()}
+              className="py-3 rounded-xl bg-white/[0.03] border border-white/5 text-s font-bold text-white flex items-center justify-center transition-colors active:border-[#0d9488]/40 shadow-sm"
+            >
+              {key}
+            </motion.button>
+          ))}
+        </div>
 
-        <NumberKeypad onNumberPress={handleNumberPress} className="pb-3" />
-      </div>
+        {/* Compact Action Button */}
+        <div className="pt-2">
+          <ActionButton
+            onClick={() => onContinue(amount)} 
+            className="w-full h-10 bg-[#0d9488] rounded-xl text-white font-black text-sm tracking-[0.2em] shadow-lg active:scale-[0.5] transition-all"
+          >
+            CONTINUE
+          </ActionButton>
+        </div>
+      </motion.div>
     </BottomSheet>
   );
 };

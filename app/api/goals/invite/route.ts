@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
+const BACKEND_API_URL = process.env.ALLOCATE_API_URL || "";
 
 export async function POST(request: NextRequest) {
   try {

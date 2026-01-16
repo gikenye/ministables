@@ -10,10 +10,14 @@ interface AppContainerProps {
   onKeyDown: (event: React.KeyboardEvent) => void;
 }
 
-export function AppContainer({ children, announcements, onKeyDown }: AppContainerProps) {
+export function AppContainer({
+  children,
+  announcements,
+  onKeyDown,
+}: AppContainerProps) {
   return (
     <div
-      className="min-h-screen relative overflow-hidden"
+      className="min-h-screen min-h-[100dvh] relative overflow-hidden"
       style={{ backgroundColor: theme.colors.backgroundMain }}
       role="application"
       aria-label="Minilend Savings Application"
@@ -23,7 +27,10 @@ export function AppContainer({ children, announcements, onKeyDown }: AppContaine
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 px-4 py-2 rounded z-50"
-        style={{ backgroundColor: theme.colors.border, color: theme.colors.textWhite }}
+        style={{
+          backgroundColor: theme.colors.border,
+          color: theme.colors.textWhite,
+        }}
       >
         Skip to main content
       </a>

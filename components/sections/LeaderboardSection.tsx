@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { BarChart3 } from "lucide-react";
+import React from "react";
+import { motion } from "framer-motion";
+import { BarChart3, RefreshCcw } from "lucide-react";
+import { theme } from "@/lib/theme";
 
 interface UserScore {
   rank: number;
@@ -16,15 +18,7 @@ export interface LeaderboardEntry {
   formattedLeaderboardScore: string;
   leaderboardRank: number;
   isCurrentUser?: boolean;
-  assetBalances: Array<{
-    asset: string;
-    vault: string;
-    totalAmountWei: string;
-    totalAmountUSD: string;
-    totalSharesWei: string;
-    totalSharesUSD: string;
-    depositCount: number;
-  }>;
+  assetBalances: Array<any>;
 }
 
 interface LeaderboardSectionProps {
@@ -35,6 +29,12 @@ interface LeaderboardSectionProps {
   refetchLeaderboard: () => void;
 }
 
+const getEmojiAvatar = (address: string) => {
+  const emojis = ["🍣", "🎈", "🌶️", "🎉", "🐧", "🐱", "☀️", "🐲", "🤖", "🍕"];
+  const index = parseInt(address.slice(-1), 16) % emojis.length;
+  return emojis[index];
+};
+
 export function LeaderboardSection({
   leaderboard,
   leaderboardLoading,
@@ -43,191 +43,202 @@ export function LeaderboardSection({
   refetchLeaderboard,
 }: LeaderboardSectionProps) {
   return (
-    <section
-      className="px-4 py-6 space-y-4"
-      role="region"
-      aria-labelledby="leaderboard-heading"
+    <section 
+      className="px-4 py-8 space-y-6 max-w-md mx-auto min-h-screen pb-24 transition-colors duration-300"
+      style={{ backgroundColor: theme.colors.background }}
     >
-      {/* User Score Card - Compact Version */}
-      {userScore && (
-        <div
-          className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-3 text-white"
-          role="region"
-          aria-label="Your leaderboard ranking"
+      <header className="px-2">
+        <h2 
+          className="text-3xl font-black tracking-tight"
+          style={{ color: theme.colors.text }}
         >
-          <div className="flex items-center justify-between">
-            {/* Rank Section */}
-            <div className="flex items-center gap-2">
-              <div className="text-2xl" aria-hidden="true"></div>
+          Leaderboard
+        </h2>
+      </header>
+
+      {/* 1. Current User "Rainbow Border" Card */}
+      {userScore && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative p-[1.5px] rounded-[24px] overflow-hidden shadow-lg"
+          style={{ 
+            background: `linear-gradient(to right, #ffcf3d, #ff6b6b, ${theme.colors.accent}, #4d9eff)` 
+          }}
+        >
+          <div 
+            className="rounded-[23px] p-5 flex items-center justify-between"
+            style={{ backgroundColor: theme.colors.backgroundDark }}
+          >
+            <div className="flex items-center gap-3">
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center text-xl border"
+                style={{ backgroundColor: theme.colors.backgroundSecondary, borderColor: theme.colors.borderLight }}
+              >
+                🐼
+              </div>
               <div>
-                <div className="text-xs opacity-75">Rank</div>
-                <div className="text-lg font-bold">
-                  {userScore.rank != null && userScore.rank !== undefined
-                    ? `#${userScore.rank}`
-                    : "Not ranked"}
+                <div 
+                  className="text-sm font-bold tracking-wide"
+                  style={{ color: theme.colors.text }}
+                >
+                  {userScore.rank ? `Rank #${userScore.rank}` : "Unranked"}
+                </div>
+                <div 
+                  className="text-[10px] uppercase font-black tracking-widest opacity-70"
+                  style={{ color: theme.colors.text }} 
+                >
+                  Your Account
                 </div>
               </div>
             </div>
-
-            {/* Score Section */}
             <div className="text-right">
-              <div className="text-xs opacity-75">Score</div>
-              <div className="text-lg font-bold">
+              <div 
+                className="text-xl font-black"
+                style={{ color: theme.colors.text }}
+              >
                 ${userScore.formattedLeaderboardScore}
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Leaderboard List */}
-      <div
-        className="bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-xl p-4"
-        role="region"
-        aria-labelledby="leaderboard-table-heading"
+      {/* 2. Main Leaderboard Card */}
+      <div 
+        className="rounded-[32px] overflow-hidden shadow-2xl border backdrop-blur-md"
+        style={{ 
+          backgroundColor: theme.colors.backgroundSecondary,
+          borderColor: theme.colors.borderLight 
+        }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3
-            id="leaderboard-table-heading"
-            className="text-lg font-semibold text-white flex items-center gap-2"
+        <div 
+          className="px-6 py-5 flex items-center justify-between border-b"
+          style={{ borderBottomColor: theme.colors.borderLight }}
+        >
+          <h3 
+            className="text-sm font-bold uppercase tracking-widest flex items-center gap-2"
+            style={{ color: theme.colors.text }}
           >
-            <BarChart3 className="w-5 h-5" aria-hidden="true" />
+            <BarChart3 size={16} style={{ color: theme.colors.accent }} />
             Top Savers
           </h3>
-          <button
+          <button 
             onClick={refetchLeaderboard}
-            className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded"
-            disabled={leaderboardLoading}
-            aria-label={
-              leaderboardLoading
-                ? "Refreshing leaderboard"
-                : "Refresh leaderboard"
-            }
+            className={`p-2 rounded-full transition-all hover:bg-white/5`}
+            style={{ color: theme.colors.accent }}
           >
-            {leaderboardLoading ? "Refreshing..." : "Refresh"}
+            <RefreshCcw size={16} className={leaderboardLoading ? 'animate-spin' : ''} />
           </button>
         </div>
 
-        {leaderboardLoading ? (
-          <div className="space-y-3" aria-label="Loading leaderboard">
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 animate-pulse"
-                aria-hidden="true"
+        <div className="" style={{ divideColor: theme.colors.borderLight }}>
+          {leaderboardLoading ? (
+            <SkeletonLoader />
+          ) : leaderboardError ? (
+            <div className="p-10 text-center space-y-3">
+               <p className="font-medium text-red-400">Failed to load data</p>
+               <button 
+                onClick={refetchLeaderboard} 
+                className="text-sm font-bold underline"
+                style={{ color: theme.colors.accent }}
               >
-                <div className="w-8 h-8 bg-gray-600 rounded-full"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-600 rounded w-24 mb-1"></div>
-                  <div className="h-3 bg-gray-600 rounded w-32"></div>
-                </div>
-                <div className="h-4 bg-gray-600 rounded w-16"></div>
-              </div>
-            ))}
-          </div>
-        ) : leaderboardError ? (
-          <div className="text-center py-8" role="alert">
-            <div className="text-red-400 mb-2">Failed to load leaderboard</div>
-            <button
-              onClick={refetchLeaderboard}
-              className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 rounded px-2 py-1"
-            >
-              Try again
-            </button>
-          </div>
-        ) : leaderboard.length === 0 ? (
-          <div className="text-center py-8" role="status">
-            <BarChart3
-              className="w-12 h-12 text-gray-600 mx-auto mb-3"
-              aria-hidden="true"
-            />
-            <div className="text-gray-400">No rankings yet</div>
-          </div>
-        ) : (
-          <div
-            className="space-y-2"
-            role="table"
-            aria-label="Leaderboard rankings"
-          >
-            <div role="rowgroup">
-              {leaderboard.map((entry, index) => (
-                <div
-                  key={entry.userAddress}
-                  role="row"
-                  className={`flex items-center gap-3 p-3 rounded-lg ${
-                    entry.isCurrentUser
-                      ? "bg-cyan-500/10 border border-cyan-500/20"
-                      : "bg-gray-700/20"
-                  }`}
-                  aria-label={`Rank ${entry.rank}: ${
-                    entry.isCurrentUser ? "You" : "User"
-                  } with score ${entry.formattedLeaderboardScore} USD`}
-                >
-                  {/* Rank */}
-                  <div
-                    role="cell"
-                    className="flex items-center justify-center w-8 h-8"
-                    aria-label={`Rank ${entry.rank}`}
-                  >
-                    {entry.rank <= 10 ? (
-                      <div className="text-xl" aria-hidden="true">
-                        {entry.rank === 1
-                          ? "🥇"
-                          : entry.rank === 2
-                          ? "🥈"
-                          : "🥉"}
-                      </div>
-                    ) : (
-                      <div className="text-sm font-semibold text-gray-400">
-                        #{entry.rank}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* User Info */}
-                  <div role="cell" className="flex-1">
-                    <div className="text-white font-medium">
-                      {entry.isCurrentUser
-                        ? "You"
-                        : `${entry.userAddress.slice(
-                            0,
-                            6
-                          )}...${entry.userAddress.slice(-4)}`}
-                    </div>
-                    {entry.isCurrentUser && (
-                      <div className="text-xs text-cyan-400">Your account</div>
-                    )}
-                  </div>
-
-                  {/* Score */}
-                  <div role="cell" className="text-right">
-                    <div className="text-white font-semibold">
-                      ${entry.totalValueUSD || "0.00"}
-                    </div>
-                    <div className="text-xs text-gray-400">USD</div>
-                  </div>
-                </div>
-              ))}
+                Try again
+              </button>
             </div>
-          </div>
-        )}
+          ) : (
+            leaderboard.map((entry) => (
+              <LeaderboardRow key={entry.userAddress} entry={entry} />
+            ))
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
+  const isTopThree = entry.rank <= 3;
+  
+  return (
+    <motion.div 
+      whileTap={{ backgroundColor: "rgba(255,255,255,0.03)" }}
+      className="flex items-center justify-between p-5 transition-colors"
+      style={{ 
+        backgroundColor: entry.isCurrentUser ? `${theme.colors.accent}11` : 'transparent' 
+      }}
+    >
+      <div className="flex items-center gap-4 flex-1">
+        <div 
+          className="w-11 h-11 rounded-full flex items-center justify-center text-2xl border"
+          style={{ 
+            backgroundColor: theme.colors.backgroundDark, 
+            borderColor: theme.colors.borderLight 
+          }}
+        >
+          {getEmojiAvatar(entry.userAddress)}
+        </div>
+        
+        <div className="flex flex-col">
+          <span 
+            className="text-sm font-bold truncate max-w-[120px]"
+            style={{ color: theme.colors.text }}
+          >
+            {entry.isCurrentUser ? "You" : `${entry.userAddress.slice(0, 6)}...${entry.userAddress.slice(-4)}`}
+          </span>
+          {entry.isCurrentUser && (
+            <span 
+              className="text-[10px] font-black uppercase tracking-tighter"
+              style={{ color: theme.colors.accent }}
+            >
+              Current User
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Load More Button */}
-      {leaderboard.length > 0 && (
-        <div className="text-center">
-          <button
-            onClick={() => {
-              /* Load more functionality can be added here */
-            }}
-            className="text-cyan-400 hover:text-cyan-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded px-2 py-1"
-            disabled={leaderboardLoading}
-            aria-label="Load more leaderboard rankings"
+      <div className="flex items-center gap-6">
+        <div className="text-right">
+          <div 
+            className="text-[15px] font-black"
+            style={{ color: isTopThree ? '#ffcf3d' : theme.colors.text }}
           >
-            View more rankings
-          </button>
+            {entry.formattedLeaderboardScore}
+          </div>
+          <div 
+            className="text-[10px] font-bold uppercase"
+            style={{ color: theme.colors.text, opacity: 0.5 }}
+          >
+            Points
+          </div>
         </div>
-      )}
-    </section>
+
+        <div className="w-8 text-right">
+          {entry.rank === 1 ? <span className="text-xl">🥇</span> :
+           entry.rank === 2 ? <span className="text-xl">🥈</span> :
+           entry.rank === 3 ? <span className="text-xl">🥉</span> :
+           <span className="text-xs font-black opacity-40" style={{ color: theme.colors.text }}>
+             #{entry.rank}
+           </span>}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function SkeletonLoader() {
+  return (
+    <div className="space-y-1 p-4">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="flex items-center gap-4 p-4 animate-pulse">
+          <div className="w-11 h-11 rounded-full" style={{ backgroundColor: theme.colors.border }} />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 rounded w-1/2" style={{ backgroundColor: theme.colors.border }} />
+            <div className="h-2 rounded w-1/4" style={{ backgroundColor: theme.colors.border }} />
+          </div>
+          <div className="w-16 h-4 rounded" style={{ backgroundColor: theme.colors.border }} />
+        </div>
+      ))}
+    </div>
   );
 }

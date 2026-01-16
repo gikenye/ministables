@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
-import { GAS_SPONSORSHIP_CONFIG } from "@/config/chainConfig";
-import { gasSponsorshipService } from "@/services/gasSponsorshipService";
+
+const GAS_SPONSORSHIP_ENABLED =
+  process.env.NEXT_PUBLIC_GAS_SPONSORSHIP_ENABLED === "true";
 
 /**
  * Execute a transaction with optional gas sponsorship
@@ -11,52 +12,58 @@ export async function executeWithGasSponsorship<T>(
   options: {
     sponsorGas: boolean;
     gasLimit?: number;
+    chainId: number;
   }
 ): Promise<T> {
-  const { sponsorGas, gasLimit = 150000 } = options;
+  const { sponsorGas, gasLimit = 150000, chainId } = options;
 
-  console.log("[Gas Sponsorship] executeWithGasSponsorship called", { userAddress, sponsorGas, gasLimit });
+  console.log("[Gas Sponsorship] executeWithGasSponsorship called", {
+    userAddress,
+    sponsorGas,
+    gasLimit,
+    chainId,
+  });
 
-  if (!sponsorGas || !GAS_SPONSORSHIP_CONFIG.ENABLED || !GAS_SPONSORSHIP_CONFIG.SPONSOR_PK) {
-    console.log("[Gas Sponsorship] Skipping sponsorship", { 
-      sponsorGas, 
-      enabled: GAS_SPONSORSHIP_CONFIG.ENABLED,
-      hasPrivateKey: !!GAS_SPONSORSHIP_CONFIG.SPONSOR_PK 
+  if (!sponsorGas || !GAS_SPONSORSHIP_ENABLED) {
+    console.log("[Gas Sponsorship] Skipping sponsorship", {
+      sponsorGas,
+      enabled: GAS_SPONSORSHIP_ENABLED,
     });
     return await transactionCallback();
   }
 
-  console.log("[Gas Sponsorship] Starting gas sponsorship process");
-
-  if (typeof window === "undefined" || !window.ethereum) {
-    console.error("[Gas Sponsorship] Ethereum provider not available");
-    throw new Error("Ethereum provider not available");
+  if (!chainId) {
+    console.warn("[Gas Sponsorship] Missing chainId, skipping sponsorship");
+    return await transactionCallback();
   }
 
-  console.log("[Gas Sponsorship] Creating provider and sponsor wallet");
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const sponsorWallet = new ethers.Wallet(
-    GAS_SPONSORSHIP_CONFIG.SPONSOR_PK,
-    provider
-  );
+  console.log("[Gas Sponsorship] Requesting server-side sponsorship");
 
-  console.log("[Gas Sponsorship] Sponsor wallet address:", sponsorWallet.address);
+  const response = await fetch("/api/sponsor-transaction", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userAddress, chainId, gasLimit }),
+  });
 
-  const result = await gasSponsorshipService.sponsorTransaction(
-    userAddress,
-    provider,
-    sponsorWallet,
-    transactionCallback,
-    gasLimit
-  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage =
+      errorData?.error ||
+      `Gas sponsorship failed (status ${response.status})`;
+    console.error("[Gas Sponsorship] Sponsorship failed:", errorMessage);
+    throw new Error(errorMessage);
+  }
 
-  if (!result.success) {
-    console.error("[Gas Sponsorship] Sponsorship failed:", result.error);
-    throw new Error(result.error || "Gas sponsorship failed");
+  const sponsorResult = await response.json().catch(() => ({}));
+  if (!sponsorResult?.success) {
+    const errorMessage =
+      sponsorResult?.error || "Gas sponsorship failed on server";
+    console.error("[Gas Sponsorship] Sponsorship failed:", errorMessage);
+    throw new Error(errorMessage);
   }
 
   console.log("[Gas Sponsorship] Sponsorship successful");
-  return result.result!;
+  return await transactionCallback();
 }
 
 /**

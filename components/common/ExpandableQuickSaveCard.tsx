@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import {
   ArrowDown,
@@ -7,14 +8,7 @@ import {
   ChevronDown,
   EyeOff,
   Eye,
-  MoveRight,
 } from "lucide-react";
-import {
-  reportError,
-  reportWarning,
-  reportInfo,
-} from "@/lib/services/errorReportingService";
-import { getTokenInfo as getChainTokenInfo } from "@/config/chainConfig";
 import { theme } from "@/lib/theme";
 
 interface ExpandableQuickSaveCardProps {
@@ -22,18 +16,16 @@ interface ExpandableQuickSaveCardProps {
   goals: any[];
   userPositions?: any;
   account?: any;
-  user?: any;
   isLoading?: boolean;
   showBalance?: boolean;
   onToggleBalance?: () => void;
   onDeposit?: () => void;
   onWithdraw?: () => void;
   defaultToken?: any;
-  chain?: any;
-  tokenInfo?: any;
   exchangeRate?: number;
   onGoalsRefetch?: () => void;
-  sendTransaction?: any;
+  onCreateGoal?: () => void;
+  onGoalClick?: (goal: any) => void;
 }
 
 const ExpandableQuickSaveCard = ({
@@ -41,406 +33,163 @@ const ExpandableQuickSaveCard = ({
   goals,
   userPositions,
   account,
-  user,
   isLoading = false,
   showBalance = true,
   onToggleBalance,
   onDeposit,
   onWithdraw,
-  defaultToken,
-  chain,
-  tokenInfo,
   exchangeRate,
   onGoalsRefetch,
-  sendTransaction,
+  onCreateGoal,
+  onGoalClick,
 }: ExpandableQuickSaveCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currencyMode, setCurrencyMode] = useState<"LOCAL" | "USD">("USD");
-  const [selectedGoalForTransfer, setSelectedGoalForTransfer] = useState<
-    string | null
-  >(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
 
-  const totalSavingsNum = Number.parseFloat(
-    userPositions?.totalValueUSD || "0"
-  );
+  const totalSavingsNum = Number.parseFloat(userPositions?.totalValueUSD || "0");
   const quickSaveAmountNum = Number.parseFloat(goal?.currentAmount || "0");
-  const tokenSymbol = defaultToken?.symbol || "USDC";
-
+  
   const hasValidExchangeRate = exchangeRate && exchangeRate > 0;
-  const totalLocalAmount = hasValidExchangeRate
-    ? totalSavingsNum * exchangeRate
-    : 0;
+  const totalLocalAmount = hasValidExchangeRate ? totalSavingsNum * exchangeRate : 0;
 
-  const primaryAmount =
-    currencyMode === "LOCAL" && hasValidExchangeRate
-      ? `Ksh${totalLocalAmount.toLocaleString("en-US", {
-          maximumFractionDigits: 0,
-        })}`
-      : `$${totalSavingsNum.toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`;
+  const primaryAmount = currencyMode === "LOCAL" && hasValidExchangeRate
+      ? `Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+      : `$${totalSavingsNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const secondaryAmount =
-    currencyMode === "LOCAL" && hasValidExchangeRate
-      ? `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`
-      : hasValidExchangeRate
-      ? `≈ Ksh${totalLocalAmount.toLocaleString("en-US", {
-          maximumFractionDigits: 0,
-        })}`
-      : `≈ $${totalSavingsNum.toFixed(2)} ${tokenSymbol}`;
-
-  const handleCurrencyToggle = () => {
-    if (currencyMode === "USD" && !hasValidExchangeRate) {
-      return;
-    }
-    setCurrencyMode((curr) => (curr === "LOCAL" ? "USD" : "LOCAL"));
-  };
-
-  const handleTransferFunds = async (targetGoalId: string) => {
-    if (!user?.address || !goal?.id) {
-      reportError("Missing user ID or Quick Save goal ID", {
-        component: "ExpandableQuickSaveCard",
-        operation: "handleTransferFunds",
-        userId: user?.address,
-      });
-      return;
-    }
-
-    const quickSaveAmount = Number.parseFloat(goal?.currentAmount || "0");
-    if (quickSaveAmount <= 0) {
-      reportWarning("No funds available in Quick Save to transfer", {
-        component: "ExpandableQuickSaveCard",
-        operation: "handleTransferFunds",
-        userId: user?.address,
-      });
-      return;
-    }
-
+  const handleGoalDrop = async (draggedGoalId: string, targetGoalId: string) => {
+    if (draggedGoalId === targetGoalId) return;
+    
+    setIsTransferring(true);
     try {
-      const prepareResponse = await fetch(
-        `/api/goals/transfer-production/prepare?userId=${user.address}&fromGoalId=${goal.id}`
-      );
-
-      if (!prepareResponse.ok) {
-        const errorData = await prepareResponse.json();
-        throw new Error(errorData.error || "Failed to prepare transfer");
-      }
-
-      const prepareData = await prepareResponse.json();
-
-      if (
-        !prepareData.availableDeposits ||
-        prepareData.availableDeposits.length === 0
-      ) {
-        reportWarning(
-          "No blockchain deposits available to transfer. Please ensure your deposits are properly synced.",
-          {
-            component: "ExpandableQuickSaveCard",
-            operation: "handleTransferFunds",
-            userId: user?.address,
-          }
-        );
-        return;
-      }
-
-      const selectedDeposit = prepareData.availableDeposits[0];
-
-      const transferResponse = await fetch("/api/goals/transfer-production", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: user.address,
-          fromGoalId: goal.id,
-          toGoalId: targetGoalId,
-          depositId: selectedDeposit.depositId,
-          sendTransaction: sendTransaction,
-        }),
-      });
-
-      if (!transferResponse.ok) {
-        const errorData = await transferResponse.json();
-        throw new Error(errorData.error || "Blockchain transfer failed");
-      }
-
-      const transferResult = await transferResponse.json();
-
-      if (onGoalsRefetch) {
-        onGoalsRefetch();
-      }
-
-      reportInfo(
-        `Successfully transferred deposit ${transferResult.transferredDepositId} to target goal`,
-        {
-          component: "ExpandableQuickSaveCard",
-          operation: "handleTransferFunds",
-          transactionHash: transferResult.blockchainTransactionHash,
-        }
-      );
-
-      setSelectedGoalForTransfer(null);
+      /**
+       * TODO: Implement actual API call to combine/transfer goals
+       * 1. Call your backend to move funds from source to target.
+       * 2. Wait for blockchain confirmation if necessary.
+       */
+      console.log(`Combining goal ${draggedGoalId} into ${targetGoalId}`);
+      
+      // Simulated delay for UI feedback
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      if (onGoalsRefetch) onGoalsRefetch();
     } catch (error) {
-      reportError("Failed to transfer funds", {
-        component: "ExpandableQuickSaveCard",
-        operation: "handleTransferFunds",
-        userId: user?.address,
-        additional: { error },
-      });
+      console.error("Failed to combine goals:", error);
+    } finally {
+      setIsTransferring(false);
+      setDraggedId(null);
     }
   };
-
-  const getTokenLogoUrl = () => {
-    if (defaultToken?.logoUrl) return defaultToken.logoUrl;
-    if (defaultToken?.image) return defaultToken.image;
-    if (defaultToken?.icon) return defaultToken.icon;
-    if (tokenInfo?.icon) return tokenInfo.icon;
-
-    if (chain?.id && defaultToken?.address) {
-      try {
-        const chainTokenInfo = getChainTokenInfo(
-          chain.id,
-          defaultToken.address
-        );
-        if (chainTokenInfo?.icon) return chainTokenInfo.icon;
-      } catch (error) {
-        console.warn("Could not get token info from chainConfig:", error);
-      }
-    }
-
-    return "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png";
-  };
-
-  const COLLAPSED_MAX = 280;
-  const EXPANDED_MAX = 520;
-  const PAGE_SIZE = 4;
-
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [activeGoal, setActiveGoal] = useState(null);
-  const [draggedId, setDraggedId] = useState(null);
 
   return (
-    <div className="relative w-full max-w-xl mx-auto px-3 sm:px-0">
-      {/* Main Card */}
+    <div className="relative w-full max-w-xl mx-auto px-1">
       <div
-        className="rounded-2xl p-5 text-white shadow-lg"
+        className="rounded-[2.5rem] p-6 text-white shadow-2xl border border-white/5 overflow-hidden transition-all duration-500"
         style={{
           backgroundImage: `linear-gradient(to bottom right, ${theme.colors.cardGradientFrom}, ${theme.colors.cardGradientTo})`,
         }}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex-1">
-            <p
-              className="text-sm font-medium"
-              style={{ color: theme.colors.cardTextSecondary }}
-            >
-              Total Savings
-            </p>
+        {/* Balance Display */}
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] opacity-60">Total Savings</p>
+            <h2 className="text-3xl font-bold mt-1 tracking-tight">
+              {showBalance ? primaryAmount : "••••••"}
+            </h2>
+          </div>
+          <button 
+            onClick={() => setCurrencyMode(prev => prev === "USD" ? "LOCAL" : "USD")}
+            className="px-2.5 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10"
+          >
+            {currencyMode}
+          </button>
+        </div>
 
-            <div className="flex items-end gap-2 mt-1">
-              <span className="text-3xl font-bold leading-none">
-                {!account
-                  ? "0"
-                  : isLoading
-                  ? "Loading..."
-                  : showBalance
-                  ? primaryAmount
-                  : "••••"}
-              </span>
-            </div>
+        {/* Main Action Buttons - Reduced height/size */}
+        <div className="flex gap-3">
+          <button 
+            onClick={onDeposit} 
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white text-black rounded-xl text-sm font-bold transition active:scale-95 shadow-lg"
+          >
+            <ArrowDown size={18} /> Deposit
+          </button>
+          <button 
+            onClick={onWithdraw} 
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/10 border border-white/10 rounded-xl text-sm font-bold transition active:scale-95"
+          >
+            <ArrowUp size={18} /> Withdraw
+          </button>
+        </div>
 
-            {account && !isLoading && showBalance && (
-              <div
-                className="text-sm mt-1"
-                style={{ color: theme.colors.cardTextSecondary }}
-              >
-                {secondaryAmount}
+        {/* Collapsible Goals Grid */}
+        <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isExpanded ? "max-h-[500px] mt-6 opacity-100" : "max-h-0 opacity-0"}`}>
+            {isTransferring && (
+              <div className="flex items-center justify-center mb-4 gap-2 animate-pulse">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce" />
+                <span className="text-[10px] font-bold uppercase text-green-400">Merging Goals...</span>
               </div>
             )}
-          </div>
-
-          {/* Currency Toggle */}
-          <button
-            onClick={handleCurrencyToggle}
-            className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-sm min-h-[40px]"
-            style={{ backgroundColor: theme.colors.cardButton }}
-          >
-            <span
-              className={`text-xs font-medium ${
-                currencyMode === "USD" ? "" : "opacity-60"
-              }`}
-              style={{ color: theme.colors.cardText }}
-            >
-              USD
-            </span>
-
-            <div className="relative w-10 h-5 rounded-full">
-              <div
-                className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                  currencyMode === "LOCAL" ? "translate-x-5" : "translate-x-0.5"
+            
+            <div className="grid grid-cols-3 gap-3 mb-2">
+              {/* Quick Save Card (Drop Zone) */}
+              <div 
+                draggable
+                onDragStart={() => setDraggedId(goal?.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedId && draggedId !== goal?.id) handleGoalDrop(draggedId, goal?.id);
+                }}
+                className={`p-3 rounded-2xl flex flex-col items-center text-center transition-all border ${
+                  draggedId && draggedId !== goal?.id ? "border-green-400/50 bg-green-400/10 scale-105" : "bg-white/5 border-white/5"
                 }`}
-              />
-            </div>
-
-            <span
-              className={`text-xs font-medium ${
-                currencyMode === "LOCAL" ? "" : "opacity-60"
-              }`}
-              style={{ color: theme.colors.cardText }}
-            >
-              KES
-            </span>
-          </button>
-        </div>
-
-        {/* Primary Actions */}
-        <div className="flex gap-3 mb-4">
-          <button
-            onClick={onDeposit}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold min-h-[44px]"
-            style={{
-              backgroundColor: theme.colors.cardButton,
-              border: `1px solid ${theme.colors.cardButtonBorder}`,
-            }}
-          >
-            <ArrowDown className="w-5 h-5" />
-            Deposit
-          </button>
-
-          <button
-            onClick={onWithdraw}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold min-h-[44px]"
-            style={{
-              backgroundColor: theme.colors.cardButton,
-              border: `1px solid ${theme.colors.cardButtonBorder}`,
-            }}
-          >
-            <ArrowUp className="w-5 h-5" />
-            Withdraw
-          </button>
-        </div>
-
-        {/* EXPANDED CONTENT (ONLY THIS IS CONSTRAINED) */}
-        <div
-          className={`
-          transition-[max-height,opacity]
-          duration-300
-          ease-in-out
-          overflow-hidden
-          ${isExpanded ? "opacity-100" : "opacity-0"}
-        `}
-          style={{
-            maxHeight: isExpanded ? EXPANDED_MAX : 0,
-          }}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-1 gap-y-1.5 auto-rows-fr">
-            {/* Quick Save */}
-            <div 
-              draggable
-              onDragStart={() => setDraggedId(goal.id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (draggedId && draggedId !== goal.id) {
-                  reorderGoals(draggedId, goal.id);
-                }
-                setDraggedId(null);
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setActiveGoal(goal);
-              }}
-              onTouchStart={() => setActiveGoal(goal)}
-              className="rounded-xl aspect-square max-w-[120px] mx-auto p-4 flex flex-col items-center justify-center text-center backdrop-blur-sm transition active:scale-95 cursor-pointer" 
-              style={{ backgroundColor: theme.colors.cardButton }}
-            >
-              <div className="font-bold" style={{ color: theme.colors.cardText }}>
-                {quickSaveAmountNum < 0.01
-                  ? "<0.01"
-                  : `$${quickSaveAmountNum.toFixed(2)}`}
+              >
+                 <span className="text-xs font-bold text-[#4ade80]">${quickSaveAmountNum.toFixed(2)}</span>
+                 <span className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-tighter">Quick Save</span>
               </div>
-              <div className="text-xs mt-1" style={{ color: theme.colors.cardTextSecondary }}>Quick Save</div>
-            </div>
-
-            {/* Goals */}
-            {goals
-              .filter((g) => g.category !== "quick")
-              .slice(0, visibleCount)
-              .map((goal) => {
-                const amount = Number(goal.currentAmount || 0);
-
-                return (
-                  <div
-                    key={goal.id}
-                    draggable
-                    onDragStart={() => setDraggedId(goal.id)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      if (draggedId && draggedId !== goal.id) {
-                        reorderGoals(draggedId, goal.id);
-                      }
-                      setDraggedId(null);
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setActiveGoal(goal);
-                    }}
-                    onTouchStart={() => setActiveGoal(goal)}
-                    className="rounded-xl aspect-square max-w-[120px] mx-auto p-4 flex flex-col items-center justify-center text-center backdrop-blur-sm transition active:scale-95 cursor-pointer"
-                    style={{ backgroundColor: theme.colors.cardButton }}
-                  >
-                    <div className="font-bold" style={{ color: theme.colors.cardText }}>
-                      {amount < 0.01 ? "<0.01" : `$${amount.toFixed(0)}`}
-                    </div>
-                    <div className="text-xs mt-1 truncate w-full" style={{ color: theme.colors.cardTextSecondary }}>
-                      {goal.title}
-                    </div>
-                  </div>
-                );
-              })}
-
-            {goals.length < 6 && (
-              <button className="aspect-square max-w-[120px] mx-auto rounded-xl border border-dashed backdrop-blur-sm flex flex-col items-center justify-center font-semibold text-sm" style={{ borderColor: theme.colors.cardButtonBorder, backgroundColor: 'rgba(255,255,255,0.1)', color: theme.colors.cardTextSecondary }}>
-                <span className="text-xl">+</span>
-                <span className="mt-1">Add</span>
+              
+              {/* Other Goals (Draggable & Drop Zone) */}
+              {goals.filter(g => g.category !== "quick").map((g) => (
+                <div 
+                  key={g.id} 
+                  draggable
+                  onDragStart={() => setDraggedId(g.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedId && draggedId !== g.id) handleGoalDrop(draggedId, g.id);
+                  }}
+                  onClick={() => !draggedId && onGoalClick?.(g)} 
+                  className={`p-3 rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all border ${
+                    draggedId && draggedId !== g.id ? "border-green-400/50 bg-green-400/10 scale-105" : "bg-white/5 border-white/5 active:scale-95"
+                  }`}
+                >
+                   <span className="text-xs font-bold text-white">${Number(g.currentAmount).toFixed(0)}</span>
+                   <span className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-tighter truncate w-full">{g.title}</span>
+                </div>
+              ))}
+              
+              <button onClick={onCreateGoal} className="border border-dashed border-white/20 p-3 rounded-2xl flex flex-col items-center justify-center opacity-40 hover:opacity-100 transition">
+                <span className="text-sm font-bold">+</span>
               </button>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {visibleCount <
-            goals.filter((g) => g.category !== "quick").length && (
-            <button
-              onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
-              className="w-full py-1 mt-2 text-sm font-semibold text-white/80 hover:text-white"
-            >
-              Show more
-            </button>
-          )}
+            </div>
         </div>
 
-        {/* Footer */}
-        {account && (
-          <div className="flex justify-end mt-3">
-            <button
-              onClick={onToggleBalance}
-              className="p-1 min-w-[12px] min-h-[12px]"
-            >
-              {showBalance ? <EyeOff /> : <Eye />}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Expand Toggle */}
-      <div className="flex justify-center mt-3">
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="rounded-full p-3 min-w-[12px] min-h-[12px] shadow-lg bg-muted transition active:scale-95"
-        >
-          {isExpanded ? <ChevronUp /> : <ChevronDown />}
-        </button>
+        {/* Bottom Controls */}
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/5">
+          <button onClick={onToggleBalance} className="p-1 opacity-40 hover:opacity-100 transition">
+            {showBalance ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
+          >
+            {isExpanded ? "Close" : "My Goals"}
+            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
       </div>
     </div>
   );

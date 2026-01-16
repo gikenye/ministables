@@ -12,8 +12,6 @@ const ASSET_DECIMALS: Record<string, number> = {
   USDT: 6,
   cUSD: 18,
   CUSD: 18,
-  cKES: 18,
-  CKES: 18,
 };
 
 export async function POST(request: NextRequest) {

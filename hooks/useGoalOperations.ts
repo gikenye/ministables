@@ -7,6 +7,7 @@ import { getContract, prepareContractCall } from "thirdweb";
 import { parseUnits } from "viem";
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { vaultABI } from "@/lib/constants";
+import { activityService } from "@/lib/services/activityService";
 
 interface UseGoalOperationsProps {
   address?: string;
@@ -93,6 +94,10 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
       setCustomGoalLoading(true);
       try {
         await backendApiClient.createGroupGoal(createRequest);
+        
+        // Track activity
+        activityService.trackGoalCreation(customGoalForm.name);
+        
         setCustomGoalModalOpen(false);
         setCustomGoalForm({
           name: "",
@@ -174,6 +179,10 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         });
         if (!response.ok) throw new Error("Failed to create group goal");
         await response.json();
+        
+        // Track activity
+        activityService.trackGoalCreation(groupGoalForm.name);
+        
         setCreateGroupGoalModalOpen(false);
         setGroupGoalForm({ name: "", amount: "", timeline: "3", isPublic: true });
         fetchGroupGoals();

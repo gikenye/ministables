@@ -23,7 +23,7 @@ export const ModalHeader = ({
   onBack,
 }: ModalHeaderProps) => {
   return (
-    <div className="p-3 sm:p-4 flex items-center justify-between min-h-[56px] border-b" style={{ borderColor: theme.colors.cardButtonBorder }}>
+    <div className="p-1 flex items-center justify-between min-h-[48px] border-b" style={{ borderColor: theme.colors.cardButtonBorder }}>
       <Button
         onClick={showBackButton ? onBack : onClose}
         variant="ghost"

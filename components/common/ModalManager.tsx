@@ -1,3 +1,7 @@
+"use client";
+
+import React, { useMemo, useState } from "react";
+import { toast } from "sonner"; 
 import {
   AmountInputModal,
   CustomGoalModal,
@@ -5,10 +9,12 @@ import {
   GoalDetailsModal,
   QuickSaveDetailsModal,
   SaveActionsModal,
+  WithdrawActionsModal,
 } from "@/components/common";
 import { CreateGroupGoalModal } from "@/components/clan/CreateGroupGoalModal";
 import { JoinGoalModal } from "@/components/clan/JoinGoalModal";
 import { OnrampDepositModal } from "@/components/OnrampDepositModal";
+import MobileMoneyWithdrawModal from "@/components/MobileMoneyWithdrawModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
 
@@ -17,6 +23,11 @@ interface ModalManagerProps {
   saveActionsModalOpen: boolean;
   onSaveActionsClose: () => void;
   onSaveActionSelect: (actionId: string) => void;
+
+  // Withdraw Actions Modal
+  withdrawActionsModalOpen: boolean;
+  onWithdrawActionsClose: () => void;
+  onWithdrawActionSelect: (actionId: string) => void;
 
   // Quick Save Modals
   quickSaveDetailsOpen: boolean;
@@ -39,6 +50,7 @@ interface ModalManagerProps {
   onGoalAmountContinue: (amount: string) => void;
   showBalances: boolean;
   exchangeRate?: number;
+  onGoalsRefetch?: () => void; 
 
   // Custom Goal Modal
   customGoalModalOpen: boolean;
@@ -69,7 +81,23 @@ interface ModalManagerProps {
   vaultPositions: any[];
   vaultPositionsLoading: boolean;
   onWithdrawalClose: () => void;
-  onWithdraw: (tokenSymbol: string, depositIds: number[], sponsorGas?: boolean) => void;
+  setWithdrawalModalOpen: (open: boolean) => void; 
+  onWithdraw: (
+    tokenSymbol: string,
+    depositIds: number[],
+    sponsorGas?: boolean
+  ) => Promise<void>;
+
+  // Mobile Offramp Modal
+  mobileOfframpModalOpen: boolean;
+  onMobileOfframpClose: () => void;
+  onSettlementTransfer: (
+    tokenAddress: string,
+    amount: string,
+    toAddress: string,
+    decimals?: number
+  ) => Promise<string>;
+
   // Onramp Modal
   showOnrampModal: boolean;
   selectedTokenForOnramp: string;
@@ -84,12 +112,14 @@ interface ModalManagerProps {
   depositSuccess: any;
   defaultToken: any;
   account: any;
+  chain: any;
   tokens: any[];
   supportedStablecoins: string[];
   copied: boolean;
   setCopied: (copied: boolean) => void;
   setSelectedTokenForOnramp: (token: string) => void;
   setShowOnrampModal: (show: boolean) => void;
+  depositMethod: "ONCHAIN" | "MPESA";
 }
 
 export function ModalManager(props: ModalManagerProps) {
@@ -97,6 +127,9 @@ export function ModalManager(props: ModalManagerProps) {
     saveActionsModalOpen,
     onSaveActionsClose,
     onSaveActionSelect,
+    withdrawActionsModalOpen,
+    onWithdrawActionsClose,
+    onWithdrawActionSelect,
     quickSaveDetailsOpen,
     quickSaveAmountOpen,
     quickSaveConfirmationOpen,
@@ -115,6 +148,7 @@ export function ModalManager(props: ModalManagerProps) {
     onGoalAmountContinue,
     showBalances,
     exchangeRate,
+    onGoalsRefetch,
     customGoalModalOpen,
     customGoalForm,
     customGoalLoading,
@@ -137,7 +171,11 @@ export function ModalManager(props: ModalManagerProps) {
     vaultPositions,
     vaultPositionsLoading,
     onWithdrawalClose,
+    setWithdrawalModalOpen,
     onWithdraw,
+    mobileOfframpModalOpen,
+    onMobileOfframpClose,
+    onSettlementTransfer,
     showOnrampModal,
     selectedTokenForOnramp,
     tokenInfos,
@@ -149,13 +187,17 @@ export function ModalManager(props: ModalManagerProps) {
     depositSuccess,
     defaultToken,
     account,
+    chain,
     tokens,
     supportedStablecoins,
     copied,
     setCopied,
     setSelectedTokenForOnramp,
     setShowOnrampModal,
+    depositMethod,
   } = props;
+
+  const [isDeleteLoading, setIsDeleteLoading] = useState(false);
 
   const getGoalIcon = (category?: string) => {
     const icons: Record<string, string> = {
@@ -171,12 +213,128 @@ export function ModalManager(props: ModalManagerProps) {
     return icons[category || ""] || "💰";
   };
 
+  const handleDeleteGoal = async (metaGoalId: string) => {
+    if (!account?.address || !metaGoalId) return;
+    
+    setIsDeleteLoading(true);
+    const toastId = toast.loading("Deleting your goal...");
+
+    try {
+      const response = await fetch("/api/goals/cancel-goal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metaGoalId, userAddress: account.address }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (typeof window !== "undefined" && window.navigator.vibrate) {
+          window.navigator.vibrate(50);
+        }
+        
+        toast.success("Goal deleted successfully", { id: toastId });
+        
+        if (onGoalsRefetch) onGoalsRefetch();
+        
+        setTimeout(() => {
+          onGoalClose();
+        }, 100);
+      } else {
+        toast.error(data.error || "Failed to delete goal", { id: toastId });
+      }
+    } catch (error) {
+      console.error("Delete failed", error);
+      toast.error("An unexpected error occurred", { id: toastId });
+    } finally {
+      setIsDeleteLoading(false);
+    }
+  };
+
+  const offrampTokenSymbol = defaultToken?.symbol || "USDC";
+  const offrampTokenAddress = defaultToken?.address || "";
+  const offrampTokenDecimals = defaultToken?.decimals ?? 18;
+
+  const offrampAvailableAmount = useMemo(() => {
+    if (!vaultPositions?.length) return "0";
+    const total = vaultPositions
+      .filter((position) => position.tokenSymbol === offrampTokenSymbol)
+      .reduce(
+        (sum, position) =>
+          sum + Number.parseFloat(position.withdrawableAmount || "0"),
+        0
+      );
+    return total.toString();
+  }, [vaultPositions, offrampTokenSymbol]);
+
+  const selectPositionsForAmount = (
+    amount: number,
+    tokenSymbol: string
+  ): number[] => {
+    const positions = vaultPositions.filter(
+      (position) =>
+        position.tokenSymbol === tokenSymbol &&
+        Number.parseFloat(position.withdrawableAmount || "0") > 0
+    );
+    const sorted = [...positions].sort(
+      (a, b) =>
+        Number.parseFloat(b.withdrawableAmount || "0") -
+        Number.parseFloat(a.withdrawableAmount || "0")
+    );
+
+    const selectedIds: number[] = [];
+    let remaining = amount;
+    for (const pos of sorted) {
+      if (remaining <= 0) break;
+      selectedIds.push(pos.depositId);
+      remaining -= Number.parseFloat(pos.withdrawableAmount || "0");
+    }
+
+    return selectedIds;
+  };
+
+  const handleVaultWithdrawForAmount = async (
+    tokenSymbol: string,
+    amount: string
+  ) => {
+    const amountNum = Number(amount);
+    if (!amountNum || amountNum <= 0) {
+      throw new Error("Enter a valid amount");
+    }
+
+    const depositIds = selectPositionsForAmount(amountNum, tokenSymbol);
+    if (!depositIds.length) {
+      throw new Error("No withdrawable deposits available");
+    }
+
+    await onWithdraw(tokenSymbol, depositIds, true);
+  };
+
+  const handleSettlementTransfer = (
+    tokenAddress: string,
+    amount: string,
+    toAddress: string
+  ) => {
+    return onSettlementTransfer(
+      tokenAddress,
+      amount,
+      toAddress,
+      offrampTokenDecimals
+    );
+  };
+
   return (
     <>
       <SaveActionsModal
         isOpen={saveActionsModalOpen}
         onClose={onSaveActionsClose}
         onActionSelect={onSaveActionSelect}
+      />
+
+      <WithdrawActionsModal
+        isOpen={withdrawActionsModalOpen}
+        onClose={onWithdrawActionsClose}
+        onActionSelect={onWithdrawActionSelect}
       />
 
       <QuickSaveDetailsModal
@@ -214,16 +372,29 @@ export function ModalManager(props: ModalManagerProps) {
         setSelectedTokenForOnramp={setSelectedTokenForOnramp}
         setShowOnrampModal={setShowOnrampModal}
         goalTitle="Quick Save Goal"
-        goalIcon="🐷"
+        depositMethod={depositMethod}
+        // goalIcon="🐷"
       />
 
+      {/* Primary Goal Management Modal */}
       <GoalDetailsModal
         isOpen={goalDetailsOpen}
         onClose={onGoalClose}
-        onSaveNow={onGoalSaveNow}
         goal={selectedGoal}
         showBalance={showBalances}
         exchangeRate={exchangeRate}
+        onDeleteGoal={handleDeleteGoal}
+        isDeleteLoading={isDeleteLoading}
+        onSaveNow={(type?: string) => {
+          if (type === "withdraw") {
+            onGoalClose();
+            // Open the specific withdrawal flow
+            setWithdrawalModalOpen(true);
+          } else {
+            // Open the deposit amount flow
+            onGoalSaveNow();
+          }
+        }}
       />
 
       <AmountInputModal
@@ -256,6 +427,7 @@ export function ModalManager(props: ModalManagerProps) {
         setShowOnrampModal={setShowOnrampModal}
         goalTitle={selectedGoal?.title || "Goal"}
         goalIcon={getGoalIcon(selectedGoal?.category)}
+        depositMethod={depositMethod}
       />
 
       <CustomGoalModal
@@ -276,7 +448,6 @@ export function ModalManager(props: ModalManagerProps) {
         groupGoalForm={groupGoalForm}
         setGroupGoalForm={setGroupGoalForm}
         isLoading={createGroupGoalLoading}
-        error={null}
         exchangeRate={exchangeRate}
       />
 
@@ -297,6 +468,20 @@ export function ModalManager(props: ModalManagerProps) {
         vaultPositions={vaultPositions}
         loading={vaultPositionsLoading}
         userAddress={account?.address}
+      />
+
+      <MobileMoneyWithdrawModal
+        isOpen={mobileOfframpModalOpen}
+        onClose={onMobileOfframpClose}
+        tokenSymbol={offrampTokenSymbol}
+        tokenAddress={offrampTokenAddress}
+        network={chain?.name || ""}
+        availableAmount={offrampAvailableAmount}
+        decimals={offrampTokenDecimals}
+        userDeposits={offrampAvailableAmount}
+        userBorrows="0"
+        onVaultWithdraw={handleVaultWithdrawForAmount}
+        onSettlementTransfer={handleSettlementTransfer}
       />
 
       <OnrampDepositModal

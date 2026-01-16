@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PRETIUM_BASE_URL = process.env.PRETIUM_BASE_URI || "";
+const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI || "";
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY || "";
+
+const getCurrencyFromChain = (chain: string) => {
+  const map: Record<string, string> = {
+    celo: "KES",
+    base: "USD",
+    stellar: "USD",
+  };
+  return map[(chain || "").toLowerCase()] || "KES";
+};
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -18,7 +27,28 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const response = await fetch(`${PRETIUM_BASE_URL}/v1/pay`, {
+    const { transaction_hash, shortcode, amount, chain } = body || {};
+    if (!transaction_hash || !shortcode || !amount) {
+      return NextResponse.json(
+        { error: "transaction_hash, shortcode, and amount are required" },
+        { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
+    if (!PRETIUM_BASE_URI || !PRETIUM_API_KEY) {
+      return NextResponse.json(
+        { error: "Pretium configuration missing" },
+        { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
+    const normalizedChain = typeof chain === "string" ? chain.trim().toLowerCase() : "";
+    const endpoint =
+      normalizedChain && normalizedChain !== "celo"
+        ? `/v1/pay/${getCurrencyFromChain(normalizedChain)}`
+        : "/v1/pay";
+
+    const response = await fetch(`${PRETIUM_BASE_URI}${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -38,7 +68,7 @@ export async function POST(req: NextRequest) {
       while ((statusData.status === 'PENDING' || !statusData.status) && (Date.now() - startTime) < timeout) {
         await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
 
-        const statusResponse = await fetch(`${PRETIUM_BASE_URL}/v1/status`, {
+        const statusResponse = await fetch(`${PRETIUM_BASE_URI}/v1/status`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

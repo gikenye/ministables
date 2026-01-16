@@ -35,14 +35,19 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  html,
   body {
-    @apply bg-background text-foreground;
+    height: 100%;
+    margin: 0;
+    background: #676060ff; /* same as theme.colors.backgroundMain */
+  }
+
+  body {
+    color: hsl(var(--foreground-hsl));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
 
 @layer utilities {
   .text-primary {
@@ -404,4 +409,8 @@ button[aria-label*="Connect"] {
     transform: none;
     box-shadow: none;
   }
+}
+
+.no-zoom-input {
+  font-size: 16px !important; /* Prevents iOS zoom */
 }

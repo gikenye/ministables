@@ -1,17 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Users,
-  Plus,
-  ChevronRight,
-  Globe,
-  Lock,
-  Calendar,
-  AlertCircle,
-} from "lucide-react";
-import { ActionButton, BottomSheet, ModalHeader } from "@/components/ui";
-import { formatUsdFromKes } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, Loader2 } from "lucide-react";
+import { BottomSheet } from "@/components/ui";
+import { theme } from "@/lib/theme";
 
 interface CreateGroupGoalModalProps {
   isOpen: boolean;
@@ -29,308 +22,247 @@ interface CreateGroupGoalModalProps {
   exchangeRate?: number | null;
 }
 
-/**
- * Step-by-step wizard modal for creating group savings goals.
- * Optimized for mobile UX with a focused single-field-per-step approach.
- */
 export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
   isOpen,
   onClose,
   onCreateGroupGoal,
   groupGoalForm,
   setGroupGoalForm,
-  isLoading = false,
-  error = null,
+  isLoading,
+  error,
   exchangeRate,
 }) => {
-  // Step management
   const [currentStep, setCurrentStep] = useState(0);
+  const [isShaking, setIsShaking] = useState(false);
 
-  // Define steps of the wizard
   const steps = [
-    { key: "name", label: "Group Goal Name", required: true },
-    { key: "amount", label: "Target Amount", required: true },
-    { key: "timeline", label: "Timeline", required: false },
-    { key: "visibility", label: "Privacy", required: false },
-  ];
+    {
+      key: "name",
+      label: "Clan Name",
+      subLabel: "Give your clan a short, clear name.",
+      placeholder: "e.g. Family Fund",
+      required: true,
+    },
+    {
+      key: "amount",
+      label: "Target Amount",
+      subLabel: "How much will you raise together?",
+      placeholder: "0",
+      required: true,
+    },
+    {
+      key: "timeline",
+      label: "Timeline",
+      subLabel: "Pick how long you want to save.",
+      required: true,
+    },
+    {
+      key: "visibility",
+      label: "Visibility",
+      subLabel: "Decide who can join this clan.",
+      required: true,
+    },
+  ] as const;
 
   const currentField = steps[currentStep];
   const isLastStep = currentStep === steps.length - 1;
+  const isDisabled = !!isLoading;
 
-  // Check if current field is valid to enable/disable "Next" button
-  const canProceed =
-    !currentField.required ||
-    (currentField.key !== "visibility" &&
-      groupGoalForm[currentField.key as keyof typeof groupGoalForm] &&
-      groupGoalForm[currentField.key as keyof typeof groupGoalForm]
-        .toString()
-        .trim() !== "");
+  const amountValue = Number(groupGoalForm.amount || 0);
+  const amountUsd =
+    exchangeRate && amountValue > 0 ? (amountValue / exchangeRate).toFixed(2) : null;
 
-  // Navigation handlers
   const handleNext = () => {
+    if (isDisabled) return;
+    const value = groupGoalForm[currentField.key as keyof typeof groupGoalForm];
+    const isMissing =
+      currentField.key === "amount"
+        ? !value || Number(value) <= 0
+        : currentField.key === "name"
+        ? !value || value.trim() === ""
+        : currentField.key === "timeline"
+        ? !value
+        : false;
+
+    if (currentField.required && isMissing) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 400);
+      return;
+    }
+
     if (isLastStep) {
       onCreateGroupGoal();
-    } else {
-      setCurrentStep(currentStep + 1);
+      return;
     }
+    setCurrentStep((prev) => prev + 1);
   };
 
   const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    } else {
+    if (currentStep === 0) {
       onClose();
+      return;
     }
-  };
-
-  // Form input handlers
-  const handleInputChange = (field: string, value: any) => {
-    setGroupGoalForm((prev: any) => ({ ...prev, [field]: value }));
-  };
-
-  // Calculate USD amount from KES input if exchange rate is available
-  const getUsdEquivalent = () => {
-    if (!exchangeRate || !groupGoalForm.amount) return null;
-    const kesAmount = parseFloat(groupGoalForm.amount);
-    if (isNaN(kesAmount)) return null;
-    return formatUsdFromKes(kesAmount, exchangeRate).toFixed(2);
-  };
-
-  // Reset step when modal closes
-  const handleModalClose = () => {
-    setCurrentStep(0);
-    onClose();
+    setCurrentStep((prev) => prev - 1);
   };
 
   return (
     <BottomSheet
       isOpen={isOpen}
-      onClose={handleModalClose}
-      maxHeight="max-h-[80vh]"
+      onClose={isDisabled ? () => {} : onClose}
+      maxHeight="max-h-[560px]"
     >
-      <div className="bg-gray-800/20 backdrop-blur-sm min-h-full flex flex-col">
-        {/* Progress Indicator */}
-        <div className="px-4 pt-4">
-          <div className="flex items-center justify-center space-x-1 py-1">
+      <div className="p-4">
+        <div
+          className="rounded-[2rem] p-6 text-white shadow-2xl border border-white/10"
+          style={{
+            backgroundImage: `linear-gradient(to bottom right, ${theme.colors.cardGradientFrom}, ${theme.colors.cardGradientTo})`,
+          }}
+        >
+          <div className="flex gap-1.5 mb-6">
             {steps.map((_, index) => (
               <div
                 key={index}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  index <= currentStep ? "bg-cyan-400" : "bg-gray-600"
+                className={`h-1 flex-1 rounded-full transition-all duration-500 ${
+                  index <= currentStep ? "bg-[#4ade80]" : "bg-white/10"
                 }`}
               />
             ))}
           </div>
-        </div>
 
-        {/* Step Header */}
-        <div className="text-center py-4">
-          <div className="text-2xl mb-2">
-            {currentField.key === "name" && "👥"}
-            {currentField.key === "amount" && "💰"}
-            {currentField.key === "timeline" && "📅"}
-            {currentField.key === "visibility" && "🔐"}
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">
-            {currentField.label}
-          </h2>
-          <p className="text-sm text-gray-400">
-            Step {currentStep + 1} of {steps.length}
-          </p>
-        </div>
+          <header className="mb-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#4ade80] mb-1">
+              {currentField.label}
+            </p>
+            <h2 className="text-lg font-semibold text-white tracking-tight">
+              {currentField.subLabel}
+            </h2>
+          </header>
 
-        {/* Dynamic Form Field */}
-        <div className="px-4 flex-1">
-          {/* Name Field */}
-          {currentField.key === "name" && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-300 text-center mb-4">
-                Give your group savings goal a clear, descriptive name
-              </p>
-              <input
-                type="text"
-                value={groupGoalForm.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                placeholder="e.g., Family Vacation Fund"
-                className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-base"
-                maxLength={50}
-                autoFocus
-              />
-              <div className="text-xs text-gray-500 text-right mt-1">
-                {groupGoalForm.name.length}/50
-              </div>
-            </div>
-          )}
-
-          {/* Amount Field */}
-          {currentField.key === "amount" && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-300 text-center mb-4">
-                How much does your group want to save in total?
-              </p>
-              <div className="text-center mb-2">
-                <span className="text-lg font-bold text-cyan-400">KES</span>
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={groupGoalForm.amount}
-                onChange={(e) =>
-                  handleInputChange(
-                    "amount",
-                    e.target.value.replace(/[^0-9]/g, "")
-                  )
-                }
-                placeholder="0"
-                className="w-full p-3 bg-gray-800/20 backdrop-blur-sm border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400 text-center text-xl font-bold"
-                autoFocus
-              />
-              {groupGoalForm.amount && exchangeRate && (
-                <div className="text-center mt-2 text-sm text-gray-400">
-                  ≈ ${getUsdEquivalent()} USD
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentField.key}
+              initial={{ x: 10, opacity: 0 }}
+              animate={isShaking ? { x: [-4, 4, -4, 4, 0] } : { x: 0, opacity: 1 }}
+              exit={{ x: -10, opacity: 0 }}
+              className="w-full"
+            >
+              {currentField.key === "amount" ? (
+                <div className="space-y-3">
+                  <div className="relative flex items-center bg-white/[0.04] border border-white/10 rounded-2xl px-3 py-3 focus-within:border-[#4ade80]/40 transition-all">
+                    <span className="text-xs font-bold text-[#4ade80] mr-3">KES</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={isDisabled}
+                      value={groupGoalForm.amount}
+                      onChange={(e) =>
+                        setGroupGoalForm({
+                          ...groupGoalForm,
+                          amount: e.target.value.replace(/\D/g, ""),
+                        })
+                      }
+                      className="w-full bg-transparent text-2xl font-bold text-white focus:outline-none disabled:opacity-50"
+                      placeholder={currentField.placeholder}
+                    />
+                  </div>
+                  {amountUsd && (
+                    <p className="text-xs text-white/40 ml-1">
+                      Value: <span className="text-white/70">${amountUsd} USD</span>
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Timeline Field */}
-          {currentField.key === "timeline" && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-300 text-center mb-4">
-                Set a timeframe for reaching your goal
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { value: "3", label: "3 months" },
-                  { value: "6", label: "6 months" },
-                  { value: "12", label: "1 year" },
-                ].map((option) => (
+              ) : currentField.key === "timeline" ? (
+                <div className="relative">
+                  <select
+                    disabled={isDisabled}
+                    value={groupGoalForm.timeline}
+                    onChange={(e) =>
+                      setGroupGoalForm({ ...groupGoalForm, timeline: e.target.value })
+                    }
+                    className="w-full bg-white/[0.04] border border-white/10 p-4 rounded-2xl text-sm text-white appearance-none outline-none focus:border-[#4ade80]/40"
+                  >
+                    <option value="3" className="bg-black">
+                      3 Months
+                    </option>
+                    <option value="6" className="bg-black">
+                      6 Months
+                    </option>
+                    <option value="12" className="bg-black">
+                      12 Months
+                    </option>
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+                  />
+                </div>
+              ) : currentField.key === "visibility" ? (
+                <div className="grid grid-cols-2 gap-3">
                   <button
-                    key={option.value}
-                    onClick={() => handleInputChange("timeline", option.value)}
-                    className={`py-3 px-4 rounded-lg text-sm font-medium transition-all ${
-                      groupGoalForm.timeline === option.value
-                        ? "bg-cyan-400 text-gray-900"
-                        : "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50"
+                    disabled={isDisabled}
+                    onClick={() => setGroupGoalForm({ ...groupGoalForm, isPublic: true })}
+                    className={`py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all ${
+                      groupGoalForm.isPublic
+                        ? "bg-white text-black"
+                        : "bg-white/10 border border-white/10 text-white/60"
                     }`}
                   >
-                    {option.label}
+                    Public
                   </button>
-                ))}
-              </div>
+                  <button
+                    disabled={isDisabled}
+                    onClick={() => setGroupGoalForm({ ...groupGoalForm, isPublic: false })}
+                    className={`py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all ${
+                      !groupGoalForm.isPublic
+                        ? "bg-white text-black"
+                        : "bg-white/10 border border-white/10 text-white/60"
+                    }`}
+                  >
+                    Private
+                  </button>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  disabled={isDisabled}
+                  value={groupGoalForm.name}
+                  onChange={(e) =>
+                    setGroupGoalForm({ ...groupGoalForm, name: e.target.value })
+                  }
+                  className="w-full bg-white/[0.04] border border-white/10 p-4 rounded-2xl text-sm font-medium text-white transition-all focus:outline-none focus:border-[#4ade80]/40 placeholder:text-white/20"
+                  placeholder={currentField.placeholder}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {error && (
+            <div className="mt-4 text-[10px] font-bold uppercase tracking-widest text-red-300/80">
+              {error}
             </div>
           )}
 
-          {/* Visibility Field */}
-          {currentField.key === "visibility" && (
-            <div className="space-y-6">
-              <p className="text-sm text-gray-300 text-center mb-2">
-                Choose who can see and join your goal
-              </p>
-
-              <div className="space-y-3">
-                {/* Public Option */}
-                <button
-                  onClick={() => handleInputChange("isPublic", true)}
-                  className={`w-full flex items-start gap-3 p-4 rounded-lg text-left transition-all ${
-                    groupGoalForm.isPublic
-                      ? "bg-cyan-400/20 border border-cyan-400/30 text-white"
-                      : "bg-gray-700/20 border border-gray-700/30 text-gray-300"
-                  }`}
-                >
-                  <div className="mt-1">
-                    <Globe
-                      className={`w-5 h-5 ${
-                        groupGoalForm.isPublic
-                          ? "text-cyan-400"
-                          : "text-gray-400"
-                      }`}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Public Goal</div>
-                    <div className="text-sm text-gray-400 mt-1">
-                      Anyone can discover and join your goal. Best for community
-                      initiatives.
-                    </div>
-                  </div>
-                  {groupGoalForm.isPublic && (
-                    <div className="w-5 h-5 bg-cyan-400 rounded-full flex items-center justify-center">
-                      <div className="w-3 h-3 bg-gray-900 rounded-full"></div>
-                    </div>
-                  )}
-                </button>
-
-                {/* Private Option */}
-                <button
-                  onClick={() => handleInputChange("isPublic", false)}
-                  className={`w-full flex items-start gap-3 p-4 rounded-lg text-left transition-all ${
-                    !groupGoalForm.isPublic
-                      ? "bg-cyan-400/20 border border-cyan-400/30 text-white"
-                      : "bg-gray-700/20 border border-gray-700/30 text-gray-300"
-                  }`}
-                >
-                  <div className="mt-1">
-                    <Lock
-                      className={`w-5 h-5 ${
-                        !groupGoalForm.isPublic
-                          ? "text-cyan-400"
-                          : "text-gray-400"
-                      }`}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Private Goal</div>
-                    <div className="text-sm text-gray-400 mt-1">
-                      Only people you invite can join. Better for family and
-                      close friends.
-                    </div>
-                  </div>
-                  {!groupGoalForm.isPublic && (
-                    <div className="w-5 h-5 bg-cyan-400 rounded-full flex items-center justify-center">
-                      <div className="w-3 h-3 bg-gray-900 rounded-full"></div>
-                    </div>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mx-4 mt-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Navigation Buttons */}
-        <div className="p-4 mt-auto">
-          <div className="flex gap-2">
-            <ActionButton
+          <div className="flex gap-3 mt-8">
+            <button
+              disabled={isDisabled}
               onClick={handleBack}
-              variant="outline"
-              size="lg"
-              className="flex-1"
+              className="flex-1 py-2.5 bg-white/10 text-white/70 rounded-xl text-[11px] font-bold uppercase tracking-widest transition active:scale-95 disabled:opacity-40"
             >
               {currentStep === 0 ? "Cancel" : "Back"}
-            </ActionButton>
-            <ActionButton
+            </button>
+            <button
+              disabled={isDisabled}
               onClick={handleNext}
-              variant="primary"
-              size="lg"
-              className="flex-1"
-              disabled={
-                !canProceed ||
-                isLoading ||
-                (currentField.key === "amount" && !exchangeRate)
-              }
+              className="flex-[1.5] py-2.5 bg-[#4ade80] text-black rounded-xl text-[11px] font-black uppercase tracking-widest transition active:scale-95 disabled:opacity-50"
             >
-              {isLoading ? "Creating..." : isLastStep ? "Create Goal" : "Next"}
-            </ActionButton>
+              {isLoading ? (
+                <Loader2 className="animate-spin mx-auto" size={18} />
+              ) : isLastStep ? (
+                "Create Clan"
+              ) : (
+                "Continue"
+              )}
+            </button>
           </div>
         </div>
       </div>
