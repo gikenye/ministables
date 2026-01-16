@@ -821,8 +821,11 @@
           // Local development - redirect to localhost app port or same origin
           appOrigin = currentOrigin;
         } else if (currentOrigin.includes("minilend.xyz")) {
-          // Production - minilend.xyz -> app.minilend.xyz
-          appOrigin = currentOrigin.replace("minilend.xyz", "app.minilend.xyz");
+          // Production - normalize www and avoid double app subdomain
+          const hostname = window.location.hostname.replace(/^www\./, "");
+          const port = window.location.port ? ":" + window.location.port : "";
+          const normalizedHost = hostname.replace(/^app\./, "");
+          appOrigin = `${window.location.protocol}//app.${normalizedHost}${port}`;
         } else {
           // Generic pattern: landing.domain.com -> app.domain.com
           // or domain.com -> app.domain.com
