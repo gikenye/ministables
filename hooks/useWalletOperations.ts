@@ -278,7 +278,9 @@ export function useWalletOperations({
             activityService.trackWithdrawal(
               0, // Amount will be updated when we get the actual withdrawal amount
               tokenSymbol,
-              result.transactionHash
+              result.transactionHash,
+              undefined,
+              userAddress
             );
             
             await fetch(`/api/goals/vault-withdraw`, {

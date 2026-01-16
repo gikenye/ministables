@@ -87,7 +87,8 @@ export function useTransactionHandlers() {
       parseFloat(amount),
       selectedToken?.symbol || defaultToken?.symbol || "USDC",
       receipt.transactionHash,
-      goalName
+      goalName,
+      account?.address
     );
 
     // Call backend allocation API

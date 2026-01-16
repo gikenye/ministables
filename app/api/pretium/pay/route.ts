@@ -59,6 +59,17 @@ export async function POST(req: NextRequest) {
 
     const data = await response.json();
 
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          error: "Pretium payment request failed",
+          status: response.status,
+          details: data,
+        },
+        { status: response.status, headers: { "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
     // If the response has a transaction_code, poll for completion
     if (data.transaction_code) {
       let statusData = data;

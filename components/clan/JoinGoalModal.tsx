@@ -21,13 +21,17 @@ export const JoinGoalModal: React.FC<JoinGoalModalProps> = ({
   isOpen, onClose, goal, onJoin, isLoading, exchangeRate,
 }) => {
   const [amount, setAmount] = useState("1000");
+  const depositUsd = useMemo(
+    () => (exchangeRate ? parseFloat(amount) / exchangeRate : 0),
+    [amount, exchangeRate]
+  );
+
   if (!goal) return null;
 
   const current = goal.totalProgressUSD ?? 0;
   const target = goal.targetAmountUSD ?? 1;
   const progress = (current / target) * 100;
   
-  const depositUsd = useMemo(() => exchangeRate ? parseFloat(amount) / exchangeRate : 0, [amount, exchangeRate]);
   const newProgress = Math.min(((current + (isNaN(depositUsd) ? 0 : depositUsd)) / target) * 100, 100);
 
   return (

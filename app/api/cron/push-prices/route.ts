@@ -21,6 +21,9 @@ const SORTED_ORACLES_ABI = [
   'function medianRate(address rateFeedId) view returns (uint256 numerator, uint256 denominator)',
 ];
 
+type TokenConfig = { address: string };
+type MentoToken = { address: string; symbol?: string };
+
 // Map token symbol to USD rate feed IDs from Mento docs (relayed:XYZUSD feeds)
 const USD_FEED_BY_SYMBOL: Record<string, string> = {
   cNGN: '0xC13D42556f1baeab4a8600C735afcd5344048d3C',
@@ -77,8 +80,10 @@ export async function GET(request: NextRequest) {
     let tokenAddresses: string[] = parseAddressesFromEnv('TOKEN_ADDRESSES');
     if (tokenAddresses.length === 0) {
       const defaultChain = CHAINS[0];
-      const tokenList = (TOKENS as any)[defaultChain.id] || [];
-      tokenAddresses = tokenList.map((t: any) => t.address).filter(Boolean);
+      const tokenList = TOKENS[defaultChain.id as keyof typeof TOKENS] || [];
+      tokenAddresses = (tokenList as TokenConfig[])
+        .map((token) => token.address)
+        .filter((address): address is string => !!address);
     }
 
     // Resolve SortedOracles address
@@ -91,7 +96,7 @@ export async function GET(request: NextRequest) {
 
     // Discover CELO and cUSD via Mento and derive USD per CELO
     const pairs = await mento.getTradablePairs();
-    const flat = pairs.flat() as any[];
+    const flat = pairs.flat() as MentoToken[];
     const celo = flat.find((t) => t.symbol === 'CELO');
     const cUSD = flat.find((t) => (t.symbol || '').toUpperCase() === 'CUSD');
     if (!celo || !cUSD) {
@@ -214,10 +219,11 @@ export async function GET(request: NextRequest) {
       txHash: receipt.transactionHash,
       entries: prepared,
     });
-  } catch (error: any) {
-    console.error('[CRON] Fatal error:', error?.message || 'Unknown error', error?.stack);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('[CRON] Fatal error:', message, stack);
     return NextResponse.json({ error: 'Failed to push prices' }, { status: 500 });
   }
 }
-
 

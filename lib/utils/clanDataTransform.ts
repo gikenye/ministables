@@ -6,14 +6,24 @@ import type { EnhancedGroupSavingsGoal, GroupMember } from "@/lib/types/clan";
  */
 export function transformGroupGoalToEnhanced(goal: GroupSavingsGoal): EnhancedGroupSavingsGoal {
   // Create mock members from participants array
-  const members: GroupMember[] = (goal.participants || []).map((address, index) => ({
-    address,
-    role: index === 0 ? "admin" : "member",
-    joinedAt: goal.createdAt,
-    contribution: 0, // Will be populated from actual data
-    displayName: undefined,
-    avatar: undefined,
-  }));
+  const participants = goal.participants || [];
+  const normalizedCreator = goal.creatorAddress?.toLowerCase();
+  const hasCreator =
+    !!normalizedCreator &&
+    participants.some((address) => address.toLowerCase() === normalizedCreator);
+  const members: GroupMember[] = participants.map((address, index) => {
+    const isCreator =
+      !!normalizedCreator && address.toLowerCase() === normalizedCreator;
+    const isAdmin = isCreator || (!hasCreator && index === 0);
+    return {
+      address,
+      role: isAdmin ? "admin" : "member",
+      joinedAt: goal.createdAt,
+      contribution: 0, // Will be populated from actual data
+      displayName: undefined,
+      avatar: undefined,
+    };
+  });
 
   return {
     metaGoalId: goal.metaGoalId,

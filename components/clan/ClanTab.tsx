@@ -100,25 +100,12 @@ export const ClanTab: React.FC<ClanTabProps> = ({
 
   const handleInvite = async (goal: GroupSavingsGoal) => {
     const link = goal.inviteLink || `${window.location.origin}/goals/${goal.metaGoalId}?inviter=${goal.creatorAddress}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: goal.name,
-          text: "Join my clan on NewDay",
-          url: link,
-        });
-        return;
-      } catch (error) {
-        if ((error as Error)?.name !== "AbortError") {
-          toast.error("Failed to open share sheet");
-        }
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(link);
-      toast.success("Invite link copied");
-    } catch {
-      toast.error("Failed to copy link");
+    const message = `Join my clan "${goal.name}" on NewDay: ${link}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+
+    if (!popup) {
+      window.location.href = whatsappUrl;
     }
   };
 

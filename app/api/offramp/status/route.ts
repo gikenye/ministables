@@ -42,14 +42,16 @@ export async function POST(request: NextRequest) {
     console.log('✅ Status retrieved successfully:', data);
     return NextResponse.json({ success: true, data });
 
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to check offramp status";
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error('❌ Status check error:', {
-      message: error.message,
-      stack: error.stack
+      message,
+      stack
     });
     
     return NextResponse.json({
-      error: error.message || 'Failed to check offramp status'
+      error: message
     }, { status: 500 });
   }
 }

@@ -16,7 +16,6 @@ export async function POST(request: NextRequest) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 35000);
     
-    console.log("Meta Goal ID:", metaGoalId, "User Address:", userAddress);
     const response = await fetch(url, {
       method: 'POST',
       signal: controller.signal,

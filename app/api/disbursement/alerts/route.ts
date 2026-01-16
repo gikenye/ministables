@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { getDatabase } from "@/lib/mongodb";
 
 /**
@@ -76,7 +77,6 @@ export async function POST(request: NextRequest) {
       });
     } else if (alertId) {
       // Acknowledge specific alert
-      const { ObjectId } = require("mongodb");
       const result = await alertsCollection.updateOne(
         { _id: new ObjectId(alertId) },
         {

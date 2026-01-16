@@ -8,6 +8,7 @@ export interface ActivityItem {
   timestamp: string;
   status: "completed" | "pending" | "failed";
   description: string;
+  userAddress?: string;
   txHash?: string;
   goalName?: string;
   fromGoal?: string;
@@ -62,7 +63,11 @@ class ActivityService {
 
   private saveToLocalStorage(activity: ActivityItem): void {
     try {
-      const stored = localStorage.getItem("minilend_activities");
+      const normalizedAddress = activity.userAddress?.toLowerCase();
+      const storageKey = normalizedAddress
+        ? `minilend_activities_${normalizedAddress}`
+        : "minilend_activities";
+      const stored = localStorage.getItem(storageKey);
       const activities = stored ? JSON.parse(stored) : [];
       
       activities.unshift(activity);
@@ -70,7 +75,7 @@ class ActivityService {
       // Keep only last 50 activities
       const trimmed = activities.slice(0, 50);
       
-      localStorage.setItem("minilend_activities", JSON.stringify(trimmed));
+      localStorage.setItem(storageKey, JSON.stringify(trimmed));
     } catch (error) {
       console.warn("Failed to save activity to localStorage:", error);
     }
@@ -78,64 +83,100 @@ class ActivityService {
 
   private getLocalActivity(userAddress: string, limit: number): ActivityItem[] {
     try {
-      const stored = localStorage.getItem("minilend_activities");
+      const normalizedAddress = userAddress?.toLowerCase();
+      const storageKey = normalizedAddress
+        ? `minilend_activities_${normalizedAddress}`
+        : "minilend_activities";
+      const stored = localStorage.getItem(storageKey);
       if (!stored) return [];
       
       const activities = JSON.parse(stored) as ActivityItem[];
-      return activities.slice(0, limit);
+      const filtered = normalizedAddress
+        ? activities.filter(
+            (activity) => activity.userAddress?.toLowerCase() === normalizedAddress
+          )
+        : activities;
+      return filtered.slice(0, limit);
     } catch (error) {
       console.warn("Failed to load activities from localStorage:", error);
       return [];
     }
   }
 
-  trackDeposit(amount: number, currency: string, txHash?: string, goalName?: string): void {
+  trackDeposit(
+    amount: number,
+    currency: string,
+    txHash?: string,
+    goalName?: string,
+    userAddress?: string
+  ): void {
     this.trackActivity({
       type: "deposit",
       amount,
       currency,
       status: "completed",
       description: goalName ? `Deposited to ${goalName}` : "Quick Save deposit",
+      userAddress,
       txHash,
       goalName,
     });
   }
 
-  trackWithdrawal(amount: number, currency: string, txHash?: string, goalName?: string): void {
+  trackWithdrawal(
+    amount: number,
+    currency: string,
+    txHash?: string,
+    goalName?: string,
+    userAddress?: string
+  ): void {
     this.trackActivity({
       type: "withdrawal",
       amount,
       currency,
       status: "completed",
       description: goalName ? `Withdrew from ${goalName}` : "Vault withdrawal",
+      userAddress,
       txHash,
       goalName,
     });
   }
 
-  trackGoalCreation(goalName: string): void {
+  trackGoalCreation(goalName: string, userAddress?: string): void {
     this.trackActivity({
       type: "goal_creation",
       amount: 0,
       currency: "USDC",
       status: "completed",
       description: "Created new goal",
+      userAddress,
       goalName,
     });
   }
 
-  trackGoalJoin(goalName: string, amount: number, currency: string): void {
+  trackGoalJoin(
+    goalName: string,
+    amount: number,
+    currency: string,
+    userAddress?: string
+  ): void {
     this.trackActivity({
       type: "goal_join",
       amount,
       currency,
       status: "completed",
       description: "Joined group goal",
+      userAddress,
       goalName,
     });
   }
 
-  trackTransfer(amount: number, currency: string, fromGoal: string, toGoal: string): void {
+  trackTransfer(
+    amount: number,
+    currency: string,
+    fromGoal: string,
+    toGoal: string,
+    userAddress?: string
+  ): void {
     this.trackActivity({
       type: "transfer",
       amount,
@@ -144,16 +185,25 @@ class ActivityService {
       description: `Transferred from ${fromGoal} to ${toGoal}`,
       fromGoal,
       toGoal,
+      userAddress,
     });
   }
 
-  trackSwap(fromAmount: number, fromCurrency: string, toAmount: number, toCurrency: string, txHash?: string): void {
+  trackSwap(
+    fromAmount: number,
+    fromCurrency: string,
+    toAmount: number,
+    toCurrency: string,
+    txHash?: string,
+    userAddress?: string
+  ): void {
     this.trackActivity({
       type: "swap",
       amount: fromAmount,
       currency: fromCurrency,
       status: "completed",
       description: `Swapped ${fromCurrency} to ${toCurrency}`,
+      userAddress,
       txHash,
     });
   }

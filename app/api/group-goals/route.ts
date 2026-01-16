@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GroupGoalService } from "@/lib/services/groupGoalService";
 import { NewGroupGoal } from "@/lib/models/groupGoal";
+import type { GoalCategory } from "@/lib/models/goal";
 import {
   isClientError,
   GroupGoalValidationError,
@@ -19,13 +20,15 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const limit = parseInt(searchParams.get("limit") || "20");
     const offset = parseInt(searchParams.get("offset") || "0");
+    const categoryFilter: GoalCategory | undefined =
+      typeof category === "string" ? (category as GoalCategory) : undefined;
 
     if (search) {
       // Handle search
       const results = await GroupGoalService.searchGroupGoals(
         search,
         userId || undefined,
-        category as any,
+        categoryFilter,
         limit
       );
       return NextResponse.json({ groupGoals: results });
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
       const groupGoals = await GroupGoalService.getPublicGroupGoals(
         limit,
         offset,
-        category as any
+        categoryFilter
       );
       return NextResponse.json({ groupGoals });
     }

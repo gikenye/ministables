@@ -82,14 +82,43 @@ export function OnrampDepositModal({
   useEffect(() => {
     if (!transaction.transactionCode || paymentStatus !== "pending") return;
 
+    const maxAttempts = 20;
+    const maxElapsedMs = 60_000;
+    const startTime = Date.now();
+    let attempts = 0;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let isActive = true;
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
     const pollStatus = async () => {
       try {
+        attempts += 1;
+        const elapsed = Date.now() - startTime;
+        if (attempts > maxAttempts || elapsed > maxElapsedMs) {
+          stopPolling();
+          if (isActive) {
+            setPaymentStatus("failed");
+            setTransaction((prev) => ({
+              ...prev,
+              error: "Status check timed out. Please try again.",
+            }));
+          }
+          return;
+        }
+
         const status = await onrampService.getTransactionStatus(
           transaction.transactionCode,
           form.countryCode
         );
 
         if (status.status === "SUCCESS" || status.status === "COMPLETED") {
+          stopPolling();
           setPaymentStatus("completed");
           onSuccess?.(
             transaction.transactionCode,
@@ -99,6 +128,7 @@ export function OnrampDepositModal({
           status.status === "FAILED" ||
           status.status === "CANCELLED"
         ) {
+          stopPolling();
           setPaymentStatus("failed");
           setTransaction((prev) => ({
             ...prev,
@@ -108,11 +138,22 @@ export function OnrampDepositModal({
         }
       } catch (error: any) {
         console.error("Status polling error:", error);
+        stopPolling();
+        if (isActive) {
+          setPaymentStatus("failed");
+          setTransaction((prev) => ({
+            ...prev,
+            error: error?.message || "Status check failed",
+          }));
+        }
       }
     };
 
-    const interval = setInterval(pollStatus, 3000);
-    return () => clearInterval(interval);
+    interval = setInterval(pollStatus, 3000);
+    return () => {
+      isActive = false;
+      stopPolling();
+    };
   }, [
     transaction.transactionCode,
     paymentStatus,

@@ -96,7 +96,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         await backendApiClient.createGroupGoal(createRequest);
         
         // Track activity
-        activityService.trackGoalCreation(customGoalForm.name);
+        activityService.trackGoalCreation(customGoalForm.name, address);
         
         setCustomGoalModalOpen(false);
         setCustomGoalForm({
@@ -181,7 +181,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         await response.json();
         
         // Track activity
-        activityService.trackGoalCreation(groupGoalForm.name);
+        activityService.trackGoalCreation(groupGoalForm.name, address);
         
         setCreateGroupGoalModalOpen(false);
         setGroupGoalForm({ name: "", amount: "", timeline: "3", isPublic: true });
