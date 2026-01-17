@@ -307,25 +307,27 @@ export const NewProfile = ({
   if (!address) {
     return (
       <div
-        className={`min-h-[100dvh] flex flex-col ${className}`}
-        style={{ backgroundColor: theme.colors.background }}
+        className={`min-h-[100dvh] flex flex-col items-center justify-center px-5 ${className}`}
       >
-        <div className="relative mb-8">
-          <div className="absolute -inset-4 bg-teal-500/20 blur-3xl rounded-full animate-pulse" />
-          <div
-            className="relative w-20 h-20 rounded-[35px] flex items-center justify-center shadow-2xl border border-white/5"
-            style={{ backgroundColor: theme.colors.backgroundDark }}
-          >
-            <UserIcon size={32} style={{ color: theme.colors.accent }} />
+        <div className="w-full max-w-sm rounded-[32px] border border-white/10 bg-black/40 backdrop-blur-xl p-8 text-center shadow-2xl">
+          <div className="flex justify-center mb-6">
+            <div className="relative">
+              <div className="absolute -inset-4 bg-teal-500/20 blur-3xl rounded-full animate-pulse" />
+              <div className="relative w-20 h-20 rounded-[28px] flex items-center justify-center shadow-2xl border border-white/10 bg-black/50">
+                <UserIcon size={32} style={{ color: theme.colors.accent }} />
+              </div>
+            </div>
+          </div>
+          <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tight">
+            Identity Required
+          </h2>
+          <p className="text-white/50 text-xs text-center max-w-[240px] mx-auto">
+            Connect your wallet to access your protocol performance.
+          </p>
+          <div className="mt-6">
+            <ConnectWallet className="w-full" />
           </div>
         </div>
-        <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tight">
-          Identity Required
-        </h2>
-        <p className="text-white/40 text-xs mb-6 text-center max-w-[220px]">
-          Connect your wallet to access your protocol performance.
-        </p>
-        <ConnectWallet />
       </div>
     );
   }
@@ -333,7 +335,6 @@ export const NewProfile = ({
   return (
     <div
       className={`min-h-[100dvh] flex flex-col ${className}`}
-      style={{ backgroundColor: theme.colors.background }}
     >
       <div className="mx-auto max-w-md px-5 space-y-6">
         {/* HERO SECTION */}

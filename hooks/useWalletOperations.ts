@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { ethers } from "ethers";
 import { getContract, prepareContractCall, waitForReceipt } from "thirdweb";
 import { getApprovalForTransaction } from "thirdweb/extensions/erc20";
 import { parseUnits } from "viem";
-import { reportInfo, reportError } from "@/lib/services/errorReportingService";
+import {
+  reportInfo,
+  reportWarning,
+  reportError,
+} from "@/lib/services/errorReportingService";
 import { getBestStablecoinForDeposit } from "@/lib/services/balanceService";
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
 import { erc20TransferABI, vaultABI, withdrawMethodABI } from "@/lib/constants";
-import { executeWithGasSponsorship, logGasInfo } from "@/lib/utils/gasSponsorship";
+import {
+  executeWithGasSponsorship,
+  GasSponsorshipError,
+  logGasInfo,
+} from "@/lib/utils/gasSponsorship";
 import { activityService } from "@/lib/services/activityService";
 
 interface WalletOperationsProps {
@@ -15,6 +24,18 @@ interface WalletOperationsProps {
   defaultToken: any;
   client: any;
   sendTransaction: any;
+}
+
+type DepositMethod = "ONCHAIN" | "MPESA";
+
+interface QuickSaveDepositOptions {
+  depositMethod?: DepositMethod;
+  token?: {
+    address: string;
+    symbol: string;
+    decimals: number;
+    balance?: number;
+  } | null;
 }
 
 /**
@@ -95,7 +116,8 @@ export function useWalletOperations({
     depositAmount: string,
     onStatus: (status: string) => void,
     onSuccess: (receipt: any, usdAmount: number, token: any) => void,
-    onError: (error: Error) => void
+    onError: (error: Error) => void,
+    options: QuickSaveDepositOptions = {}
   ) => {
     if (!account) {
       setPendingDeposit(true);
@@ -109,12 +131,19 @@ export function useWalletOperations({
     }
 
     try {
+      const depositMethod = options.depositMethod || "ONCHAIN";
+      const inputAmount = Number.parseFloat(depositAmount);
+
+      if (!inputAmount || inputAmount <= 0) {
+        onError(new Error("Enter a valid amount"));
+        return;
+      }
+
       // Select the best stablecoin for deposit
       onStatus("Setting up your deposit...");
-      const bestToken = await getBestStablecoinForDeposit(
-        account.address,
-        chain.id
-      );
+      const bestToken =
+        options.token ||
+        (await getBestStablecoinForDeposit(account.address, chain.id));
 
       if (!bestToken) {
         onError(
@@ -129,47 +158,50 @@ export function useWalletOperations({
       const selectedToken = {
         address: bestToken.address,
         symbol: bestToken.symbol,
-        decimals: bestToken.decimals,
+        decimals: bestToken.decimals || defaultToken?.decimals || 18,
       };
 
-      const walletBalance = bestToken.balance;
-      const inputAmountKES = parseFloat(depositAmount);
+      const walletBalance =
+        typeof bestToken.balance === "number" ? bestToken.balance : 0;
+      let usdAmount = inputAmount;
 
       onStatus("processing...");
 
-      // Convert KES amount to USD equivalent using exchange rate API
-      const exchangeRateResponse = await fetch("/api/onramp/exchange-rate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ currency_code: "KES" }),
-      });
+      if (depositMethod !== "ONCHAIN") {
+        // Convert KES amount to USD equivalent using exchange rate API
+        const exchangeRateResponse = await fetch("/api/onramp/exchange-rate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ currency_code: "KES" }),
+        });
 
-      if (!exchangeRateResponse.ok) {
-        throw new Error(
-          "Failed to get exchange rate for KES to USD conversion"
-        );
+        if (!exchangeRateResponse.ok) {
+          throw new Error(
+            "Failed to get exchange rate for KES to USD conversion"
+          );
+        }
+
+        const exchangeRateData = await exchangeRateResponse.json();
+
+        if (!exchangeRateData.success || !exchangeRateData.data) {
+          throw new Error("Invalid exchange rate response");
+        }
+
+        // The API returns buying_rate and selling_rate in KES per USD
+        // selling_rate: 130.59 means 1 USD = 130.59 KES, so 1 KES = 1/130.59 USD
+        const sellingRate = exchangeRateData.data.data?.selling_rate;
+
+        if (!sellingRate || sellingRate <= 0) {
+          throw new Error(
+            "Exchange rate data does not contain valid selling rate"
+          );
+        }
+
+        const usdPerKES = 1 / sellingRate;
+        usdAmount = inputAmount * usdPerKES;
       }
-
-      const exchangeRateData = await exchangeRateResponse.json();
-
-      if (!exchangeRateData.success || !exchangeRateData.data) {
-        throw new Error("Invalid exchange rate response");
-      }
-
-      // The API returns buying_rate and selling_rate in KES per USD
-      // selling_rate: 130.59 means 1 USD = 130.59 KES, so 1 KES = 1/130.59 USD
-      const sellingRate = exchangeRateData.data.data?.selling_rate;
-
-      if (!sellingRate || sellingRate <= 0) {
-        throw new Error(
-          "Exchange rate data does not contain valid selling rate"
-        );
-      }
-
-      const usdPerKES = 1 / sellingRate;
-      const usdAmount = inputAmountKES * usdPerKES;
 
       // Check if converted USD amount exceeds wallet balance
       if (usdAmount > walletBalance) {
@@ -187,10 +219,14 @@ export function useWalletOperations({
       reportInfo("Deposit started", {
         component: "useWalletOperations",
         operation: "handleQuickSaveDeposit",
-        amount: depositAmount,
+        amount: usdAmount.toString(),
         tokenSymbol: selectedToken.symbol,
         chainId: chain?.id,
         userId: account?.address,
+        additional: {
+          inputAmount: depositAmount,
+          inputCurrency: depositMethod === "ONCHAIN" ? "USD" : "KES",
+        },
       });
 
       onStatus("Setting up your deposit...");
@@ -205,24 +241,30 @@ export function useWalletOperations({
         account: account,
       });
 
-      if (approveTx) {
-        onStatus("Authorizing transaction...");
-        const approveResult = await sendTransaction(approveTx);
+      const executeDepositFlow = async () => {
+        if (approveTx) {
+          onStatus("Authorizing transaction...");
+          const approveResult = await sendTransaction(approveTx);
 
-        if (approveResult?.transactionHash) {
-          onStatus("Processing authorization...");
-          await waitForReceipt({
-            client,
-            chain,
-            transactionHash: approveResult.transactionHash,
-          });
+          if (approveResult?.transactionHash) {
+            onStatus("Processing authorization...");
+            await waitForReceipt({
+              client,
+              chain,
+              transactionHash: approveResult.transactionHash,
+            });
+          } else {
+            throw new Error("Approval transaction failed");
+          }
         }
-      }
 
-      onStatus("Completing your deposit...");
-      const depositResult = await sendTransaction(depositTx);
+        onStatus("Completing your deposit...");
+        const depositResult = await sendTransaction(depositTx);
 
-      if (depositResult?.transactionHash) {
+        if (!depositResult?.transactionHash) {
+          throw new Error("Deposit transaction failed");
+        }
+
         onStatus("Almost done...");
         const depositReceipt = await waitForReceipt({
           client,
@@ -230,8 +272,71 @@ export function useWalletOperations({
           transactionHash: depositResult.transactionHash,
         });
         onStatus("Success!");
-        onSuccess(depositReceipt, usdAmount, selectedToken);
+        return depositReceipt;
+      };
+
+      const isSponsorshipError = (error: unknown) =>
+        error instanceof GasSponsorshipError ||
+        (error instanceof Error && error.name === "GasSponsorshipError");
+
+      const getGasShortfall = async (gasLimit: number) => {
+        if (typeof window === "undefined" || !window.ethereum) return null;
+
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const [balance, feeData] = await Promise.all([
+          provider.getBalance(account.address),
+          provider.getFeeData(),
+        ]);
+        const maxFeePerGas =
+          feeData.maxFeePerGas || feeData.gasPrice || ethers.BigNumber.from(0);
+        if (maxFeePerGas.lte(0)) return null;
+
+        const estimatedGasCost = maxFeePerGas.mul(gasLimit);
+        return balance.lt(estimatedGasCost)
+          ? estimatedGasCost.sub(balance)
+          : null;
+      };
+
+      const sponsorGasLimit = approveTx ? 250000 : 180000;
+      const gasShortfall = await getGasShortfall(sponsorGasLimit);
+      const shouldSponsor = gasShortfall === null || gasShortfall.gt(0);
+
+      let depositReceipt: any;
+
+      if (shouldSponsor) {
+        onStatus("Requesting gas sponsorship...");
+        await logGasInfo(account.address, sponsorGasLimit);
+        try {
+          depositReceipt = await executeWithGasSponsorship(
+            account.address,
+            executeDepositFlow,
+            {
+              sponsorGas: true,
+              gasLimit: sponsorGasLimit,
+              chainId: chain.id,
+            }
+          );
+        } catch (error) {
+          if (!isSponsorshipError(error)) {
+            throw error;
+          }
+          reportWarning("Gas sponsorship failed; retrying with wallet gas", {
+            component: "useWalletOperations",
+            operation: "handleQuickSaveDeposit",
+            chainId: chain?.id,
+            userId: account?.address,
+            additional: {
+              gasLimit: sponsorGasLimit,
+              gasShortfall: gasShortfall ? gasShortfall.toString() : "unknown",
+            },
+          });
+          depositReceipt = await executeDepositFlow();
+        }
+      } else {
+        depositReceipt = await executeDepositFlow();
       }
+
+      onSuccess(depositReceipt, usdAmount, selectedToken);
     } catch (err: any) {
       onError(err);
     }

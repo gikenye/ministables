@@ -69,6 +69,49 @@ export function useDataFetching(props: UseDataFetchingProps) {
     }
   }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
 
+  const refreshUserPortfolio = useCallback(async () => {
+    if (!address) return;
+
+    setPortfolioLoading(true);
+    setPortfolioError(null);
+
+    try {
+      const response = await fetch("/api/user-balances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userAddress: address }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(
+          errorData.error || `HTTP ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      setUserPortfolio(data);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setPortfolioError(errorMessage);
+      setUserPortfolio({
+        totalValueUSD: "0",
+        formattedLeaderboardScore: "0.00",
+        leaderboardRank: 0,
+        assetBalances: [],
+      });
+      reportError("Failed to refresh user portfolio", {
+        component: "useDataFetching",
+        operation: "refreshUserPortfolio",
+        additional: { error: errorMessage },
+      });
+    } finally {
+      setPortfolioLoading(false);
+    }
+  }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
+
   const fetchUserGoals = useCallback(async () => {
     if (!address) return;
     setGoalsLoading(true);
@@ -160,7 +203,56 @@ export function useDataFetching(props: UseDataFetchingProps) {
     setMyGroupsLoading(true);
     try {
       const response = await backendApiClient.getMyGroups(address);
+      // Show base group data immediately, then enrich with progress later.
       setMyGroups(response);
+      setMyGroupsLoading(false);
+      let goalsWithProgress: any[] = [];
+      try {
+        goalsWithProgress = await backendApiClient.getGoalsWithProgress(address);
+      } catch (error) {
+        reportWarning("Failed to fetch group goal progress details", {
+          component: "useDataFetching",
+          operation: "fetchMyGroups",
+          additional: { error },
+        });
+      }
+      if (!goalsWithProgress.length) {
+        return;
+      }
+
+      const progressByMetaGoalId = new Map(
+        goalsWithProgress.map((goal) => [goal.metaGoalId, goal])
+      );
+      const mergeGoals = (goals: any[]) =>
+        goals.map((goal) => {
+          const progress = progressByMetaGoalId.get(goal.metaGoalId);
+          if (!progress) return goal;
+          return {
+            ...goal,
+            totalProgressUSD: progress.totalProgressUSD ?? goal.totalProgressUSD,
+            progressPercent: progress.progressPercent ?? goal.progressPercent,
+            currentAmountUSD: progress.totalProgressUSD ?? goal.currentAmountUSD,
+            cachedMembers: progress.cachedMembers ?? goal.cachedMembers,
+            participants: progress.participants ?? goal.participants,
+            invitedUsers: progress.invitedUsers ?? goal.invitedUsers,
+            onChainGoals: progress.onChainGoals ?? goal.onChainGoals,
+            vaultProgress: progress.vaultProgress ?? goal.vaultProgress,
+            userBalance: progress.userBalance ?? goal.userBalance,
+            userBalanceUSD: progress.userBalanceUSD ?? goal.userBalanceUSD,
+          };
+        });
+
+      setMyGroups({
+        ...response,
+        public: {
+          ...response.public,
+          goals: mergeGoals(response.public?.goals || []),
+        },
+        private: {
+          ...response.private,
+          goals: mergeGoals(response.private?.goals || []),
+        },
+      });
     } catch (error) {
       reportError("Failed to fetch user's groups", {
         component: "useDataFetching",
@@ -168,19 +260,19 @@ export function useDataFetching(props: UseDataFetchingProps) {
         additional: { error },
       });
       setMyGroups(null);
-    } finally {
       setMyGroupsLoading(false);
     }
   }, [address, setMyGroups, setMyGroupsLoading]);
 
   const forceRefresh = useCallback(() => {
-    fetchUserPortfolio();
+    refreshUserPortfolio();
     fetchUserGoals();
     fetchLeaderboard();
-  }, [fetchUserPortfolio, fetchUserGoals, fetchLeaderboard]);
+  }, [refreshUserPortfolio, fetchUserGoals, fetchLeaderboard]);
 
   return {
     fetchUserPortfolio,
+    refreshUserPortfolio,
     fetchUserGoals,
     fetchLeaderboard,
     fetchGroupGoals,

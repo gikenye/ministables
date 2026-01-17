@@ -39,8 +39,19 @@ export function useTransactionHandlers() {
       error.message.includes("User rejected")
     ) {
       userMessage = "Transaction was cancelled.";
-    } else if (error.message.includes("insufficient funds")) {
-      userMessage = "Insufficient funds for this transaction.";
+    } else if (
+      error.message.includes("Amount exceeds available balance") ||
+      error.message.includes("You have $0") ||
+      error.message.includes("Enter a valid amount")
+    ) {
+      userMessage = error.message;
+    } else if (
+      error.message.includes("insufficient funds") ||
+      error.message.includes("gas * price + value") ||
+      error.message.includes("intrinsic gas")
+    ) {
+      userMessage =
+        "Insufficient gas for network fees. Add native gas or try again.";
     } else if (error.message.includes("transfer amount exceeds allowance")) {
       userMessage = "Token approval failed. Please try again.";
     } else if (error.message.includes("network")) {
@@ -94,7 +105,10 @@ export function useTransactionHandlers() {
     // Call backend allocation API
     try {
       if (account?.address && defaultToken && receipt?.transactionHash) {
-        const amountWei = parseUnits(amount, defaultToken.decimals || 6);
+        const amountWei = parseUnits(
+          amount,
+          selectedToken?.decimals || defaultToken.decimals || 6
+        );
 
         // Map token symbol to supported asset
         const mappedAsset = mapTokenSymbolToAsset(
@@ -206,13 +220,9 @@ export function useTransactionHandlers() {
       });
     }
 
-    // Reset states after delay
-    setTimeout(() => {
-      setIsDepositLoading(false);
-      setDepositSuccess(null);
-      setTransactionStatus(null);
-      setDepositError(null);
-    }, 3000);
+    setIsDepositLoading(false);
+    setDepositError(null);
+    setTransactionStatus(null);
   };
 
   /**

@@ -45,7 +45,6 @@ export function LeaderboardSection({
   return (
     <section 
       className="px-4 py-8 space-y-6 max-w-md mx-auto min-h-screen pb-24 transition-colors duration-300"
-      style={{ backgroundColor: theme.colors.background }}
     >
       <header className="px-2">
         <h2 
@@ -68,7 +67,7 @@ export function LeaderboardSection({
         >
           <div 
             className="rounded-[23px] p-5 flex items-center justify-between"
-            style={{ backgroundColor: theme.colors.backgroundDark }}
+            style={{ backgroundColor: "rgba(12, 12, 14, 0.72)" }}
           >
             <div className="flex items-center gap-3">
               <div 
@@ -108,7 +107,7 @@ export function LeaderboardSection({
       <div 
         className="rounded-[32px] overflow-hidden shadow-2xl border backdrop-blur-md"
         style={{ 
-          backgroundColor: theme.colors.backgroundSecondary,
+          backgroundColor: "rgba(16, 19, 24, 0.75)",
           borderColor: theme.colors.borderLight 
         }}
       >

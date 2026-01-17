@@ -1,987 +1,387 @@
 <!doctype html>
-<html lang="en">
-  <head>
+<html lang="en" class="scroll-smooth">
+<head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Minilend — Grow Your Money</title>
-    <meta
-      name="description"
-      content="A dollar savings wallet that allows you to convert your local currency to dollars and earn up to 10% APY on your savings."
-    />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Minilend — Grow Your Money and Family</title>
     <meta name="theme-color" content="#0e6037" />
-
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="./manifest.json" />
-
-    <!-- Apple PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
-    <meta name="apple-mobile-web-app-title" content="Minilend" />
-    <link rel="apple-touch-icon" href="./static/icon-180x180.png" />
-    <link
-      rel="apple-touch-icon"
-      sizes="152x152"
-      href="./static/icon-152x152.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="./static/icon-180x180.png"
-    />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./static/icon-192x192.png" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #020617;
+            color: white;
+            overflow-x: hidden;
+        }
 
-    <!-- Standard PWA Icons -->
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="32x32"
-      href="./static/icon-192x192.png"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="16x16"
-      href="./static/icon-192x192.png"
-    />
-    <link rel="shortcut icon" href="./static/icon-192x192.png" />
+        .glass-card {
+            background: rgba(16, 185, 129, 0.05);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 24px;
+        }
 
-    <!-- Windows Tiles -->
-    <meta name="msapplication-TileColor" content="#0e6037" />
-    <meta name="msapplication-TileImage" content="./static/icon-144x144.png" />
+        .app-balance-card {
+            background-image: linear-gradient(to bottom right, #064e3b, #022c22);
+            border-radius: 2.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
 
-    <!-- Android Chrome Meta Tags -->
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="mobile-web-app-title" content="Minilend" />
+        .emerald-gradient-text {
+            background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
 
-    <!-- Android Specific Viewport and Performance -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, user-scalable=yes, viewport-fit=cover"
-    />
-    <meta name="screen-orientation" content="portrait" />
-    <meta name="full-screen" content="yes" />
-    <meta name="browsermode" content="application" />
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
 
-    <!-- Android Performance Optimizations -->
-    <meta name="renderer" content="webkit" />
-    <meta name="force-rendering" content="webkit" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .float-anim { animation: float 6s ease-in-out infinite; }
 
-    <!-- Samsung Internet Support -->
-    <meta name="samsung-internet-bookmark-color" content="#0e6037" />
+        /* Enhanced Infinite Loop Marquee */
+        @keyframes scroll {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+        .animate-scroll {
+            display: flex;
+            width: max-content;
+            animation: scroll 15s linear infinite; /* Faster speed (15s vs 30s) */
+        }
 
-    <!-- Additional PWA Meta Tags -->
-    <meta name="application-name" content="Minilend" />
-    <meta name="format-detection" content="telephone=no" />
+        .pwa-install-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 100;
+            background: #10b981;
+            padding: 12px 24px;
+            border-radius: 99px;
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+        }
+        .pwa-install-btn:hover { transform: scale(1.05); }
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <!-- Full-page fixed background -->
-    <div class="site-bg" aria-hidden="true">
-      <div class="site-bg-overlay"></div>
+        section { opacity: 0; transform: translateY(30px); transition: all 0.8s ease-out; }
+        section.visible { opacity: 1; transform: translateY(0); }
+
+        .pwa-ios-prompt {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 110;
+        }
+        .pwa-ios-prompt.visible { display: flex; }
+        .pwa-ios-card {
+            width: 100%;
+            max-width: 340px;
+            background: #0b1220;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            text-align: left;
+        }
+        .pwa-ios-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .pwa-ios-text { font-size: 14px; color: rgba(236, 253, 245, 0.75); }
+        .pwa-ios-close {
+            margin-top: 16px;
+            width: 100%;
+            background: #10b981;
+            color: #06140d;
+            font-weight: 700;
+            padding: 10px 16px;
+            border-radius: 12px;
+            transition: transform 0.2s ease;
+        }
+        .pwa-ios-close:hover { transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+
+    <nav class="fixed top-0 w-full z-50 px-6 py-4 flex justify-between items-center backdrop-blur-md border-b border-white/5">
+        <div class="flex items-center gap-2">
+            <img src="static/icon-512x512.png" alt="Minilend" class="h-8 w-auto" />
+            <span class="text-xl font-extrabold tracking-tighter">MINILEND</span>
+        </div>
+        <div class="hidden md:flex gap-8 text-sm font-medium text-emerald-100/70">
+            <a href="#features" class="hover:text-emerald-400 transition">Features</a>
+            <a href="#yield" class="hover:text-emerald-400 transition">Yield</a>
+            <a href="#partners" class="hover:text-emerald-400 transition">Partners</a>
+        </div>
+        <a href="https://app.minilend.xyz" class="bg-white text-black px-5 py-2 rounded-full font-bold text-sm hover:bg-emerald-400 transition">Launch App</a>
+    </nav>
+
+    <section id="hero" class="min-h-[80vh] md:min-h-screen flex flex-col items-center justify-center px-6 text-center pt-24 pb-16 md:pt-28 md:pb-24">
+        <h1 class="text-5xl md:text-8xl font-extrabold tracking-tight">
+            Save With Friends <br/> <span class="emerald-gradient-text">and Family.</span>
+        </h1>
+    </section>
+
+    <section id="hero-details" class="min-h-[90vh] md:min-h-screen flex flex-col items-center justify-center px-6 text-center py-16 md:py-24">
+        <div class="inline-block px-4 py-1.5 mb-6 md:mb-8 border border-emerald-500/30 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-widest">
+             Earn 10% APY in USD
+        </div>
+        <p class="text-lg md:text-xl text-emerald-100/60 max-w-2xl mb-8 md:mb-12">
+           Create group savings goals, earn high yields on stablecoins, and enjoy zero fees with Minilend.
+        </p>
+        
+        <div class="flex flex-col md:flex-row gap-6 mb-12 md:mb-20">
+            <a href="https://app.minilend.xyz" class="px-8 py-4 bg-emerald-500 rounded-2xl font-bold text-lg hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-all">
+                Open Free Account
+            </a>
+            <div class="glass-card px-8 py-4 flex items-center gap-3">
+                <span class="text-emerald-400 font-bold">1K+</span>
+                <span class="text-sm text-emerald-100/50">Wallets Joined</span>
+            </div>
+        </div>
+
+        <div class="relative w-full max-w-xl mx-auto px-1 float-anim">
+            <div class="app-balance-card p-6 text-white text-left">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <p class="text-[10px] font-bold uppercase tracking-[0.1em] opacity-60">Total Savings</p>
+                        <h2 class="text-3xl font-bold mt-1 tracking-tight">$12,434.56</h2>
+                    </div>
+                    <button class="px-2.5 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10">
+                        USD
+                    </button>
+                </div>
+
+                <div class="flex gap-3 mb-5">
+                    <button class="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white text-black rounded-xl text-sm font-bold transition active:scale-95 shadow-lg" data-app-link>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Deposit
+                    </button>
+                    <button class="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/10 border border-white/10 rounded-xl text-sm font-bold transition active:scale-95" data-app-link>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg> Withdraw
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                    <button class="p-1 opacity-40 hover:opacity-100 transition">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button class="flex items-center gap-2 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all">
+                        My Goals
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="partners" class="py-20 border-y border-white/5 overflow-hidden">
+        <p class="text-center text-xs font-bold uppercase tracking-widest text-emerald-500/50 mb-10">Powering the Future of Finance with</p>
+        <div class="flex w-full">
+            <div class="animate-scroll flex items-center gap-20 px-10">
+                <a href="https://celo.org" target="_blank" class="flex items-center">
+                    <div style="width:110px; height:25px; background-image: url('data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 110.629 24.989\'><g><path d=\'M 98.112 21.67 C 103.192 21.67 107.265 17.563 107.265 12.483 C 107.265 7.403 103.192 3.33 98.112 3.33 C 93.032 3.33 88.959 7.437 88.959 12.483 C 88.97 17.517 93.078 21.67 98.112 21.67 Z M 85.641 0 L 110.629 0 L 110.629 24.989 L 85.641 24.989 Z\' fill=\'white\'></path><path d=\'M 53.307 16.27 L 53.307 24.989 L 28.318 24.989 L 28.318 0 L 53.295 0 L 53.295 12.838 L 31.636 12.838 C 31.819 17.735 35.858 21.67 40.789 21.67 C 44.508 21.67 47.689 19.451 49.153 16.27 Z M 32.037 9.76 L 49.485 9.76 C 48.204 5.503 44.771 3.33 40.801 3.33 C 36.831 3.33 33.135 5.652 32.037 9.76 Z\' fill=\'white\'></path><path d=\'M 24.989 0 L 0 0 L 0 24.989 L 24.989 24.989 L 24.989 16.27 L 20.847 16.27 C 19.416 19.451 16.201 21.67 12.517 21.67 C 7.437 21.67 3.33 17.529 3.33 12.483 C 3.33 7.437 7.437 3.33 12.517 3.33 C 16.27 3.33 19.485 5.618 20.915 8.867 L 24.989 8.867 Z M 82.54 16.27 L 78.398 16.27 C 77.151 19.554 73.787 21.636 69.966 21.636 C 65.034 21.636 60.881 18.066 60.881 12.483 L 60.881 0 L 56.659 0 L 56.659 24.989 L 82.54 24.989 Z\' fill=\'white\'></path></g></svg>'); background-size: contain; background-repeat: no-repeat;"></div>
+                </a>
+                <a href="https://base.org" target="_blank" class="flex items-center gap-2">
+                    <svg width="25" height="25" viewBox="0 0 23 24" fill="none"><path d="M1.35433 23.24C0.451444 23.24 0 22.7899 0 21.8898V2.08683C0 1.1867 0.451444 0.736633 1.35433 0.736633H21.2178C22.1207 0.736633 22.5722 1.1867 22.5722 2.08683V21.8898C22.5722 22.7899 22.1207 23.24 21.2178 23.24H1.35433Z" fill="#0000FF"></path></svg>
+                    <span class="font-bold text-lg tracking-tight">BASE</span>
+                </a>
+                <a href="https://scroll.io" target="_blank">
+                    <svg width="90" height="25" fill="none" viewBox="0 0 24 24"><path fill="#FFEEDA" d="M21.702 15.822V2.532C21.684 1.422 20.82.527 19.734.527H6.197C3.277.57.93 3.02.93 6.022c0 1.013.264 1.88.67 2.64.345.633.883 1.23 1.412 1.672.15.127.08.072.539.362a5.8 5.8 0 0 0 1.359.597l-.01 7.946c.018.38.054.741.15 1.075.3 1.122 1.06 1.98 2.092 2.396.433.172.918.29 1.439.299l10.81.036c2.153 0 3.9-1.79 3.9-4.005a4.02 4.02 0 0 0-1.588-3.218"></path><path fill="#EBC28E" d="M21.966 19.14c-.044 1.419-1.182 2.558-2.577 2.558l-7.439-.027a4.06 4.06 0 0 0 .953-2.613c0-1.564-.909-2.64-.909-2.64h7.404c1.421 0 2.577 1.185 2.577 2.64z"></path><path fill="white" d="M3.717 9.213c-.856-.832-1.456-1.907-1.456-3.182v-.136C2.331 3.717 4.08 1.963 6.206 1.9h13.537c.353.019.635.272.635.642v11.734c.31.055.46.1.76.208.238.09.564.28.564.28V2.542C21.684 1.43 20.82.534 19.734.534H6.197C3.277.58.93 6.031c0 1.745.776 3.236 2.047 4.285.088.072.168.163.397.163.397 0 .68-.326.662-.678-.009-.299-.132-.407-.318-.588"></path></svg>
+                </a>
+                <a href="https://self.xyz" target="_blank" class="flex items-center gap-2">
+                    <img src="https://558968968-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/organizations%2FN7JVIot3pWv4ZY6bRRrw%2Fsites%2Fsite_WgLhj%2Ficon%2FANI7wUW00mwXyWKSVz2c%2FSelf%20App%20Icon.png?alt=media&token=3f8725c5-5d2c-4a3e-8b58-8b50c0835ef6" class="w-6 h-6 object-contain" alt="Self Logo">
+                    <span class="font-bold text-lg tracking-tighter">zkSELF</span>
+                </a>
+
+                <a href="https://celo.org" target="_blank" class="flex items-center">
+                    <div style="width:110px; height:25px; background-image: url('data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 110.629 24.989\'><g><path d=\'M 98.112 21.67 C 103.192 21.67 107.265 17.563 107.265 12.483 C 107.265 7.403 103.192 3.33 98.112 3.33 C 93.032 3.33 88.959 7.437 88.959 12.483 C 88.97 17.517 93.078 21.67 98.112 21.67 Z M 85.641 0 L 110.629 0 L 110.629 24.989 L 85.641 24.989 Z\' fill=\'white\'></path><path d=\'M 53.307 16.27 L 53.307 24.989 L 28.318 24.989 L 28.318 0 L 53.295 0 L 53.295 12.838 L 31.636 12.838 C 31.819 17.735 35.858 21.67 40.789 21.67 C 44.508 21.67 47.689 19.451 49.153 16.27 Z M 32.037 9.76 L 49.485 9.76 C 48.204 5.503 44.771 3.33 40.801 3.33 C 36.831 3.33 33.135 5.652 32.037 9.76 Z\' fill=\'white\'></path><path d=\'M 24.989 0 L 0 0 L 0 24.989 L 24.989 24.989 L 24.989 16.27 L 20.847 16.27 C 19.416 19.451 16.201 21.67 12.517 21.67 C 7.437 21.67 3.33 17.529 3.33 12.483 C 3.33 7.437 7.437 3.33 12.517 3.33 C 16.27 3.33 19.485 5.618 20.915 8.867 L 24.989 8.867 Z M 82.54 16.27 L 78.398 16.27 C 77.151 19.554 73.787 21.636 69.966 21.636 C 65.034 21.636 60.881 18.066 60.881 12.483 L 60.881 0 L 56.659 0 L 56.659 24.989 L 82.54 24.989 Z\' fill=\'white\'></path></g></svg>'); background-size: contain; background-repeat: no-repeat;"></div>
+                </a>
+                <a href="https://base.org" target="_blank" class="flex items-center gap-2">
+                    <svg width="25" height="25" viewBox="0 0 23 24" fill="none"><path d="M1.35433 23.24C0.451444 23.24 0 22.7899 0 21.8898V2.08683C0 1.1867 0.451444 0.736633 1.35433 0.736633H21.2178C22.1207 0.736633 22.5722 1.1867 22.5722 2.08683V21.8898C22.5722 22.7899 22.1207 23.24 21.2178 23.24H1.35433Z" fill="#0000FF"></path></svg>
+                    <span class="font-bold text-lg tracking-tight">BASE</span>
+                </a>
+                <a href="https://scroll.io" target="_blank">
+                    <svg width="90" height="25" fill="none" viewBox="0 0 24 24"><path fill="#FFEEDA" d="M21.702 15.822V2.532C21.684 1.422 20.82.527 19.734.527H6.197C3.277.57.93 3.02.93 6.022c0 1.013.264 1.88.67 2.64.345.633.883 1.23 1.412 1.672.15.127.08.072.539.362a5.8 5.8 0 0 0 1.359.597l-.01 7.946c.018.38.054.741.15 1.075.3 1.122 1.06 1.98 2.092 2.396.433.172.918.29 1.439.299l10.81.036c2.153 0 3.9-1.79 3.9-4.005a4.02 4.02 0 0 0-1.588-3.218"></path><path fill="#EBC28E" d="M21.966 19.14c-.044 1.419-1.182 2.558-2.577 2.558l-7.439-.027a4.06 4.06 0 0 0 .953-2.613c0-1.564-.909-2.64-.909-2.64h7.404c1.421 0 2.577 1.185 2.577 2.64z"></path><path fill="white" d="M3.717 9.213c-.856-.832-1.456-1.907-1.456-3.182v-.136C2.331 3.717 4.08 1.963 6.206 1.9h13.537c.353.019.635.272.635.642v11.734c.31.055.46.1.76.208.238.09.564.28.564.28V2.542C21.684 1.43 20.82.534 19.734.534H6.197C3.277.58.93 6.031c0 1.745.776 3.236 2.047 4.285.088.072.168.163.397.163.397 0 .68-.326.662-.678-.009-.299-.132-.407-.318-.588"></path></svg>
+                </a>
+                <a href="https://self.xyz" target="_blank" class="flex items-center gap-2">
+                    <img src="https://558968968-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/organizations%2FN7JVIot3pWv4ZY6bRRrw%2Fsites%2Fsite_WgLhj%2Ficon%2FANI7wUW00mwXyWKSVz2c%2FSelf%20App%20Icon.png?alt=media&token=3f8725c5-5d2c-4a3e-8b58-8b50c0835ef6" class="w-6 h-6 object-contain" alt="Self Logo">
+                    <span class="font-bold text-lg tracking-tighter">zkSELF</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="py-32 px-6 max-w-6xl mx-auto text-center">
+        <h2 class="text-3xl md:text-5xl font-bold mb-20">Do it all with <span class="text-emerald-400">Stablecoins</span></h2>
+        <div class="grid md:grid-cols-2 gap-10 max-w-4xl mx-auto">
+            <div class="glass-card p-8 hover:bg-emerald-500/10 transition group text-left">
+                <div class="flex gap-2 mb-6">
+                    <img src="https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png" class="w-10 h-10 rounded-full" alt="USDC">
+                    <img src="https://s2.coinmarketcap.com/static/img/coins/64x64/825.png" class="w-10 h-10 rounded-full" alt="USDT">
+                </div>
+                <h3 class="text-xl font-bold mb-4">High Yield Savings</h3>
+                <p class="text-emerald-100/60 text-sm leading-relaxed">Earn 4-10% APY on USDC and USDT with transparent algorithmic rates across Celo, Base, and Scroll.</p>
+            </div>
+            <div class="glass-card p-8 hover:bg-emerald-500/10 transition group text-left">
+                <div class="w-8 h-8 mb-6 group-hover:scale-110 transition">
+                    <img src="https://558968968-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/organizations%2FN7JVIot3pWv4ZY6bRRrw%2Fsites%2Fsite_WgLhj%2Ficon%2FANI7wUW00mwXyWKSVz2c%2FSelf%20App%20Icon.png?alt=media&token=3f8725c5-5d2c-4a3e-8b58-8b50c0835ef6" class="w-full h-full object-contain" alt="Self Logo">
+                </div>
+                <h3 class="text-xl font-bold mb-4">zk-Privacy</h3>
+                <p class="text-emerald-100/60 text-sm leading-relaxed">Powered by self.xyz, stay compliant without exposing your sensitive data using zero-knowledge identity.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="pwa-install-btn" id="pwa-btn" style="display: none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        Install PWA
+    </button>
+
+    <div class="pwa-ios-prompt" id="pwa-ios-prompt" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="pwa-ios-card">
+            <div class="pwa-ios-title">Install Minilend</div>
+            <p class="pwa-ios-text">On iPhone and iPad, tap the Share button in Safari, then choose "Add to Home Screen".</p>
+            <button class="pwa-ios-close" id="pwa-ios-close">Got it</button>
+        </div>
     </div>
 
-    <!-- Mobile Header -->
-    <header class="mobile-header">
-      <button class="hamburger" id="hamburger">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
-    </header>
-
-    <!-- Mobile Menu Dropdown -->
-    <nav class="mobile-nav" id="mobile-nav">
-      <ul>
-        <li><a href="#intro" class="mobile-nav-link">Intro</a></li>
-        <li><a href="#value-prop" class="mobile-nav-link">Why Us</a></li>
-        <li><a href="#currencies" class="mobile-nav-link">Currencies</a></li>
-        <li><a href="#features" class="mobile-nav-link">Features</a></li>
-        <li><a href="#cta" class="mobile-nav-link">Launch</a></li>
-      </ul>
-    </nav>
-
-    <!-- Desktop Navigation menu -->
-    <nav class="main-nav">
-      <ul>
-        <li><a href="#intro" class="active">Intro</a></li>
-        <li><a href="#value-prop">Why Us</a></li>
-        <li><a href="#currencies">Currencies</a></li>
-        <li><a href="#features">Features</a></li>
-        <li><a href="#cta">Launch</a></li>
-      </ul>
-    </nav>
-
-    <main>
-      <!-- Page 1: Introduction -->
-      <section id="intro" class="page">
-        <div class="page-content">
-          <div class="hero-inner">
-            <img
-              src="./static/new-logo.png"
-              alt="Minilend Logo"
-              class="hero-logo"
-            />
-            <div></div>
-            <div class="description-box">
-              <p class="main-description">
-                Earn up to 10% interest annually by saving in USD
-                <!-- <img
-                  src="https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png"
-                  style="width: 30px; height: 40px; vertical-align: middle"
-                /> -->
-                <br />& use your savings as security.
-              </p>
-            </div>
-
-            <div class="badges" aria-hidden="true">
-              <span>4-10% APY Returns</span>
-              <span>Instant Withdrawals</span>
-              <span>negligible FX fees</span>
-            </div>
-
-            <div class="cta-action intro-cta">
-              <a
-                class="cta"
-                href="https://app.minilend.xyz"
-                role="button"
-                aria-label="Start your savings journey"
-              >
-                <svg
-                  class="cta-icon"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M2 12a10 10 0 1 1 20 0 10 10 0 0 1-20 0z"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    fill="none"
-                  />
-                  <path d="M10 8l6 4-6 4V8z" fill="currentColor" />
-                </svg>
-                Open a USD account for free
-              </a>
-            </div>
-
-            <!-- Directional cue to encourage scrolling -->
-            <div class="scroll-cue" aria-hidden="true">
-              <p class="scroll-text">Scroll to explore</p>
-              <div class="chev"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Page 2: Value Proposition -->
-      <section id="value-prop" class="page">
-        <div class="page-content">
-          <div class="value-prop-container">
-            <h2 class="section-title">
-              Why Choose <span class="accent">Minilend</span>?
-            </h2>
-
-            <div class="value-grid">
-              <div class="value-item">
-                <div class="icon-circle">
-                  <svg
-                    class="icon-svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M23 6l-9.5 9.5-5-5L1 18"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M17 6h6v6"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-                <div class="value-content">
-                  <h3>Competitive Returns</h3>
-                  <p>
-                    Earn 4-10% APY on your stablecoin deposits with transparent,
-                    algorithmic interest rates
-                  </p>
-                </div>
-              </div>
-              <div class="value-item">
-                <div class="icon-circle">
-                  <svg
-                    class="icon-svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M12 1v22"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                    />
-                    <path
-                      d="M17 5H9.5a3 3 0 0 0 0 6H15a3 3 0 0 1 0 6H6"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-                <div class="value-content">
-                  <h3>Collateral Loans</h3>
-                  <p>
-                    Minilend allows you to use your USDC savings as collateral
-                    for a local currency loan
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Stats Section -->
-            <div class="stats-container">
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <div class="stat-value">11+</div>
-                  <div class="stat-label">Supported Assets</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-value">150%</div>
-                  <div class="stat-label">Collateral Ratio</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-value">24/7</div>
-                  <div class="stat-label">Global Access</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-value">zkSelf</div>
-                  <div class="stat-label">Privacy Compliance</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Page 3: Supported Currencies -->
-
-      <!-- <section id="currencies" class="page">
-        <div class="page-content">
-          <div class="currencies-container">
-            <h2 class="section-title">Supported <span class="accent">Assets</span></h2>
-            
-            <p class="currency-intro">Minilend supports a variety of stablecoins and local currency tokens, allowing you to save in dollars while borrowing in your local currency.</p>
-            
-            <div class="token-grid">
-              <div class="token">
-                <img src="https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png" alt="USDC" class="token-icon"/> 
-                <div class="token-details">
-                  <h4>USDC</h4>
-                  <span class="token-badge">collateral</span>
-                </div>
-              </div>
-              
-              <div class="token">
-                <img src="https://s2.coinmarketcap.com/static/img/coins/64x64/825.png" alt="USDT" class="token-icon"/> 
-                <div class="token-details">
-                  <h4>USDT</h4>
-                  <span class="token-badge">collateral</span>
-                </div>
-              </div>
-              
-              <div class="token">
-                <img src="https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6807f9a4185658fa6e759a27_Tokens.avif" alt="cUSD" class="token-icon"/> 
-                <div class="token-details">
-                  <h4>cUSD</h4>
-                  <span class="token-badge">collateral</span>
-                </div>
-              </div>
-              
-              <div class="token">
-                <img src="https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/68094e158b4206fbeba352aa_Tokens-3.avif" alt="cKES" class="token-icon"/> 
-                <div class="token-details">
-                  <h4>cKES</h4>
-                  <span class="token-badge">Borrow</span>
-                </div>
-              </div>
-              
-              <div class="token">
-                <img src="https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6818d1976757a7c20485226f_Tokens%20(2).avif" alt="cNGN" class="token-icon"/> 
-                <div class="token-details">
-                  <h4>cNGN</h4>
-                  <span class="token-badge">Borrow</span>
-                </div>
-              </div>
-              
-              <div class="token">
-                <img src="./static/bpesa.jpg" alt="bPESA" class="token-icon"/> 
-                <div class="token-details">
-                  <h4>B-pesa</h4>
-                  <span class="token-badge">Borrow</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="currency-note">
-              <p>Additional currencies are being added regularly. <a href="https://t.me/minilendxyz" class="text-link">Suggest a new currency</a> for us to support.</p>
-            </div>
-          </div>
-        </div>
-      </section> -->
-
-      <!-- Page 3: Features & Benefits -->
-      <section id="features" class="page">
-        <div class="page-content">
-          <div class="features-container">
-            <h2 class="section-title">
-              Built for <span class="accent">Modern Day Finance</span>
-            </h2>
-
-            <div class="feature-cards">
-              <div class="feature-card">
-                <div class="icon-circle">
-                  <svg
-                    class="icon-svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M12 1v22"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                    />
-                    <path
-                      d="M17 5H9.5a3 3 0 0 0 0 6H15a3 3 0 0 1 0 6H6"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-                <h3>Earn 4-10% APY</h3>
-                <p>
-                  Competitive returns on your stablecoin deposits with flexible
-                  lock periods.
-                </p>
-                <div class="highlight">Starting at 2% base rate</div>
-              </div>
-
-              <div class="feature-card">
-                <div class="icon-circle">
-                  <svg
-                    class="icon-svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M21 3v6h-6"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M10 14L21 3"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M21 3L14 10"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-                <h3>Instant Liquidity</h3>
-                <p>
-                  Borrow up to 66% of your collateral value at competitive
-                  rates.
-                </p>
-                <div class="highlight">150% collateral ratio</div>
-              </div>
-
-              <!-- <div class="feature-card">
-                <div class="icon-circle">
-                  <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                    <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <h3>Regulatory Compliant</h3>
-                <p>Privacy-preserving KYC through zkSelf — stay compliant without compromising privacy.</p>
-                <div class="highlight">Zero-knowledge proofs</div>
-              </div> -->
-
-              <div class="feature-card">
-                <div class="icon-circle">
-                  <svg
-                    class="icon-svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      fill="none"
-                    />
-                    <path
-                      d="M12 6v6l4 2"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </div>
-                <h3>Flexible Terms</h3>
-                <p>
-                  Choose from 30, 60, or 120-day lock periods to maximize your
-                  earnings.
-                </p>
-                <div class="highlight">Up to 365 days available</div>
-              </div>
-
-              <div class="feature-card">
-                <div class="icon-circle">
-                  <svg
-                    class="icon-svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <polyline
-                      points="7,10 12,15 17,10"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <line
-                      x1="12"
-                      y1="15"
-                      x2="12"
-                      y2="3"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </div>
-                <h3>Withdraw funds anytime</h3>
-                <p>
-                  Access your funds whenever you need them with flexible
-                  withdrawal options.
-                </p>
-                <div class="highlight">No penalties</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Page 4: FAQ & Call to Action -->
-      <section id="cta" class="page">
-        <div class="page-content">
-          <div class="cta-container">
-            <h2 class="section-title">
-              Ready to <span class="accent">get started</span>?
-            </h2>
-
-            <div class="cta-action">
-              <a
-                id="main-cta"
-                class="cta"
-                href="https://app.minilend.xyz"
-                role="button"
-                aria-label="Start your savings journey"
-              >
-                <svg
-                  class="cta-icon"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M2 21s4-1 6-3 5-5 5-5 3 2 5 4 3 6 3 6-3-1-6-3-5-3-7-3-6 4-6 4z"
-                    fill="currentColor"
-                    opacity="0.08"
-                  />
-                  <path d="M14 2l3 3-7 7-3-3 7-7z" fill="currentColor" />
-                  <path
-                    d="M7 17l4-4"
-                    stroke="currentColor"
-                    stroke-width="1.2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                Start your savings journey today
-              </a>
-            </div>
-
-            <div class="faq-container">
-              <h3>Frequently Asked Questions</h3>
-              <details>
-                <summary>How does Minilend generate returns?</summary>
-                <div>
-                  Minilend uses a dual approach: dollar-backed tokens earn yield
-                  through Aave integration, while other stablecoins generate
-                  returns through our internal lending pool where borrowers pay
-                  interest to lenders.
-                </div>
-              </details>
-              <details>
-                <summary>What makes Minilend unique?</summary>
-                <div>
-                  Minilend allows you to use your savings as a security to take
-                  a quick loan in your local currency while maintaining your
-                  savings in dollars to reduce currency devaluation.
-                </div>
-              </details>
-              <details>
-                <summary>Is my money safe with Minilend?</summary>
-                <div>
-                  Yes. Minilend uses battle-tested smart contracts, integrates
-                  with Aave for additional security, and maintains
-                  over-collateralization ratios. All transactions are
-                  transparent on the Celo blockchain.
-                </div>
-              </details>
-              <details>
-                <summary>How quickly can I access my funds?</summary>
-                <div>
-                  Funds can be withdrawn immediately after the lock period ends.
-                  Borrowing is instant once you've deposited collateral.
-                  Emergency withdrawals may be available depending on pool
-                  liquidity.
-                </div>
-              </details>
-              <details>
-                <summary>What is zkSelf compliance?</summary>
-                <div>
-                  zkSelf enables privacy-preserving KYC verification using
-                  zero-knowledge proofs. You can prove your identity and
-                  compliance status without revealing personal information,
-                  meeting regulatory requirements while protecting your privacy.
-                </div>
-              </details>
-            </div>
-
-            <div class="community-showcase">
-              <h3>Join Our Community</h3>
-              <p>
-                Stay updated with the latest features, earn rewards, and connect
-                with other users building the future of decentralized finance.
-              </p>
-              <div class="community-actions">
-                <a
-                  class="btn btn-outline btn-x"
-                  href="https://x.com/minilend_bits"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >Follow on X</a
-                >
-                <a
-                  class="btn btn-outline btn-tg"
-                  href="https://t.me/minilendxyz"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >Join Telegram</a
-                >
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Scripts at the end for performance -->
     <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        // Initialize pages and navigation
-        const pages = document.querySelectorAll(".page");
-        const navLinks = document.querySelectorAll(".main-nav a");
+        const canvas = document.getElementById('bg-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
 
-        // Make first page visible initially
-        document.querySelector("#intro").classList.add("visible");
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 15000;
+        const posArray = new Float32Array(starCount * 3);
+        for(let i=0; i < starCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 15;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const starMaterial = new THREE.PointsMaterial({ size: 0.005, color: 0x10b981 });
+        const starMesh = new THREE.Points(starGeometry, starMaterial);
+        scene.add(starMesh);
 
-        // Intersection Observer for scroll animations
-        const observer = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              // When a section comes into view
-              if (entry.isIntersecting) {
-                // Add visible class to make it appear
-                entry.target.classList.add("visible");
+        function animate() {
+            requestAnimationFrame(animate);
+            starMesh.rotation.y += 0.0005;
+            renderer.render(scene, camera);
+        }
+        animate();
 
-                // Update active navigation link
-                const id = entry.target.getAttribute("id");
-                navLinks.forEach((link) => {
-                  link.classList.toggle(
-                    "active",
-                    link.getAttribute("href") === `#${id}`
-                  );
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if(entry.isIntersecting) entry.target.classList.add('visible');
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('section').forEach(s => observer.observe(s));
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch((error) => {
+                    console.log('Service worker registration failed:', error);
                 });
-
-                // Update URL without scrolling
-                history.replaceState(null, null, `#${id}`);
-              }
             });
-          },
-          {
-            // Options for the observer
-            threshold: 0.25, // When 25% of the section is visible
-            rootMargin: "-10% 0px", // Trigger slightly before element comes into view
-          }
-        );
+        }
 
-        // Observe all section elements
-        pages.forEach((page) => {
-          observer.observe(page);
+        const installButton = document.getElementById('pwa-btn');
+        const iosPrompt = document.getElementById('pwa-ios-prompt');
+        const iosClose = document.getElementById('pwa-ios-close');
+        let deferredPrompt = null;
+
+        const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+        const showInstallButton = () => {
+            installButton.style.display = 'flex';
+        };
+
+        const hideInstallButton = () => {
+            installButton.style.display = 'none';
+        };
+
+        const showIosPrompt = () => {
+            iosPrompt.classList.add('visible');
+            iosPrompt.setAttribute('aria-hidden', 'false');
+        };
+
+        const hideIosPrompt = () => {
+            iosPrompt.classList.remove('visible');
+            iosPrompt.setAttribute('aria-hidden', 'true');
+        };
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredPrompt = event;
+            showInstallButton();
         });
 
-        // Handle smooth scrolling for navigation
-        navLinks.forEach((link) => {
-          link.addEventListener("click", function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute("href"));
+        window.addEventListener('appinstalled', () => {
+            deferredPrompt = null;
+            hideInstallButton();
+        });
 
-            // Smooth scroll to the target section
-            if (target) {
-              window.scrollTo({
-                top: target.offsetTop,
-                behavior: "smooth",
-              });
+        if (isIos && !isStandalone) {
+            showInstallButton();
+        }
+
+        installButton.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                try {
+                    await deferredPrompt.userChoice;
+                } finally {
+                    deferredPrompt = null;
+                    hideInstallButton();
+                }
+                return;
             }
-          });
-        });
 
-        // Handle scroll cues
-        const scrollCues = document.querySelectorAll(".scroll-cue");
-        scrollCues.forEach((cue) => {
-          cue.addEventListener("click", function () {
-            const parent = this.closest(".page");
-            const nextSection = parent.nextElementSibling;
-
-            if (nextSection) {
-              window.scrollTo({
-                top: nextSection.offsetTop,
-                behavior: "smooth",
-              });
+            if (isIos && !isStandalone) {
+                showIosPrompt();
             }
-          });
         });
 
-        // Handle direct URL with hash on load
-        if (window.location.hash) {
-          const targetSection = document.querySelector(window.location.hash);
-          if (targetSection) {
-            setTimeout(() => {
-              window.scrollTo({
-                top: targetSection.offsetTop,
-                behavior: "auto",
-              });
-            }, 100);
-          }
-        }
-
-        // Set all CTA buttons to redirect to the app URL
-        document.querySelectorAll(".cta").forEach((button) => {
-          if (
-            !button.getAttribute("href") ||
-            button.getAttribute("href") === "#"
-          ) {
-            button.setAttribute("href", "https://app.minilend.xyz");
-          }
+        iosPrompt.addEventListener('click', (event) => {
+            if (event.target === iosPrompt) {
+                hideIosPrompt();
+            }
         });
 
-        // Mobile hamburger menu functionality
-        const hamburger = document.getElementById("hamburger");
-        const mobileNav = document.getElementById("mobile-nav");
-
-        hamburger.addEventListener("click", function () {
-          hamburger.classList.toggle("active");
-          mobileNav.classList.toggle("active");
+        iosClose.addEventListener('click', () => {
+            hideIosPrompt();
         });
 
-        // Close mobile menu when clicking on a link
-        document.querySelectorAll(".mobile-nav-link").forEach((link) => {
-          link.addEventListener("click", function () {
-            hamburger.classList.remove("active");
-            mobileNav.classList.remove("active");
-          });
-        });
-
-        // FAQ accordion functionality
-        document
-          .querySelectorAll(".faq-container details")
-          .forEach((details) => {
-            const summary = details.querySelector("summary");
-
-            summary.addEventListener("click", function (e) {
-              e.preventDefault();
-
-              // Close all other details
-              document
-                .querySelectorAll(".faq-container details")
-                .forEach((otherDetails) => {
-                  if (otherDetails !== details && otherDetails.open) {
-                    otherDetails.open = false;
-                  }
-                });
-
-              // Toggle current details
-              details.open = !details.open;
-            });
-          });
-      });
-    </script>
-
-    <!-- PWA Service Worker Registration -->
-    <script>
-      // PWA Launch Detection and Redirect
-      const isPWAStandalone = () => {
-        return (
-          window.matchMedia("(display-mode: standalone)").matches ||
-          window.navigator.standalone === true ||
-          document.referrer.includes("android-app://")
-        );
-      };
-
-      // Redirect PWA launches to the main app (environment-aware)
-      if (isPWAStandalone()) {
-        // Derive app URL from current domain
-        const currentOrigin = window.location.origin;
-        let appOrigin;
-
-        // Handle different deployment patterns
-        if (currentOrigin.includes("localhost")) {
-          // Local development - redirect to localhost app port or same origin
-          appOrigin = currentOrigin;
-        } else if (currentOrigin.includes("minilend.xyz")) {
-          // Production - normalize www and avoid double app subdomain
-          const hostname = window.location.hostname.replace(/^www\./, "");
-          const port = window.location.port ? ":" + window.location.port : "";
-          const normalizedHost = hostname.replace(/^app\./, "");
-          appOrigin = `${window.location.protocol}//app.${normalizedHost}${port}`;
-        } else {
-          // Generic pattern: landing.domain.com -> app.domain.com
-          // or domain.com -> app.domain.com
-          const hostname = window.location.hostname;
-          if (hostname.startsWith("www.")) {
-            appOrigin = currentOrigin.replace("www.", "app.");
-          } else if (!hostname.startsWith("app.")) {
-            // If it's a bare domain or different subdomain, prepend 'app.'
-            appOrigin = `${window.location.protocol}//app.${hostname}${window.location.port ? ":" + window.location.port : ""}`;
-          } else {
-            // Fallback to same origin
-            appOrigin = currentOrigin;
-          }
-        }
-
-        window.location.href = `${appOrigin}/?source=pwa_landing`;
-      }
-
-      // Detect Android device
-      const isAndroid = () => /android/i.test(navigator.userAgent);
-      const isAndroidWebView = () =>
-        /android/i.test(navigator.userAgent) &&
-        /wv\)/i.test(navigator.userAgent);
-
-      // Service Worker Registration for PWA with Android optimizations
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          // Use relative scope for better compatibility
-          const swOptions = { scope: "./" };
-
-          navigator.serviceWorker
-            .register("./sw.js", swOptions)
-            .then(function (registration) {
-              // Android-specific: Check for updates more frequently
-              if (isAndroid()) {
-                setInterval(() => {
-                  registration.update();
-                }, 30000); // Check every 30 seconds for Android
-              }
-            })
-            .catch(function (error) {
-              console.log("ServiceWorker registration failed: ", error);
-
-              // Android WebView has limited PWA support
-              if (isAndroidWebView()) {
-                // PWA features may be limited in WebView
-              }
+        document.querySelectorAll('[data-app-link]').forEach((button) => {
+            button.addEventListener('click', () => {
+                window.location.href = 'https://app.minilend.xyz';
             });
         });
-      }
-
-      // PWA Install Prompt with Android optimizations
-      let deferredPrompt;
-      const installButton = document.createElement("button");
-
-      // Android-specific install text
-      const getInstallText = () => {
-        if (isAndroid()) {
-          return "Add to Home Screen";
-        }
-        return "Install App";
-      };
-
-      installButton.textContent = getInstallText();
-      // Android-specific styling
-      const getInstallButtonStyles = () => {
-        const baseStyles = `
-          position: fixed;
-          background: #0e6037;
-          color: white;
-          border: none;
-          font-weight: 600;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(14, 96, 55, 0.3);
-          z-index: 1000;
-          display: none;
-          font-family: 'Inter', sans-serif;
-          transition: all 0.3s ease;
-        `;
-
-        if (isAndroid()) {
-          // Android devices: full-width bottom bar for easier tapping
-          return (
-            baseStyles +
-            `
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 16px 20px;
-            border-radius: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 16px;
-          `
-          );
-        } else {
-          // Desktop/iOS: floating button
-          return (
-            baseStyles +
-            `
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 25px;
-          `
-          );
-        }
-      };
-
-      installButton.style.cssText = getInstallButtonStyles();
-      installButton.addEventListener("mouseenter", function () {
-        this.style.transform = "translateY(-2px)";
-        this.style.boxShadow = "0 6px 16px rgba(14, 96, 55, 0.4)";
-      });
-      installButton.addEventListener("mouseleave", function () {
-        this.style.transform = "translateY(0)";
-        this.style.boxShadow = "0 4px 12px rgba(14, 96, 55, 0.3)";
-      });
-
-      window.addEventListener("beforeinstallprompt", (e) => {
-        // Prevent the mini-infobar from appearing on mobile
-        e.preventDefault();
-        // Stash the event so it can be triggered later
-        deferredPrompt = e;
-        // Show the install button
-        installButton.style.display = "block";
-        document.body.appendChild(installButton);
-      });
-
-      installButton.addEventListener("click", async () => {
-        if (deferredPrompt) {
-          // Show the install prompt
-          deferredPrompt.prompt();
-          // Wait for the user to respond to the prompt
-          const { outcome } = await deferredPrompt.userChoice;
-          // Clear the deferredPrompt variable
-          deferredPrompt = null;
-          // Hide the install button
-          installButton.style.display = "none";
-        }
-      });
-
-      // Hide install button if app is already installed
-      window.addEventListener("appinstalled", () => {
-        installButton.style.display = "none";
-        deferredPrompt = null;
-      });
-
-      // Check if app is running in standalone mode (installed)
-      if (
-        window.matchMedia("(display-mode: standalone)").matches ||
-        window.navigator.standalone === true
-      ) {
-        // App is installed, hide install button
-        installButton.style.display = "none";
-      }
     </script>
-  </body>
+</body>
 </html>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner"; 
 import {
   AmountInputModal,
@@ -17,6 +17,9 @@ import { OnrampDepositModal } from "@/components/OnrampDepositModal";
 import MobileMoneyWithdrawModal from "@/components/MobileMoneyWithdrawModal";
 import { WithdrawModal } from "@/components/WithdrawModal";
 import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
+import { getStablecoinBalances } from "@/lib/services/balanceService";
+import type { TokenBalance } from "@/lib/services/balanceService";
+import { getOfframpSupportedSymbols } from "@/lib/services/offrampService";
 
 interface ModalManagerProps {
   // Save Actions Modal
@@ -120,6 +123,8 @@ interface ModalManagerProps {
   setSelectedTokenForOnramp: (token: string) => void;
   setShowOnrampModal: (show: boolean) => void;
   depositMethod: "ONCHAIN" | "MPESA";
+  selectedDepositToken: TokenBalance | null;
+  setSelectedDepositToken: (token: TokenBalance | null) => void;
 }
 
 export function ModalManager(props: ModalManagerProps) {
@@ -195,9 +200,97 @@ export function ModalManager(props: ModalManagerProps) {
     setSelectedTokenForOnramp,
     setShowOnrampModal,
     depositMethod,
+    selectedDepositToken,
+    setSelectedDepositToken,
   } = props;
 
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
+  const [stablecoinBalances, setStablecoinBalances] = useState<TokenBalance[]>([]);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [selectedOfframpToken, setSelectedOfframpToken] = useState<TokenBalance | null>(null);
+  const isOnchainDeposit = depositMethod === "ONCHAIN";
+
+  const pickDefaultToken = (balances: TokenBalance[]) => {
+    const priorityOrder = ["USDC", "USDT", "CUSD"];
+    const sorted = [...balances].sort((a, b) => {
+      if (a.balance !== b.balance) {
+        return b.balance - a.balance;
+      }
+
+      const aPriority = priorityOrder.indexOf(a.symbol.toUpperCase());
+      const bPriority = priorityOrder.indexOf(b.symbol.toUpperCase());
+
+      if (aPriority !== -1 && bPriority !== -1) {
+        return aPriority - bPriority;
+      }
+      if (aPriority !== -1) return -1;
+      if (bPriority !== -1) return 1;
+      return 0;
+    });
+
+    return sorted[0] || null;
+  };
+
+  useEffect(() => {
+    if (!isOnchainDeposit) {
+      setStablecoinBalances([]);
+      setBalancesLoading(false);
+      setSelectedDepositToken(null);
+    }
+  }, [isOnchainDeposit, setSelectedDepositToken]);
+
+  useEffect(() => {
+    const shouldLoadBalances =
+      isOnchainDeposit &&
+      (quickSaveAmountOpen || goalAmountOpen) &&
+      account?.address &&
+      chain?.id;
+
+    if (!shouldLoadBalances) {
+      return;
+    }
+
+    let isActive = true;
+    setBalancesLoading(true);
+
+    getStablecoinBalances(account.address, chain.id)
+      .then((balances) => {
+        if (!isActive) return;
+        setStablecoinBalances(balances);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setStablecoinBalances([]);
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setBalancesLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    isOnchainDeposit,
+    quickSaveAmountOpen,
+    goalAmountOpen,
+    account?.address,
+    chain?.id,
+  ]);
+
+  useEffect(() => {
+    if (!stablecoinBalances.length) {
+      setSelectedDepositToken(null);
+      return;
+    }
+
+    setSelectedDepositToken((prev) => {
+      if (prev && stablecoinBalances.some((token) => token.address === prev.address)) {
+        return prev;
+      }
+      return pickDefaultToken(stablecoinBalances);
+    });
+  }, [stablecoinBalances, setSelectedDepositToken]);
 
   const getGoalIcon = (category?: string) => {
     const icons: Record<string, string> = {
@@ -251,11 +344,67 @@ export function ModalManager(props: ModalManagerProps) {
     }
   };
 
-  const offrampTokenSymbol = defaultToken?.symbol || "USDC";
-  const offrampTokenAddress = defaultToken?.address || "";
-  const offrampTokenDecimals = defaultToken?.decimals ?? 18;
+  const offrampSupportedSymbols = useMemo(
+    () => getOfframpSupportedSymbols(chain?.name || ""),
+    [chain?.name]
+  );
+  const offrampTokenBalances = useMemo(() => {
+    if (!vaultPositions?.length) return [];
+    const allowedSymbols = offrampSupportedSymbols.length > 0 ? offrampSupportedSymbols : null;
+    const balancesBySymbol = new Map<string, TokenBalance>();
+    const tokenInfoBySymbol = new Map(
+      (tokens || []).map((token) => [token.symbol.toUpperCase(), token])
+    );
+
+    vaultPositions.forEach((position) => {
+      const symbol = position.tokenSymbol?.toUpperCase();
+      if (!symbol) return;
+      if (allowedSymbols && !allowedSymbols.includes(symbol)) return;
+      const amount = Number.parseFloat(position.withdrawableAmount || "0");
+      if (!Number.isFinite(amount)) return;
+
+      const tokenInfo = tokenInfoBySymbol.get(symbol);
+      const address = tokenInfo?.address || position.tokenAddress;
+      const decimals = tokenInfo?.decimals ?? 18;
+      const existing = balancesBySymbol.get(symbol);
+      const balance = (existing?.balance || 0) + amount;
+
+      balancesBySymbol.set(symbol, {
+        address,
+        symbol,
+        balance,
+        formattedBalance: balance.toString(),
+        decimals,
+      });
+    });
+
+    return Array.from(balancesBySymbol.values()).sort(
+      (a, b) => b.balance - a.balance
+    );
+  }, [vaultPositions, tokens, offrampSupportedSymbols]);
+
+  useEffect(() => {
+    if (!offrampTokenBalances.length) {
+      setSelectedOfframpToken(null);
+      return;
+    }
+    setSelectedOfframpToken((prev) => {
+      if (prev && offrampTokenBalances.some((token) => token.address === prev.address)) {
+        return prev;
+      }
+      return offrampTokenBalances[0];
+    });
+  }, [offrampTokenBalances]);
+
+  const activeOfframpToken = selectedOfframpToken || defaultToken;
+  const offrampTokenSymbol = activeOfframpToken?.symbol || "USDC";
+  const offrampTokenAddress = activeOfframpToken?.address || "";
+  const offrampTokenDecimals = activeOfframpToken?.decimals ?? 18;
 
   const offrampAvailableAmount = useMemo(() => {
+    if (selectedOfframpToken) {
+      return selectedOfframpToken.balance.toString();
+    }
     if (!vaultPositions?.length) return "0";
     const total = vaultPositions
       .filter((position) => position.tokenSymbol === offrampTokenSymbol)
@@ -316,10 +465,10 @@ export function ModalManager(props: ModalManagerProps) {
     toAddress: string
   ) => {
     return onSettlementTransfer(
-      tokenAddress,
-      amount,
-      toAddress,
-      offrampTokenDecimals
+    tokenAddress,
+    amount,
+    toAddress,
+    offrampTokenDecimals
     );
   };
 
@@ -348,8 +497,13 @@ export function ModalManager(props: ModalManagerProps) {
         onClose={onQuickSaveClose}
         onContinue={onQuickSaveAmountContinue}
         title="How much do you want to save?"
-        initialAmount="100"
-        currency="KES"
+        initialAmount={isOnchainDeposit ? "0" : "100"}
+        currency={isOnchainDeposit ? "USD" : "KES"}
+        allowDecimal={isOnchainDeposit}
+        tokenBalances={isOnchainDeposit ? stablecoinBalances : []}
+        selectedToken={selectedDepositToken}
+        onTokenSelect={setSelectedDepositToken}
+        balancesLoading={isOnchainDeposit ? balancesLoading : false}
         icon="🐷"
       />
 
@@ -373,7 +527,6 @@ export function ModalManager(props: ModalManagerProps) {
         setShowOnrampModal={setShowOnrampModal}
         goalTitle="Quick Save Goal"
         depositMethod={depositMethod}
-        // goalIcon="🐷"
       />
 
       {/* Primary Goal Management Modal */}
@@ -402,8 +555,13 @@ export function ModalManager(props: ModalManagerProps) {
         onClose={onGoalClose}
         onContinue={onGoalAmountContinue}
         title={`Save to ${selectedGoal?.title || "Goal"}`}
-        initialAmount="100"
-        currency="KES"
+        initialAmount={isOnchainDeposit ? "0" : "100"}
+        currency={isOnchainDeposit ? "USD" : "KES"}
+        allowDecimal={isOnchainDeposit}
+        tokenBalances={isOnchainDeposit ? stablecoinBalances : []}
+        selectedToken={selectedDepositToken}
+        onTokenSelect={setSelectedDepositToken}
+        balancesLoading={isOnchainDeposit ? balancesLoading : false}
         icon={getGoalIcon(selectedGoal?.category)}
       />
 
@@ -478,6 +636,9 @@ export function ModalManager(props: ModalManagerProps) {
         network={chain?.name || ""}
         availableAmount={offrampAvailableAmount}
         decimals={offrampTokenDecimals}
+        tokenBalances={offrampTokenBalances}
+        selectedToken={selectedOfframpToken}
+        onTokenSelect={setSelectedOfframpToken}
         userDeposits={offrampAvailableAmount}
         userBorrows="0"
         onVaultWithdraw={handleVaultWithdrawForAmount}

@@ -99,6 +99,7 @@ export interface GoalDetailsResponse {
   updatedAt: string;
   isPublic?: boolean;
   inviteLink?: string;
+  invitedUsers?: string[];
   cachedMembers?: {
     totalContributedUSD: number;
     progressPercent: number;
@@ -120,6 +121,8 @@ export interface GroupSavingsGoal {
   createdAt: string;
   // Additional fields used by components
   currentAmountUSD?: number;
+  totalContributedUSD?: number;
+  totalContributedUsd?: number;
   category?: string;
   status?: "active" | "completed" | "paused";
   description?: string;
@@ -128,7 +131,14 @@ export interface GroupSavingsGoal {
   // Fields used by ClanTab UI
   progressPercent?: number;
   totalProgressUSD?: number;
+  cachedMembers?: {
+    totalContributedUSD?: number;
+    progressPercent?: number;
+    memberCount?: number;
+    members?: any[];
+  };
   participants?: string[];
+  invitedUsers?: string[];
   inviteLink?: string;
 }
 
@@ -175,6 +185,18 @@ export interface GroupGoalMembersResponse {
     depositCount: number;
     joinedAt: string;
   }>;
+}
+
+export interface GroupGoalInviteChallengeResponse {
+  nonce: string;
+  issuedAt: string;
+  alreadyInvited?: boolean;
+  error?: string;
+}
+
+export interface GroupGoalInviteResponse {
+  success?: boolean;
+  error?: string;
 }
 
 export interface GroupGoalDetailsResponse {
@@ -314,9 +336,12 @@ export class BackendApiClient {
           statusText: response.statusText,
           errorData,
         });
-        throw new Error(
+        const error = new Error(
           errorData.error || `HTTP ${response.status}: ${response.statusText}`
-        );
+        ) as Error & { status?: number; data?: unknown };
+        error.status = response.status;
+        error.data = errorData;
+        throw error;
       }
 
       return await response.json();
@@ -457,8 +482,15 @@ export class BackendApiClient {
     public: { total: number; goals: GroupSavingsGoal[] };
     private: { total: number; goals: GroupSavingsGoal[] };
   }> {
-    const params = new URLSearchParams({ action: "my-groups", userAddress });
-    return this.request(`${API_ENDPOINTS.USER_POSITIONS}?${params}`);
+    const params = new URLSearchParams({
+      action: "my-groups",
+      userAddress,
+    });
+    return this.request<{
+      total: number;
+      public: { total: number; goals: GroupSavingsGoal[] };
+      private: { total: number; goals: GroupSavingsGoal[] };
+    }>(`${API_ENDPOINTS.USER_POSITIONS}?${params}`);
   }
 
   // Multi-vault Goals API methods
@@ -490,6 +522,31 @@ export class BackendApiClient {
     return this.request(`${API_ENDPOINTS.GOALS}/invite`, {
       method: "POST",
       body: JSON.stringify({ metaGoalId, invitedAddress, inviterAddress }),
+    });
+  }
+
+  async getGroupGoalInviteChallenge(
+    metaGoalId: string,
+    invitedAddress: string,
+    inviterAddress: string
+  ): Promise<GroupGoalInviteChallengeResponse> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite/challenge`, {
+      method: "POST",
+      body: JSON.stringify({ metaGoalId, invitedAddress, inviterAddress }),
+    });
+  }
+
+  async sendGroupGoalInvite(request: {
+    metaGoalId: string;
+    invitedAddress: string;
+    inviterAddress: string;
+    nonce: string;
+    issuedAt: string;
+    signature: string;
+  }): Promise<GroupGoalInviteResponse> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite`, {
+      method: "POST",
+      body: JSON.stringify(request),
     });
   }
 

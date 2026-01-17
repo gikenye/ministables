@@ -18,7 +18,7 @@ export function AppContainer({
   return (
     <div
       className="min-h-screen min-h-[100dvh] relative overflow-hidden"
-      style={{ backgroundColor: theme.colors.backgroundMain }}
+      style={{ backgroundColor: "transparent" }}
       role="application"
       aria-label="Minilend Savings Application"
       onKeyDown={onKeyDown}

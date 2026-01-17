@@ -68,21 +68,22 @@ export function GoalsSection({
       {combinedError && !combinedLoading && (
         <div className="text-center py-8">
           <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
-            <p className="text-red-400 mb-2">Failed to load data</p>
-            <p className="text-gray-400 text-sm">
-              {goalsError || portfolioError || "Unknown error occurred"}
+            <p className="text-red-300 mb-1 text-sm font-semibold">
+              We couldn't refresh your dashboard
+            </p>
+            <p className="text-gray-400 text-xs">
+              Check your connection and try again. Your money is safe.
             </p>
           </div>
-          <div className="flex gap-2 justify-center">
-            <ActionButton onClick={fetchUserGoals} variant="outline" size="sm">
-              Retry Goals
-            </ActionButton>
+          <div className="flex justify-center">
             <ActionButton
-              onClick={fetchUserPortfolio}
-              variant="outline"
+              onClick={() => {
+                fetchUserGoals();
+                fetchUserPortfolio();
+              }}
               size="sm"
             >
-              Retry Positions
+              Refresh dashboard
             </ActionButton>
           </div>
         </div>

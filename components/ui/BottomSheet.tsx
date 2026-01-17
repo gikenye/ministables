@@ -33,11 +33,24 @@ export const BottomSheet = ({
       };
     }
   }, [isOpen]);
+  useEffect(() => {
+  if (isOpen) {
+    const preventDefault = (e: TouchEvent) => {
+      // Only prevent if we aren't scrolling the modal content itself
+      if (!(e.target as HTMLElement).closest('.custom-scrollbar')) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchmove', preventDefault, { passive: false });
+    return () => document.removeEventListener('touchmove', preventDefault);
+  }
+}, [isOpen]);
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
           {/* Backdrop: Use simple opacity for stability */}
           <motion.div 
             initial={{ opacity: 0 }}
@@ -69,7 +82,7 @@ export const BottomSheet = ({
               <div className="w-10 h-1.5 rounded-full bg-white/10" />
             </div>
             
-            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar overscroll-contain">
               {children}
             </div>
           </motion.div>

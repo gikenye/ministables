@@ -14,26 +14,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { metaGoalId, invitedAddress, inviterAddress, nonce, issuedAt, signature } = body;
+    const { metaGoalId, invitedAddress, inviterAddress } = body;
 
-    if (!metaGoalId || !invitedAddress || !inviterAddress || !nonce || !issuedAt || !signature) {
+    if (!metaGoalId || !invitedAddress || !inviterAddress) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    const response = await fetch(`${BACKEND_API_URL}/api/goals/invite`, {
+    const response = await fetch(`${BACKEND_API_URL}/api/goals/invite/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        metaGoalId,
-        invitedAddress,
-        inviterAddress,
-        nonce,
-        issuedAt,
-        signature,
-      }),
+      body: JSON.stringify({ metaGoalId, invitedAddress, inviterAddress }),
     });
 
     const data = await response.json();
@@ -45,7 +38,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
-      { error: "Failed to process invite" },
+      { error: "Failed to request invite challenge" },
       { status: 500 }
     );
   }

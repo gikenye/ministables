@@ -1,4 +1,5 @@
 // Offramp service for Pretium API integration - Mobile Money Withdrawals
+import { getUSDToKESRate } from "@/lib/services/exchangeRateService";
 
 export interface OfframpQuoteRequest {
   amount: string; // crypto amount input by user
@@ -98,6 +99,23 @@ export const PHONE_PATTERNS = {
   GHS: /^(?:\+233|233|0)?(\d{9})$/,
 } as const;
 
+export const OFFRAMP_SUPPORTED_TOKENS: Record<string, string[]> = {
+  CELO: ["USDC", "USDT", "CUSD"],
+  BASE: ["USDC", "USDT"],
+};
+
+export const normalizeOfframpNetwork = (network: string): string => {
+  const normalized = (network || "").trim().toUpperCase();
+  if (normalized.includes("CELO")) return "CELO";
+  if (normalized.includes("BASE")) return "BASE";
+  return normalized;
+};
+
+export const getOfframpSupportedSymbols = (network: string): string[] => {
+  const normalized = normalizeOfframpNetwork(network);
+  return OFFRAMP_SUPPORTED_TOKENS[normalized] || [];
+};
+
 class OfframpService {
   private baseUrl: string;
 
@@ -156,22 +174,47 @@ class OfframpService {
   // --- Quote ---
   async getOfframpQuote(request: OfframpQuoteRequest): Promise<OfframpQuoteResponse> {
     try {
-      const rateReq: PretiumExchangeRateRequest = {
-        currency_code: request.fiatCurrency,
-      };
-      const rateRes = await this.makeRequest<any>(
-        "/onramp/exchange-rate",
-        "POST",
-        rateReq
-      );
+      const fiatCurrency = request.fiatCurrency.trim().toUpperCase();
+      const cryptoCurrency = request.cryptoCurrency.trim().toUpperCase();
+      const isKesPegged = cryptoCurrency.includes("KES");
+      const isUsdPegged = cryptoCurrency.includes("USD");
 
-      const exchangeRate = Number(
-        rateRes?.data?.data?.quoted_rate ||
-          rateRes?.data?.data?.selling_rate ||
-          rateRes?.data?.rate ||
-          rateRes?.rate ||
-          1
-      );
+      let exchangeRate: number | null = null;
+
+      if (fiatCurrency === "KES") {
+        if (isKesPegged) {
+          exchangeRate = 1;
+        } else if (isUsdPegged) {
+          exchangeRate = await getUSDToKESRate();
+        }
+      }
+
+      if (!exchangeRate) {
+        const rateReq: PretiumExchangeRateRequest = {
+          currency_code: fiatCurrency,
+        };
+        const rateRes = await this.makeRequest<any>(
+          "/onramp/exchange-rate",
+          "POST",
+          rateReq
+        );
+
+        exchangeRate = Number(
+          rateRes?.data?.data?.quoted_rate ||
+            rateRes?.data?.data?.selling_rate ||
+            rateRes?.data?.rate ||
+            rateRes?.rate
+        );
+      }
+
+      if (exchangeRate === null) {
+        throw new Error("Invalid exchange rate for offramp quote");
+      }
+
+      if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+        throw new Error("Invalid exchange rate for offramp quote");
+      }
+
       const inputAmount = Number(request.amount);
       const grossOut = inputAmount * exchangeRate;
 
@@ -185,21 +228,21 @@ class OfframpService {
           inputAmount: request.amount,
           outputAmount: netOut.toString(),
           inputCurrency: request.cryptoCurrency,
-          outputCurrency: request.fiatCurrency,
+          outputCurrency: fiatCurrency,
           exchangeRate,
           type: "offramp",
           network: request.network,
           fee: {
             feeInInputCurrency: (feeOut / exchangeRate).toString(),
-            currency: request.fiatCurrency,
+            currency: fiatCurrency,
             feeInOutputCurrency: feeOut,
-            estimatedOutputKES: request.fiatCurrency === "KES" ? netOut : 0,
+            estimatedOutputKES: fiatCurrency === "KES" ? netOut : 0,
             decimals: 2,
           },
           limits: {
-            min: this.getMinimumWithdrawalAmount(request.fiatCurrency),
-            max: this.getMaximumWithdrawalAmount(request.fiatCurrency),
-            currency: request.fiatCurrency,
+            min: this.getMinimumWithdrawalAmount(fiatCurrency),
+            max: this.getMaximumWithdrawalAmount(fiatCurrency),
+            currency: fiatCurrency,
           },
         },
       };

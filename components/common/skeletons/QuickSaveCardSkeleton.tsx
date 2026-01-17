@@ -14,7 +14,7 @@ export const QuickSaveCardSkeleton = () => {
 
           {/* Currency Toggle Skeleton - larger */}
           <div className="flex flex-col items-end gap-2">
-            <div className="bg-white/10 rounded-full px-4 py-2 flex items-center gap-3 min-h-[48px]">
+            <div className="bg-white/10 rounded-full px-2 py-2 flex items-center gap-3 min-h-[48px]">
               <div className="bg-white/20 h-4 w-10 rounded"></div>
               <div className="w-12 h-6 bg-white/20 rounded-full"></div>
               <div className="bg-white/20 h-4 w-10 rounded"></div>

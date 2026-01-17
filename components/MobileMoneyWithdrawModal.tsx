@@ -21,6 +21,7 @@ import {
   type OfframpQuoteResponse,
 } from "@/lib/services/offrampService";
 import { OFFRAMP_SETTLEMENT_WALLETS } from "@/config/offrampConfig";
+import type { TokenBalance } from "@/lib/services/balanceService";
 
 interface OfframpModalProps {
   isOpen: boolean;
@@ -31,6 +32,9 @@ interface OfframpModalProps {
   network: string; // used as `network` for quote + `chain` for initiate
   availableAmount: string;
   decimals: number;
+  tokenBalances?: TokenBalance[];
+  selectedToken?: TokenBalance | null;
+  onTokenSelect?: (token: TokenBalance) => void;
 
   userDeposits?: string;
   userBorrows?: string;
@@ -60,8 +64,12 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
   tokenAddress,
   network,
   availableAmount,
+  decimals,
   userDeposits = "0",
   userBorrows = "0",
+  tokenBalances = [],
+  selectedToken = null,
+  onTokenSelect,
   onWithdrawSuccess,
   onVaultWithdraw,
   onSettlementTransfer,
@@ -85,6 +93,23 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
   const [constraint, setConstraint] = useState<{ ok: boolean; error?: string }>(
     { ok: true }
   );
+  const activeToken = selectedToken || {
+    symbol: tokenSymbol,
+    address: tokenAddress,
+    balance: Number.parseFloat(availableAmount || "0"),
+    formattedBalance: availableAmount || "0",
+    decimals,
+  };
+  const activeTokenSymbol = activeToken.symbol;
+  const activeTokenAddress = activeToken.address;
+  const activeAvailableAmount =
+    selectedToken?.balance !== undefined
+      ? selectedToken.balance.toString()
+      : availableAmount;
+  const effectiveDeposits =
+    selectedToken?.balance !== undefined
+      ? selectedToken.balance.toString()
+      : userDeposits;
 
   // Reset when opened
   useEffect(() => {
@@ -114,14 +139,14 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
       const quoteRes = await offrampService.getOfframpQuote({
         amount: form.amount,
         fiatCurrency: form.fiatCurrency,
-        cryptoCurrency: tokenSymbol,
+        cryptoCurrency: activeTokenSymbol,
         network, // quote uses network field
       });
 
       const validation = offrampService.validateWithdrawalConstraints(
-        tokenAddress,
+        activeTokenAddress,
         form.amount,
-        userDeposits,
+        effectiveDeposits,
         userBorrows,
         false
       );
@@ -160,16 +185,16 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
     isOpen,
     form.amount,
     form.fiatCurrency,
-    tokenSymbol,
+    activeTokenSymbol,
     network,
-    tokenAddress,
-    userDeposits,
+    activeTokenAddress,
+    effectiveDeposits,
     userBorrows,
   ]);
 
   const maxBalance = useMemo(
-    () => Number(availableAmount || "0"),
-    [availableAmount]
+    () => Number(activeAvailableAmount || "0"),
+    [activeAvailableAmount]
   );
   const isReviewDisabled = useMemo(() => {
     return !form.amount || !form.partyB || !constraint.ok;
@@ -216,6 +241,13 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
     setConstraint({ ok: true });
     onClose();
   };
+  const handleTokenSelect = (token: TokenBalance) => {
+    if (token.address === activeTokenAddress) return;
+    onTokenSelect?.(token);
+    setQuote(null);
+    setConstraint({ ok: true });
+    setForm((f) => ({ ...f, amount: "" }));
+  };
   const handleConfirm = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -243,11 +275,11 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
       }
 
       setProcessingStage("WITHDRAWAL");
-      await onVaultWithdraw(tokenSymbol, form.amount);
+      await onVaultWithdraw(activeTokenSymbol, form.amount);
 
       setProcessingStage("TRANSFER");
       const transactionHash = await onSettlementTransfer(
-        tokenAddress,
+        activeTokenAddress,
         form.amount,
         settlement
       );
@@ -298,7 +330,7 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={handleClose} maxHeight="max-h-[85vh]">
+    <BottomSheet isOpen={isOpen} onClose={handleClose} maxHeight="max-h-[75vh]">
       <div className="flex flex-col h-full text-white bg-transparent overflow-hidden">
         <ModalHeader
           title={step === 4 ? "Success" : "Send to Phone"}
@@ -337,12 +369,41 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
                 >
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                      Amount ({tokenSymbol})
+                      Amount ({activeTokenSymbol})
                     </span>
                     <span className="text-[10px] font-bold text-emerald-400">
                       Bal: {Number(maxBalance).toFixed(2)}
                     </span>
                   </div>
+                  {tokenBalances.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pb-2">
+                      {tokenBalances.map((token) => {
+                        const isSelected = token.address === activeTokenAddress;
+                        return (
+                          <button
+                            key={token.address}
+                            type="button"
+                            onClick={() => handleTokenSelect(token)}
+                            className={`px-3 py-2 rounded-xl border text-left transition-colors ${
+                              isSelected
+                                ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+                                : "bg-white/[0.03] border-white/10 text-white/70 hover:border-white/20"
+                            }`}
+                          >
+                            <div className="text-[10px] font-black uppercase tracking-wide">
+                              {token.symbol}
+                            </div>
+                            <div className="text-[9px] font-bold text-white/50">
+                              ${Number(token.balance || 0).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 6,
+                              })}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <input
                     type="number"
@@ -450,7 +511,7 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
                     <div className="flex justify-between py-1 border-b border-white/5">
                       <span className="text-xs text-white/40">From Wallet</span>
                       <span className="text-xs font-mono font-bold text-white/80">
-                        {tokenSymbol}
+                        {activeTokenSymbol}
                       </span>
                     </div>
 
@@ -476,7 +537,7 @@ export const EnhancedOfframpModal: FC<OfframpModalProps> = ({
                     <div className="flex justify-between py-1">
                       <span className="text-xs text-white/40">You Send</span>
                       <span className="text-xs font-black text-white/80">
-                        {form.amount} {tokenSymbol}
+                        {form.amount} {activeTokenSymbol}
                       </span>
                     </div>
                   </div>

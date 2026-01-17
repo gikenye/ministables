@@ -1,26 +1,29 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronRight,
   MessageCircle,
   Plus,
-  Users,
   ArrowUpRight,
   Lock,
   Globe,
   Share2,
-  X,
   ArrowDownLeft,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { GroupSavingsGoal } from "@/lib/services/backendApiService";
+import { useActiveAccount } from "thirdweb/react";
+import { backendApiClient } from "@/lib/services/backendApiService";
+import type { GroupGoalMembersResponse, GroupSavingsGoal } from "@/lib/services/backendApiService";
 import { Account, MyGroups } from "@/lib/types/shared";
+import { useChain } from "@/components/ChainProvider";
 import { BottomSheet, ModalHeader } from "@/components/ui";
-import SaveMoneyModal from "@/components/SaveMoneyModal";
 import { AmountInputModal } from "@/components/common";
 import SaveActionsModal from "@/components/common/SaveActionsModal";
+import { DepositConfirmationModal } from "@/components/common/DepositConfirmationModal";
+import { getStablecoinBalances, type TokenBalance } from "@/lib/services/balanceService";
 
 interface ClanTabProps {
   account?: Account;
@@ -29,19 +32,17 @@ interface ClanTabProps {
   myGroupsLoading: boolean;
   onCreateGroupGoal: () => void;
   onOpenWithdrawActions?: () => void;
-  onJoinGroupGoalWithAmount: (goal: GroupSavingsGoal, amount: string) => void;
+  onJoinGroupGoalWithAmount: (
+    goal: GroupSavingsGoal,
+    amount: string,
+    options?: { depositMethod?: "ONCHAIN" | "MPESA"; token?: TokenBalance }
+  ) => void;
   exchangeRate?: number;
   isJoinGoalLoading: boolean;
   joinGoalError: string | null;
-  tokens: any[];
-  tokenInfos: Record<string, any>;
-  supportedStablecoins: string[];
-  defaultToken?: any;
-  copied: boolean;
-  setCopied: (value: boolean) => void;
   setDepositMethod: (method: "ONCHAIN" | "MPESA") => void;
-  setSelectedTokenForOnramp: (token: string) => void;
   setShowOnrampModal: (show: boolean) => void;
+  showOnrampModal: boolean;
 }
 
 const formatCurrency = (amount: number, rate?: number) => {
@@ -51,10 +52,48 @@ const formatCurrency = (amount: number, rate?: number) => {
   return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 };
 
+const toNumber = (value: number | string | undefined | null) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const normalizePercent = (value: number) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(value, 0);
+};
+
+const getGoalProgress = (goal: GroupSavingsGoal) => {
+  const targetAmount = toNumber(goal.targetAmountUSD);
+  const totalProgress = toNumber(goal.totalProgressUSD);
+  const currentAmount = toNumber(goal.currentAmountUSD);
+  const progressPercent = toNumber(goal.progressPercent);
+  const cachedProgressPercent = toNumber(goal.cachedMembers?.progressPercent);
+  const cachedTotalContributed = toNumber(goal.cachedMembers?.totalContributedUSD);
+  const totalContributed = toNumber(goal.totalContributedUSD ?? goal.totalContributedUsd);
+
+  let progressUsd = totalProgress;
+  if (progressUsd <= 0 && currentAmount > 0) progressUsd = currentAmount;
+  if (progressUsd <= 0 && cachedTotalContributed > 0) progressUsd = cachedTotalContributed;
+  if (progressUsd <= 0 && totalContributed > 0) progressUsd = totalContributed;
+  if (progressUsd <= 0 && progressPercent > 0 && targetAmount > 0) progressUsd = (targetAmount * progressPercent) / 100;
+  if (progressUsd <= 0 && cachedProgressPercent > 0 && targetAmount > 0) progressUsd = (targetAmount * cachedProgressPercent) / 100;
+
+  let percent = progressPercent > 0 ? progressPercent : cachedProgressPercent;
+  if (percent <= 0 && targetAmount > 0 && progressUsd > 0) percent = (progressUsd / targetAmount) * 100;
+
+  return { progressUsd, progressPercent: normalizePercent(percent) };
+};
+
+const isWalletAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value);
+
 const Badge = ({ children, variant = "default" }: { children: React.ReactNode; variant?: "active" | "default" | "soon" }) => (
   <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
     variant === "active" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : 
-    variant === "soon" ? " bg-[#4ade80] text-[8px] text-black tracking-tighter shadow-lg" : "bg-white/10 text-white/60  bg-[#4ade80] text-[8px] text-black tracking-tighter shadow-lg"
+    "bg-[#4ade80] text-[8px] text-black tracking-tighter shadow-lg"
   }`}>
     {children}
   </span>
@@ -71,41 +110,214 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   exchangeRate,
   isJoinGoalLoading,
   joinGoalError,
-  tokens,
-  tokenInfos,
-  supportedStablecoins,
-  defaultToken,
-  copied,
-  setCopied,
   setDepositMethod,
-  setSelectedTokenForOnramp,
   setShowOnrampModal,
+  showOnrampModal,
 }) => {
+  const activeAccount = useActiveAccount();
+  const { chain } = useChain();
   const [selectedGoal, setSelectedGoal] = useState<GroupSavingsGoal | null>(null);
   const [depositAmount, setDepositAmount] = useState("100");
   const [isSaveActionsOpen, setIsSaveActionsOpen] = useState(false);
   const [isAmountModalOpen, setIsAmountModalOpen] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteAddress, setInviteAddress] = useState("");
+  const [isInviting, setIsInviting] = useState(false);
+  const [clanDepositMethod, setClanDepositMethod] = useState<"ONCHAIN" | "MPESA">("ONCHAIN");
+  const [depositAttempted, setDepositAttempted] = useState(false);
+  const [submittedDepositAmount, setSubmittedDepositAmount] = useState<string | null>(null);
+  const [depositSuccess, setDepositSuccess] = useState<{ amount: string } | null>(null);
+  const [stablecoinBalances, setStablecoinBalances] = useState<TokenBalance[]>([]);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [selectedDepositToken, setSelectedDepositToken] = useState<TokenBalance | null>(null);
+  const inviteInFlightRef = useRef(false);
+  const [goalMembers, setGoalMembers] = useState<GroupGoalMembersResponse | null>(null);
+  const [isMembersLoading, setIsMembersLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "members">("overview");
+  const isOnchainDeposit = clanDepositMethod === "ONCHAIN";
+  const walletAddress = activeAccount?.address || account?.address;
+
+  // Determine if any modal/overlay is currently active
+  const isAnyModalOpen = useMemo(() => {
+    return (
+      !!selectedGoal ||
+      isSaveActionsOpen ||
+      isAmountModalOpen ||
+      isDepositModalOpen ||
+      isInviteModalOpen ||
+      showOnrampModal
+    );
+  }, [selectedGoal, isSaveActionsOpen, isAmountModalOpen, isDepositModalOpen, isInviteModalOpen, showOnrampModal]);
+
   const isLoading = groupGoalsLoading || myGroupsLoading;
+  
+  const selectedGoalProgress = useMemo(
+    () => (selectedGoal ? getGoalProgress(selectedGoal) : null),
+    [selectedGoal]
+  );
+
+  useEffect(() => {
+    if (!selectedGoal?.metaGoalId) {
+      setGoalMembers(null);
+      return;
+    }
+    let isActive = true;
+    setIsMembersLoading(true);
+    backendApiClient.getGroupGoalMembers(selectedGoal.metaGoalId)
+      .then((data) => { if (isActive) setGoalMembers(data); })
+      .catch(() => { if (isActive) setGoalMembers(null); })
+      .finally(() => { if (isActive) setIsMembersLoading(false); });
+    return () => { isActive = false; };
+  }, [selectedGoal?.metaGoalId]);
+
+  const memberRows = useMemo(() => {
+    if (!selectedGoal) return [];
+    const entries = new Map<string, { address: string; isOwner: boolean }>();
+    const addAddress = (address?: string, isOwner = false) => {
+      if (!address) return;
+      const normalized = address.toLowerCase();
+      const existing = entries.get(normalized);
+      entries.set(normalized, { address, isOwner: existing?.isOwner || isOwner });
+    };
+    addAddress(selectedGoal.creatorAddress, true);
+    const memberAddresses = goalMembers?.members?.map((member) => member.address) ?? selectedGoal.participants ?? [];
+    memberAddresses.forEach((address) => addAddress(address, false));
+    (selectedGoal.invitedUsers || []).forEach((address) => addAddress(address, false));
+    return Array.from(entries.values());
+  }, [goalMembers, selectedGoal]);
 
   const allGoals = useMemo(() => [
     ...(myGroups?.public?.goals || []),
     ...(myGroups?.private?.goals || [])
   ], [myGroups]);
 
-  const handleDepositClick = () => {
-    setIsSaveActionsOpen(true);
+  const handleDepositClick = () => setIsSaveActionsOpen(true);
+  const handleInvite = () => {
+    setInviteAddress("");
+    setIsInviteModalOpen(true);
   };
 
-  const handleInvite = async (goal: GroupSavingsGoal) => {
-    const link = goal.inviteLink || `${window.location.origin}/goals/${goal.metaGoalId}?inviter=${goal.creatorAddress}`;
-    const message = `Join my clan "${goal.name}" on NewDay: ${link}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  const resetDepositFlow = useCallback(() => {
+    setDepositAttempted(false);
+    setSubmittedDepositAmount(null);
+    setDepositSuccess(null);
+  }, []);
 
-    if (!popup) {
-      window.location.href = whatsappUrl;
+  useEffect(() => {
+    if (!isDepositModalOpen) {
+      resetDepositFlow();
+    }
+  }, [isDepositModalOpen, resetDepositFlow]);
+
+  useEffect(() => {
+    resetDepositFlow();
+  }, [selectedGoal?.metaGoalId, resetDepositFlow]);
+
+  useEffect(() => {
+    if (!depositAttempted || isJoinGoalLoading) return;
+    if (joinGoalError || !submittedDepositAmount) return;
+    setDepositSuccess({ amount: submittedDepositAmount });
+  }, [depositAttempted, isJoinGoalLoading, joinGoalError, submittedDepositAmount]);
+
+  const pickDefaultToken = useCallback((balances: TokenBalance[]) => {
+    const priorityOrder = ["USDC", "USDT", "CUSD"];
+    const sorted = [...balances].sort((a, b) => {
+      if (a.balance !== b.balance) {
+        return b.balance - a.balance;
+      }
+      const aPriority = priorityOrder.indexOf(a.symbol.toUpperCase());
+      const bPriority = priorityOrder.indexOf(b.symbol.toUpperCase());
+      if (aPriority !== -1 && bPriority !== -1) {
+        return aPriority - bPriority;
+      }
+      if (aPriority !== -1) return -1;
+      if (bPriority !== -1) return 1;
+      return 0;
+    });
+    return sorted[0] || null;
+  }, []);
+
+  useEffect(() => {
+    if (!isOnchainDeposit) {
+      setStablecoinBalances([]);
+      setBalancesLoading(false);
+      setSelectedDepositToken(null);
+    }
+  }, [isOnchainDeposit]);
+
+  useEffect(() => {
+    if (!isOnchainDeposit || !isAmountModalOpen || !walletAddress || !chain?.id) {
+      return;
+    }
+    let isActive = true;
+    setBalancesLoading(true);
+    getStablecoinBalances(walletAddress, chain.id)
+      .then((balances) => {
+        if (!isActive) return;
+        setStablecoinBalances(balances);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setStablecoinBalances([]);
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setBalancesLoading(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [isOnchainDeposit, isAmountModalOpen, walletAddress, chain?.id]);
+
+  useEffect(() => {
+    if (!stablecoinBalances.length) {
+      setSelectedDepositToken(null);
+      return;
+    }
+    setSelectedDepositToken((prev) => {
+      if (prev && stablecoinBalances.some((token) => token.address === prev.address)) {
+        return prev;
+      }
+      return pickDefaultToken(stablecoinBalances);
+    });
+  }, [stablecoinBalances, pickDefaultToken]);
+
+  const handleSendInvite = async () => {
+    if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
+    inviteInFlightRef.current = true;
+    setIsInviting(true);
+    try {
+      const trimmedInvite = inviteAddress.trim();
+      if (!isWalletAddress(trimmedInvite)) {
+        toast.error("Enter a valid wallet address.");
+        return;
+      }
+      const challenge = await backendApiClient.getGroupGoalInviteChallenge(
+        selectedGoal.metaGoalId,
+        trimmedInvite.toLowerCase(),
+        activeAccount.address.toLowerCase()
+      );
+      
+      const message = `Invite to goal\nmetaGoalId: ${selectedGoal.metaGoalId}\ninvitedAddress: ${trimmedInvite.toLowerCase()}\ninviterAddress: ${activeAccount.address.toLowerCase()}\nnonce: ${challenge.nonce}\nissuedAt: ${challenge.issuedAt}`;
+      const signature = await activeAccount.signMessage({ message });
+      
+      await backendApiClient.sendGroupGoalInvite({
+        metaGoalId: selectedGoal.metaGoalId,
+        inviterAddress: activeAccount.address.toLowerCase(),
+        invitedAddress: trimmedInvite.toLowerCase(),
+        nonce: challenge.nonce,
+        issuedAt: challenge.issuedAt,
+        signature,
+      });
+
+      toast.success("Invite sent.");
+      setIsInviteModalOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || "Invite failed");
+    } finally {
+      setIsInviting(false);
+      inviteInFlightRef.current = false;
     }
   };
 
@@ -113,181 +325,76 @@ export const ClanTab: React.FC<ClanTabProps> = ({
     <div className="p-6 text-center bg-black/20 rounded-[40px] border border-white/5 my-8">
       <Lock className="mx-auto mb-4 text-white/10" size={20} />
       <h3 className="text-m font-black text-white">Wallet Locked</h3>
-      <p className="text-white/30 mt-2 font-bold text-sm">Connect wallet to view clans.</p>
+      <p className="text-white/30 mt-2 font-bold text-base">Connect wallet to view clans.</p>
     </div>
   );
 
-  return (
-    <div className="max-w-2xl mx-auto py-8 px-4 space-y-10">
-      {/* Header */}
-      <div className="flex justify-between items-end px-2">
-        <div>
-          <h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">Clans</h1>
-          <p className=" bg-emerald-500/10 text-emerald-400 font-bold mt-2 uppercase text-[10px] tracking-[0.025em]">Save with friends and family</p>
-        </div>
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={onCreateGroupGoal}
-          className="h-10 w-10 rounded-full bg-white flex items-center justify-center text-black shadow-1xl"
-        >
-          <Plus size={28} strokeWidth={3} />
-        </motion.button>
-      </div>
-
-      {/* Goal Cards */}
-      <div className="grid gap-4">
-        {isLoading ? (
-          Array.from({ length: 2 }, (_, index) => (
-            <div
-              key={`clan-skeleton-${index}`}
-              className="rounded-[32px] border border-emerald-500/10 bg-[#1e2923]/60 p-4 animate-pulse"
-            >
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex gap-2">
-                  <div className="h-6 w-20 rounded-full bg-white/10" />
-                  <div className="h-6 w-6 rounded-full bg-white/10" />
-                </div>
-                <div className="h-8 w-8 rounded-full bg-white/10" />
-              </div>
-              <div className="h-6 w-36 rounded bg-white/10 mb-2" />
-              <div className="h-4 w-24 rounded bg-white/10 mb-8" />
-              <div className="flex justify-between items-end">
-                <div>
-                  <div className="h-3 w-16 rounded bg-white/10 mb-2" />
-                  <div className="h-6 w-24 rounded bg-white/10" />
-                </div>
-                <div className="text-right">
-                  <div className="h-3 w-10 rounded bg-white/10 mb-2 ml-auto" />
-                  <div className="w-20 h-1.5 rounded-full bg-white/10" />
-                </div>
-              </div>
-            </div>
-          ))
-        ) : allGoals.length > 0 ? (
-          allGoals.map((goal) => (
-            <motion.div
-              key={goal.metaGoalId}
-              onClick={() => { setSelectedGoal(goal); setActiveTab("overview"); }}
-              className="group relative overflow-hidden rounded-[32px] border border-emerald-500/10 bg-[#1e2923]/80 p-6 cursor-pointer active:scale-[0.98] transition-all"
-            >
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex gap-2">
-                  <Badge variant="active">{goal.participantCount || 0} Members</Badge>
-                  <div className="h-6 w-6 rounded-full bg-white/5 flex items-center justify-center">
-                    {goal.isPublic ? <Globe size={12} className="text-white/40" /> : <Lock size={12} className="text-white/40" />}
-                  </div>
-                </div>
-                <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white group-hover:text-black transition-colors">
-                  <ChevronRight size={18} strokeWidth={3} />
-                </div>
-              </div>
-              <h3 className="text-2xl font-black text-white mb-1 tracking-tight">{goal.name}</h3>
-              <p className="text-white/20 text-sm mb-8 font-bold line-clamp-1">{goal.description || "Active Savings Clan"}</p>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Total Vault</p>
-                  <p className="text-2xl font-black text-white tracking-tight">{formatCurrency(goal.totalProgressUSD || 0, exchangeRate)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-black text-emerald-400 mb-2">
-                    {Math.min(((goal.totalProgressUSD || 0) / (goal.targetAmountUSD || 1)) * 100, 100).toFixed(0)}%
-                  </p>
-                  <div className="w-20 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-400" style={{ width: `${Math.min(((goal.totalProgressUSD || 0) / (goal.targetAmountUSD || 1)) * 100, 100)}%` }} />
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))
-        ) : (
-          <div className="p-8 text-center bg-[#1e2923]/60 rounded-[32px] border border-emerald-500/10">
-            <p className="text-xs font-black text-white/60 uppercase tracking-[0.2em]">No clans yet</p>
-            <p className="text-white/30 mt-2 font-bold text-sm">Create or join a clan to get started.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Detail Drawer */}
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  
+  const clanModals = (
+    <>
       <BottomSheet
         isOpen={
           !!selectedGoal &&
           !isDepositModalOpen &&
           !isAmountModalOpen &&
-          !isSaveActionsOpen
+          !isSaveActionsOpen &&
+          !isInviteModalOpen &&
+          !showOnrampModal
         }
         onClose={() => setSelectedGoal(null)}
       >
         {selectedGoal && (
-          <div className="p-6 pt-0 pb-20">
+          <div className="p-6 pt-0 pb-12">
             <ModalHeader title={selectedGoal.name} onClose={() => setSelectedGoal(null)} />
-            
             <div className="grid grid-cols-2 gap-3 mt-4 mb-8">
-              <button 
-                onClick={handleDepositClick}
-                className="flex flex-col items-center justify-center gap-2 py-6 rounded-[28px] bg-white text-black font-black active:scale-95 transition-all shadow-xl"
-              >
+              <button onClick={handleDepositClick} className="flex flex-col items-center justify-center gap-2 py-6 rounded-[28px] bg-white text-black font-black active:scale-95 transition-all shadow-xl">
                 <ArrowUpRight size={24} strokeWidth={3} />
-                <span className="text-sm">Deposit</span>
+                <span className="text-base">Deposit</span>
               </button>
               <div className="relative flex flex-col items-center justify-center gap-2 py-6 rounded-[28px] bg-black/40 text-white/10 font-black border border-white/5">
                 <MessageCircle size={24} />
-                <span className="text-sm">Chat</span>
-                <div className="absolute top-4 right-4 "><Badge variant="soon">Soon</Badge></div>
+                <span className="text-base">Chat</span>
+                <div className="absolute top-4 right-4"><Badge variant="soon">Soon</Badge></div>
               </div>
             </div>
 
-            {/* Tabs & Content */}
-            <div className="flex gap-1 p-1.5 bg-black/40 rounded-[20px] mb-2 border border-white/5">
+            <div className="flex gap-1 p-1.5 bg-black/40 rounded-[20px] mb-4 border border-white/5">
               {["overview", "members"].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setActiveTab(t as any)}
-                  className={`flex-1 py-3 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
-                    activeTab === t ? "bg-white text-black shadow-md" : "text-white/40"
-                  }`}
-                >
+                <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 py-3 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === t ? "bg-white text-black shadow-md" : "text-white/40"}`}>
                   {t}
                 </button>
               ))}
             </div>
 
-            <div className="max-h-[250px]">
+            <div className="min-h-[200px]">
               {activeTab === "overview" ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="bg-black/40 p-6 rounded-[32px] border border-white/5">
                     <p className="text-white/30 font-black uppercase text-[10px] tracking-widest mb-2">Total Progress</p>
-                    <span className="text-2xl font-black text-white">{formatCurrency(selectedGoal.totalProgressUSD || 0, exchangeRate)}</span>
+                    <span className="text-2xl font-black text-white">{formatCurrency(selectedGoalProgress?.progressUsd || 0, exchangeRate)}</span>
                     <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden mt-4">
-                      <div className="h-full bg-emerald-400" style={{ width: `${Math.min(((selectedGoal.totalProgressUSD || 0) / (selectedGoal.targetAmountUSD || 1)) * 100, 100)}%` }} />
+                      <div className="h-full bg-emerald-400" style={{ width: `${Math.min(selectedGoalProgress?.progressPercent || 0, 100)}%` }} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => handleInvite(selectedGoal)} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
+                    <button onClick={handleInvite} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
                       <Share2 size={16} /> Invite
                     </button>
-                    <button
-                      onClick={() => {
-                        if (!onOpenWithdrawActions) {
-                          toast.info("Contact clan admin to withdraw");
-                          return;
-                        }
-                        onOpenWithdrawActions();
-                        setSelectedGoal(null);
-                      }}
-                      className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all"
-                    >
+                    <button onClick={() => { onOpenWithdrawActions?.(); setSelectedGoal(null); }} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
                       <ArrowDownLeft size={16} /> Withdraw
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {(selectedGoal.participants || []).map((p, i) => (
-                    <div key={i} className="flex justify-between items-center p-4 bg-black/20 rounded-[20px] border border-white/5">
-                      <span className="text-xs font-black text-white/80 font-mono">{p.substring(0, 8)}...{p.substring(p.length-4)}</span>
-                      <Badge variant="active">Member</Badge>
-                    </div>
-                  ))}
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                  {isMembersLoading ? <div className="p-4 text-xs font-bold text-white/40">Loading members...</div> :
+                    memberRows.map((member, i) => (
+                      <div key={i} className="flex justify-between items-center p-4 bg-black/20 rounded-[20px] border border-white/5">
+                        <span className="text-xs font-black text-white/80 font-mono">{member.address.substring(0, 8)}...{member.address.substring(member.address.length-4)}</span>
+                        <Badge variant={member.isOwner ? "soon" : "active"}>{member.isOwner ? "Owner" : "Member"}</Badge>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -295,17 +402,36 @@ export const ClanTab: React.FC<ClanTabProps> = ({
         )}
       </BottomSheet>
 
+      <BottomSheet isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)}>
+        {selectedGoal && (
+          <div className="p-6 pt-0 pb-12 text-white space-y-5">
+            <ModalHeader title="Invite member" onClose={() => setIsInviteModalOpen(false)} />
+            <div className="rounded-[28px] border border-white/5 bg-black/40 p-4 space-y-3">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Wallet address</label>
+              <div className="rounded-[18px] border border-white/10 bg-black/60 px-4 py-3">
+                <input type="text" placeholder="0x..." value={inviteAddress} onChange={(e) => setInviteAddress(e.target.value)} className="w-full bg-transparent text-base font-mono text-white focus:outline-none" />
+              </div>
+            </div>
+            <motion.button whileTap={{ scale: 0.98 }} onClick={handleSendInvite} disabled={isInviting || !inviteAddress.trim()} className="w-full rounded-[20px] bg-white py-4 text-base font-black text-black disabled:opacity-30">
+              {isInviting ? "Sending..." : "Send invite"}
+            </motion.button>
+          </div>
+        )}
+      </BottomSheet>
+
       <SaveActionsModal
         isOpen={isSaveActionsOpen}
         onClose={() => setIsSaveActionsOpen(false)}
-        onActionSelect={(actionId) => {
+        onActionSelect={(id) => {
           setIsSaveActionsOpen(false);
-          if (actionId === "onramp") {
+          if (id === "onramp") {
+            setClanDepositMethod("MPESA");
+            setDepositAmount("100");
             setDepositMethod("MPESA");
             setShowOnrampModal(true);
-            return;
-          }
-          if (actionId === "onchain") {
+          } else {
+            setClanDepositMethod("ONCHAIN");
+            setDepositAmount("0");
             setDepositMethod("ONCHAIN");
             setIsAmountModalOpen(true);
           }
@@ -313,43 +439,114 @@ export const ClanTab: React.FC<ClanTabProps> = ({
       />
 
       {selectedGoal && (
-        <AmountInputModal
-          isOpen={isAmountModalOpen}
-          onClose={() => setIsAmountModalOpen(false)}
-          onContinue={(amount: string) => {
-            setDepositAmount(amount);
-            setIsAmountModalOpen(false);
-            setIsDepositModalOpen(true);
-          }}
-          title="How much do you want to add?"
-          initialAmount={depositAmount}
-          currency="KES"
-        />
+        <>
+          <AmountInputModal
+            isOpen={isAmountModalOpen}
+            onClose={() => setIsAmountModalOpen(false)}
+            onContinue={(amt) => {
+              setDepositAmount(amt);
+              setIsAmountModalOpen(false);
+              setIsDepositModalOpen(true);
+            }}
+            title="Add to clan"
+            initialAmount={depositAmount}
+            currency={isOnchainDeposit ? "USD" : "KES"}
+            allowDecimal={isOnchainDeposit}
+            tokenBalances={isOnchainDeposit ? stablecoinBalances : []}
+            selectedToken={isOnchainDeposit ? selectedDepositToken : null}
+            onTokenSelect={isOnchainDeposit ? setSelectedDepositToken : undefined}
+            balancesLoading={isOnchainDeposit ? balancesLoading : false}
+          />
+          <DepositConfirmationModal
+            isOpen={isDepositModalOpen}
+            onClose={() => {
+              setIsDepositModalOpen(false);
+              resetDepositFlow();
+            }}
+            amount={depositAmount}
+            onDeposit={() => {
+              setDepositSuccess(null);
+              setDepositAttempted(true);
+              setSubmittedDepositAmount(depositAmount);
+              onJoinGroupGoalWithAmount(selectedGoal, depositAmount, {
+                depositMethod: clanDepositMethod,
+                token: selectedDepositToken || undefined,
+              });
+            }}
+            isLoading={isJoinGoalLoading}
+            error={joinGoalError}
+            depositSuccess={depositSuccess}
+            goalTitle={selectedGoal.name}
+            depositMethod={clanDepositMethod}
+            currencyLabel={isOnchainDeposit ? "USD" : "KES"}
+            minFractionDigits={isOnchainDeposit ? 2 : 0}
+            maxFractionDigits={isOnchainDeposit ? 6 : 0}
+          />
+        </>
       )}
+    </>
+  );
 
-      {selectedGoal && (
-        <SaveMoneyModal
-          isOpen={isDepositModalOpen}
-          onClose={() => setIsDepositModalOpen(false)}
-          amount={depositAmount}
-          goal={{ title: selectedGoal.name, ...selectedGoal }}
-          account={account}
-          isLoading={isJoinGoalLoading}
-          error={joinGoalError}
-          tokenSymbol={defaultToken?.symbol || "USDC"}
-          tokens={tokens}
-          tokenInfos={tokenInfos}
-          supportedStablecoins={supportedStablecoins}
-          copied={copied}
-          setCopied={setCopied}
-          setSelectedTokenForOnramp={setSelectedTokenForOnramp}
-          setShowOnrampModal={setShowOnrampModal}
-          onDeposit={() => {
-            onJoinGroupGoalWithAmount(selectedGoal, depositAmount);
-          }}
-        />
-      )}
-    </div>
+  return (
+    <>
+      <div className={`max-w-2xl mx-auto py-8 px-4 space-y-10 transition-all duration-500 ease-in-out ${
+        isAnyModalOpen ? "opacity-30 pointer-events-none scale-[0.96] blur-[2px]" : "opacity-100 scale-100 blur-0"
+      }`}>
+        <div className="flex justify-between items-end px-2">
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">Clans</h1>
+            <p className="bg-emerald-500/10 text-emerald-400 font-bold mt-2 uppercase text-[10px] px-2 py-0.5 rounded-md inline-block">Save with friends and family</p>
+          </div>
+          <motion.button whileTap={{ scale: 0.9 }} onClick={onCreateGroupGoal} className="h-12 w-12 rounded-full bg-white flex items-center justify-center text-black shadow-2xl">
+            <Plus size={28} strokeWidth={3} />
+          </motion.button>
+        </div>
+
+        <div className="grid gap-4">
+          {isLoading ? (
+            [1, 2].map((i) => <div key={i} className="h-48 rounded-[32px] bg-white/5 animate-pulse" />)
+          ) : allGoals.length > 0 ? (
+            allGoals.map((goal) => {
+              const { progressUsd, progressPercent } = getGoalProgress(goal);
+              return (
+                <motion.div key={goal.metaGoalId} onClick={() => { setSelectedGoal(goal); setActiveTab("overview"); }} className="group relative overflow-hidden rounded-[32px] border border-emerald-500/10 bg-[#1e2923]/80 p-6 cursor-pointer active:scale-[0.98] transition-all">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex gap-2">
+                      <Badge variant="active">{goal.participantCount || 0} Members</Badge>
+                      <div className="h-6 w-6 rounded-full bg-white/5 flex items-center justify-center">
+                        {goal.isPublic ? <Globe size={12} className="text-white/40" /> : <Lock size={12} className="text-white/40" />}
+                      </div>
+                    </div>
+                    <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white group-hover:text-black transition-colors">
+                      <ChevronRight size={18} strokeWidth={3} />
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-black text-white mb-1 tracking-tight">{goal.name}</h3>
+                  <p className="text-white/20 text-base mb-8 font-bold line-clamp-1">{goal.description || "Active Savings Clan"}</p>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Total Vault</p>
+                      <p className="text-2xl font-black text-white tracking-tight">{formatCurrency(progressUsd, exchangeRate)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-emerald-400 mb-2">{progressPercent.toFixed(0)}%</p>
+                      <div className="w-20 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-400" style={{ width: `${Math.min(progressPercent, 100)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })
+          ) : (
+            <div className="p-12 text-center bg-[#1e2923]/60 rounded-[32px] border border-emerald-500/10">
+              <p className="text-white/30 font-bold text-base">Create a clan to get started.</p>
+            </div>
+          )}
+        </div>
+      </div>
+      {portalTarget ? createPortal(clanModals, portalTarget) : clanModals}
+    </>
   );
 };
 

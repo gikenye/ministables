@@ -117,7 +117,13 @@ export function OnrampDepositModal({
           form.countryCode
         );
 
-        if (status.status === "SUCCESS" || status.status === "COMPLETED") {
+        const normalizedStatus = status.status?.toUpperCase?.() || "";
+
+        if (
+          normalizedStatus === "SUCCESS" ||
+          normalizedStatus === "COMPLETED" ||
+          normalizedStatus === "COMPLETE"
+        ) {
           stopPolling();
           setPaymentStatus("completed");
           onSuccess?.(
@@ -125,8 +131,8 @@ export function OnrampDepositModal({
             Number.parseFloat(form.amount)
           );
         } else if (
-          status.status === "FAILED" ||
-          status.status === "CANCELLED"
+          normalizedStatus === "FAILED" ||
+          normalizedStatus === "CANCELLED"
         ) {
           stopPolling();
           setPaymentStatus("failed");
