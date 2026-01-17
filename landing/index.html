@@ -6,6 +6,8 @@
     <title>Minilend — Grow Your Money and Family</title>
     <meta name="theme-color" content="#0e6037" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="dns-prefetch" href="//app.minilend.xyz" />
+    <link rel="preconnect" href="https://app.minilend.xyz" crossorigin />
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./static/icon-192x192.png" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -381,6 +383,19 @@
             button.addEventListener('click', () => {
                 window.location.href = 'https://app.minilend.xyz';
             });
+        });
+
+        const appUrl = 'https://app.minilend.xyz';
+        let appWarmed = false;
+        const warmApp = () => {
+            if (appWarmed) return;
+            appWarmed = true;
+            fetch(appUrl, { mode: 'no-cors', credentials: 'omit' }).catch(() => {});
+        };
+        document.querySelectorAll('a[href^="https://app.minilend.xyz"], [data-app-link]').forEach((link) => {
+            link.addEventListener('pointerenter', warmApp, { once: true });
+            link.addEventListener('touchstart', warmApp, { once: true });
+            link.addEventListener('focus', warmApp, { once: true });
         });
     </script>
 </body>

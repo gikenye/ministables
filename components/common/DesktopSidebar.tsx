@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link"; // Import Link
 import { Flag, Sparkles, Target, User, Users, Plus } from "lucide-react";
 
 interface NavItem {
@@ -28,8 +29,14 @@ export function DesktopSidebar({ activeTab, onTabChange, onQuickSave, onNewGoal 
       <div className="relative flex h-full flex-col">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_45%_at_18%_8%,rgba(16,185,129,0.18),transparent_60%),radial-gradient(45%_35%_at_88%_0%,rgba(255,255,255,0.08),transparent_65%)]" />
 
-        <div className="relative flex items-center gap-3 px-6 py-5">
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+        {/* BRAND HEADER LINK */}
+        <Link 
+          href="https://minilend.xyz"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="relative flex items-center gap-3 px-6 py-5 transition-all duration-200 hover:bg-white/[0.02] group"
+        >
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-colors group-hover:border-emerald-500/50">
             <Image
               src="/minilend-pwa.png"
               alt="Minilend"
@@ -39,13 +46,15 @@ export function DesktopSidebar({ activeTab, onTabChange, onQuickSave, onNewGoal 
             />
           </div>
           <div className="leading-tight">
-            <div className="text-lg font-semibold text-white">Minilend</div>
+            <div className="text-lg font-semibold text-white group-hover:text-emerald-400 transition-colors">
+              Minilend
+            </div>
             <div className="text-xs text-white/50">Smart savings vault</div>
           </div>
           <div className="ml-auto rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
             Live
           </div>
-        </div>
+        </Link>
 
         <nav className="relative flex-1 px-6 pb-6 pt-4">
           <div className="space-y-2">
