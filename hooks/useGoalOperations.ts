@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { backendApiClient, type CreateGoalRequest, type GroupSavingsGoal } from "@/lib/services/backendApiService";
 import { reportError, reportInfo, reportWarning } from "@/lib/services/errorReportingService";
 import { formatUsdFromKes } from "@/lib/utils";
-import { getBestStablecoinForDeposit } from "@/lib/services/balanceService";
+import { getBestStablecoinForDeposit, type TokenBalance } from "@/lib/services/balanceService";
 import { getContract, prepareContractCall } from "thirdweb";
 import { parseUnits } from "viem";
 import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
@@ -24,6 +24,7 @@ interface UseGoalOperationsProps {
   setJoinGoalError: (error: string | null) => void;
   fetchUserGoals: () => void;
   fetchGroupGoals: () => void;
+  refreshUserPortfolio?: () => void;
 }
 
 export function useGoalOperations(props: UseGoalOperationsProps) {
@@ -42,6 +43,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
     setJoinGoalError,
     fetchUserGoals,
     fetchGroupGoals,
+    refreshUserPortfolio,
   } = props;
 
   const handleCreateCustomGoal = useCallback(
@@ -106,6 +108,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
           category: customGoalForm.category,
         });
         fetchUserGoals();
+        refreshUserPortfolio?.();
         reportInfo("Goal created successfully", {
           component: "useGoalOperations",
           operation: "handleCreateCustomGoal",
@@ -120,7 +123,15 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         setCustomGoalLoading(false);
       }
     },
-    [address, getKESRate, setCustomGoalLoading, setCustomGoalModalOpen, setCustomGoalForm, fetchUserGoals]
+    [
+      address,
+      getKESRate,
+      setCustomGoalLoading,
+      setCustomGoalModalOpen,
+      setCustomGoalForm,
+      fetchUserGoals,
+      refreshUserPortfolio,
+    ]
   );
 
   const handleCreateGroupGoal = useCallback(
@@ -186,6 +197,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         setCreateGroupGoalModalOpen(false);
         setGroupGoalForm({ name: "", amount: "", timeline: "3", isPublic: true });
         fetchGroupGoals();
+        refreshUserPortfolio?.();
         reportInfo("Group goal created successfully", {
           component: "useGoalOperations",
           operation: "handleCreateGroupGoal",
@@ -200,11 +212,23 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         setCreateGroupGoalLoading(false);
       }
     },
-    [address, getKESRate, setCreateGroupGoalLoading, setCreateGroupGoalModalOpen, setGroupGoalForm, fetchGroupGoals]
+    [
+      address,
+      getKESRate,
+      setCreateGroupGoalLoading,
+      setCreateGroupGoalModalOpen,
+      setGroupGoalForm,
+      fetchGroupGoals,
+      refreshUserPortfolio,
+    ]
   );
 
   const handleJoinGoalWithAmount = useCallback(
-    async (selectedGoalToJoin: GroupSavingsGoal | null, amount: string) => {
+    async (
+      selectedGoalToJoin: GroupSavingsGoal | null,
+      amount: string,
+      options?: { depositMethod?: "ONCHAIN" | "MPESA"; token?: TokenBalance }
+    ) => {
       if (!selectedGoalToJoin || !address) return;
       if (!chain?.id) {
         setJoinGoalError("Network not available");
@@ -215,22 +239,37 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
       setJoinGoalError(null);
 
       try {
-        const exchangeRate = getKESRate();
-        if (!exchangeRate) {
-          throw new Error("Exchange rate not available");
+        const depositMethod = options?.depositMethod ?? "MPESA";
+        let usdAmount = 0;
+        if (depositMethod === "ONCHAIN") {
+          const parsedAmount = parseFloat(amount);
+          if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            throw new Error("Enter a valid amount");
+          }
+          usdAmount = parsedAmount;
+        } else {
+          const exchangeRate = getKESRate();
+          if (!exchangeRate) {
+            throw new Error("Exchange rate not available");
+          }
+          const kesAmount = parseFloat(amount);
+          usdAmount = formatUsdFromKes(kesAmount, exchangeRate);
         }
 
-        const kesAmount = parseFloat(amount);
-        const usdAmount = formatUsdFromKes(kesAmount, exchangeRate);
-
-        const bestToken = await getBestStablecoinForDeposit(address, chain.id);
+        const preferredToken = options?.token || null;
+        const bestToken =
+          preferredToken || (await getBestStablecoinForDeposit(address, chain.id));
         if (!bestToken) {
-          throw new Error("No stablecoin with balance available. Please add funds to your wallet first.");
+          throw new Error(
+            "No stablecoin with balance available. Please add funds to your wallet first."
+          );
         }
 
         if (bestToken.balance < usdAmount) {
           throw new Error(
-            `Insufficient balance. You have $${bestToken.balance.toFixed(2)} but need $${usdAmount.toFixed(2)}`
+            `Insufficient balance. You have $${bestToken.balance.toFixed(
+              2
+            )} but need $${usdAmount.toFixed(2)}`
           );
         }
 

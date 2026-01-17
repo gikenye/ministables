@@ -20,6 +20,12 @@ const RPC_URLS: Record<number, string | undefined> = {
   [base.id]: process.env.BASE_RPC_URL || "https://mainnet.base.org",
 };
 
+const RPC_NETWORKS: Record<number, { name: string; chainId: number }> = {
+  [celo.id]: { name: "celo", chainId: celo.id },
+  [scroll.id]: { name: "scroll", chainId: scroll.id },
+  [base.id]: { name: "base", chainId: base.id },
+};
+
 const normalizeGasLimit = (gasLimit?: number) => {
   if (!Number.isFinite(gasLimit)) return DEFAULT_GAS_LIMIT;
   const rounded = Math.floor(gasLimit as number);
@@ -87,7 +93,11 @@ export async function POST(request: NextRequest) {
       typeof gasLimitRaw === "string" ? Number(gasLimitRaw) : gasLimitRaw;
     const normalizedGasLimit = normalizeGasLimit(gasLimit);
 
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const network = RPC_NETWORKS[chainId];
+    const provider = new ethers.providers.StaticJsonRpcProvider(
+      rpcUrl,
+      network
+    );
     const sponsorWallet = new ethers.Wallet(
       GAS_SPONSORSHIP_CONFIG.SPONSOR_PK,
       provider

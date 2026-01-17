@@ -3,6 +3,15 @@ import { ethers } from "ethers";
 const GAS_SPONSORSHIP_ENABLED =
   process.env.NEXT_PUBLIC_GAS_SPONSORSHIP_ENABLED === "true";
 
+export class GasSponsorshipError extends Error {
+  isSponsorshipError = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "GasSponsorshipError";
+  }
+}
+
 /**
  * Execute a transaction with optional gas sponsorship
  */
@@ -39,27 +48,35 @@ export async function executeWithGasSponsorship<T>(
 
   console.log("[Gas Sponsorship] Requesting server-side sponsorship");
 
-  const response = await fetch("/api/sponsor-transaction", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userAddress, chainId, gasLimit }),
-  });
+  try {
+    const response = await fetch("/api/sponsor-transaction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userAddress, chainId, gasLimit }),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMessage =
-      errorData?.error ||
-      `Gas sponsorship failed (status ${response.status})`;
-    console.error("[Gas Sponsorship] Sponsorship failed:", errorMessage);
-    throw new Error(errorMessage);
-  }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage =
+        errorData?.error ||
+        `Gas sponsorship failed (status ${response.status})`;
+      console.error("[Gas Sponsorship] Sponsorship failed:", errorMessage);
+      throw new GasSponsorshipError(errorMessage);
+    }
 
-  const sponsorResult = await response.json().catch(() => ({}));
-  if (!sponsorResult?.success) {
-    const errorMessage =
-      sponsorResult?.error || "Gas sponsorship failed on server";
-    console.error("[Gas Sponsorship] Sponsorship failed:", errorMessage);
-    throw new Error(errorMessage);
+    const sponsorResult = await response.json().catch(() => ({}));
+    if (!sponsorResult?.success) {
+      const errorMessage =
+        sponsorResult?.error || "Gas sponsorship failed on server";
+      console.error("[Gas Sponsorship] Sponsorship failed:", errorMessage);
+      throw new GasSponsorshipError(errorMessage);
+    }
+  } catch (error) {
+    if (error instanceof GasSponsorshipError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : "Gas sponsorship failed";
+    throw new GasSponsorshipError(message);
   }
 
   console.log("[Gas Sponsorship] Sponsorship successful");

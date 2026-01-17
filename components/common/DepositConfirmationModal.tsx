@@ -27,6 +27,9 @@ interface DepositConfirmationModalProps {
   goalTitle?: string;
   depositMethod?: DepositMethod;
   setShowOnrampModal?: (val: boolean) => void;
+  currencyLabel?: string;
+  minFractionDigits?: number;
+  maxFractionDigits?: number;
   
   
 }
@@ -40,7 +43,11 @@ export const DepositConfirmationModal = ({
   error,
   transactionStatus,
   depositSuccess,
+  goalTitle,
   depositMethod,
+  currencyLabel,
+  minFractionDigits,
+  maxFractionDigits,
 }: DepositConfirmationModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const resolvedError =
@@ -48,12 +55,27 @@ export const DepositConfirmationModal = ({
     (depositMethod === "ONCHAIN"
       ? "On-chain transaction failed or was rejected in your wallet."
       : "Mobile money payment failed or was cancelled.");
+  const resolvedCurrencyLabel =
+    currencyLabel || (depositMethod === "ONCHAIN" ? "USD" : "KES");
+  const resolvedMinFractionDigits =
+    minFractionDigits ?? (depositMethod === "ONCHAIN" ? 2 : 0);
+  const resolvedMaxFractionDigits =
+    maxFractionDigits ?? (depositMethod === "ONCHAIN" ? 6 : 0);
+  const amountValue = Number(amount);
+  const formattedAmount = Number.isFinite(amountValue)
+    ? amountValue.toLocaleString(undefined, {
+        minimumFractionDigits: resolvedMinFractionDigits,
+        maximumFractionDigits: resolvedMaxFractionDigits,
+      })
+    : amount;
+  const goalLabel = goalTitle ? `to ${goalTitle}` : "to your savings";
   const phase = useMemo(() => {
     if (isSubmitting || isLoading) return "PROCESSING";
     if (depositSuccess) return "SUCCESS";
     if (error) return "ERROR";
     return "CONFIRM";
   }, [isSubmitting, isLoading, depositSuccess, error]);
+  const isValidAmount = Number.isFinite(amountValue) && amountValue > 0;
 
   useEffect(() => {
     if (!isOpen) {
@@ -68,8 +90,8 @@ export const DepositConfirmationModal = ({
   }, [depositSuccess, error]);
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose}>
-      <div className="px-6 pt-8 pb-12 space-y-8">
+    <BottomSheet isOpen={isOpen} onClose={onClose} maxHeight="max-h-[70vh]">
+      <div className="px-6 pt-6 pb-10 min-h-[40vh] flex flex-col">
         <AnimatePresence mode="wait">
           {/* PHASE: CONFIRM */}
           {phase === "CONFIRM" && (
@@ -78,27 +100,27 @@ export const DepositConfirmationModal = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="space-y-8"
+              className="flex-1 flex flex-col justify-center space-y-8"
             >
               <div className="text-center space-y-2">
                 <p className="text-[12px] font-black uppercase tracking-[0.2em] text-white">
                   Total to Deposit
                 </p>
                 <div className="text-2xl font-black tracking-tighter flex items-center justify-center gap-3 text-white">
-                  <span className="text-teal-500">KES</span>
-                  {Number(amount).toLocaleString()}
+                  <span className="text-teal-500">{resolvedCurrencyLabel}</span>
+                  {formattedAmount}
                 </div>
               </div>
 
               <button
                 onClick={() => {
-                  if (isSubmitting || isLoading) return;
+                  if (isSubmitting || isLoading || !isValidAmount) return;
                   setIsSubmitting(true);
                   onDeposit();
                 }}
-                disabled={isSubmitting || isLoading}
+                disabled={isSubmitting || isLoading || !isValidAmount}
                 className="w-full py-2 rounded-2xl bg-teal-500 text-black font-black uppercase tracking-[0.2em] text-xs shadow-lg shadow-teal-500/20
-    disabled:opacity-60 disabled:cursor-not-allowed active:scale-95 transition-transform"
+    disabled:opacity-60 disabled:cursor-not-allowed active:scale-95 disabled:active:scale-100 transition-transform"
               >
                 Initiate Payment
               </button>
@@ -110,7 +132,7 @@ export const DepositConfirmationModal = ({
               key="err"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
+              className="flex-1 flex flex-col justify-center space-y-6"
             >
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-2 flex flex-col items-center text-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
@@ -136,7 +158,7 @@ export const DepositConfirmationModal = ({
               key="proc"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="py-10 flex flex-col items-center gap-6"
+              className="flex-1 flex flex-col items-center justify-center gap-6"
             >
               <Loader2 className="w-12 h-12 text-teal-500 animate-spin" />
 
@@ -159,6 +181,33 @@ export const DepositConfirmationModal = ({
                     : "Check your phone for the M-Pesa prompt"}
                 </p>
               </div>
+            </motion.div>
+          )}
+
+          {phase === "SUCCESS" && (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex-1 flex flex-col items-center justify-center gap-6 text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-teal-500/15 border border-teal-500/30 flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-teal-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-black uppercase tracking-tight text-white">
+                  Deposit Complete
+                </h3>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em]">
+                  {resolvedCurrencyLabel} {formattedAmount} {goalLabel}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full py-2 rounded-2xl bg-teal-500 text-black font-black uppercase tracking-[0.2em] text-xs shadow-lg shadow-teal-500/20 active:scale-95 transition-transform"
+              >
+                Done
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

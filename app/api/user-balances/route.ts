@@ -108,6 +108,32 @@ export async function POST(request: NextRequest) {
         }, { status: 500 });
       }
     }
+
+    if (action === 'group-goal-members' || action === 'group-goal-details') {
+      const body = await request.json();
+      console.log(`[user-balances POST] ${action} request:`, body);
+
+      try {
+        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `API responded with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return NextResponse.json(data);
+      } catch (error) {
+        console.error(`[user-balances POST] ${action} error:`, error);
+        return NextResponse.json({
+          error: error instanceof Error ? error.message : `Failed to ${action}`,
+        }, { status: 500 });
+      }
+    }
     
     const body = await request.json();
     const { userAddress } = body;

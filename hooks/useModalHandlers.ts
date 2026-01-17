@@ -26,7 +26,6 @@ interface UseModalHandlersProps {
   setDepositError: (error: string | null) => void;
   setTransactionStatus: (status: string | null) => void;
   setDepositSuccess: (success: any) => void;
-  walletBalance?: bigint;
 }
 
 export function useModalHandlers(props: UseModalHandlersProps) {
@@ -34,7 +33,6 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setQuickSaveDetailsOpen,
     setQuickSaveAmountOpen,
     setQuickSaveConfirmationOpen,
-    walletBalance,
     setQuickSaveAmount,
     setGoalDetailsOpen,
     setGoalAmountOpen,
@@ -58,6 +56,18 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setDepositSuccess,
   } = props;
 
+  const resetDepositState = useCallback(() => {
+    setIsDepositLoading(false);
+    setDepositError(null);
+    setTransactionStatus(null);
+    setDepositSuccess(null);
+  }, [
+    setIsDepositLoading,
+    setDepositError,
+    setTransactionStatus,
+    setDepositSuccess,
+  ]);
+
 const handleSaveActionSelect = useCallback(
     (actionId: string) => {
       setSaveActionsModalOpen(false);
@@ -68,18 +78,7 @@ const handleSaveActionSelect = useCallback(
       } 
       else if (actionId === "onchain") {
         setDepositMethod("ONCHAIN");
-       
-        const hasFunds = walletBalance && walletBalance > BigInt(0);
-
-        if (hasFunds) {
-          // Proceed with normal deposit flow
-          setQuickSaveAmountOpen(true);
-        } else {
-          // No funds: Go straight to the "Deposit Confirmation" 
-          // which contains the wallet address/QR code for them to copy
-          setQuickSaveAmount("0"); // Default amount for display
-          setQuickSaveConfirmationOpen(true);
-        }
+        setQuickSaveAmountOpen(true);
       }
     },
     [
@@ -87,8 +86,6 @@ const handleSaveActionSelect = useCallback(
       setShowOnrampModal,
       setDepositMethod,
       setQuickSaveAmountOpen,
-      setQuickSaveConfirmationOpen,
-      walletBalance,
     ]
   );
 
@@ -130,18 +127,12 @@ const handleSaveActionSelect = useCallback(
     setQuickSaveDetailsOpen(false);
     setQuickSaveAmountOpen(false);
     setQuickSaveConfirmationOpen(false);
-    setIsDepositLoading(false);
-    setDepositError(null);
-    setTransactionStatus(null);
-    setDepositSuccess(null);
+    resetDepositState();
   }, [
     setQuickSaveDetailsOpen,
     setQuickSaveAmountOpen,
     setQuickSaveConfirmationOpen,
-    setIsDepositLoading,
-    setDepositError,
-    setTransactionStatus,
-    setDepositSuccess,
+    resetDepositState,
   ]);
 
   const handleGoalCardClick = useCallback(
@@ -171,7 +162,14 @@ const handleSaveActionSelect = useCallback(
     setGoalAmountOpen(false);
     setGoalConfirmationOpen(false);
     setSelectedGoal(null);
-  }, [setGoalDetailsOpen, setGoalAmountOpen, setGoalConfirmationOpen, setSelectedGoal]);
+    resetDepositState();
+  }, [
+    setGoalDetailsOpen,
+    setGoalAmountOpen,
+    setGoalConfirmationOpen,
+    setSelectedGoal,
+    resetDepositState,
+  ]);
 
   const closeCustomGoalModal = useCallback(() => {
     setCustomGoalModalOpen(false);

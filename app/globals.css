@@ -39,13 +39,28 @@
   body {
     height: 100%;
     margin: 0;
-    background: #676060ff; /* same as theme.colors.backgroundMain */
+    background: #020617;
   }
 
   body {
     color: hsl(var(--foreground-hsl));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+.space-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
 }
 
 

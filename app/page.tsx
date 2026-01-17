@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import {
   useActiveAccount,
   useSendTransaction,
-  useWalletBalance,
 } from "thirdweb/react";
 import { client } from "@/lib/thirdweb/client";
 import { useChain } from "@/components/ChainProvider";
@@ -77,13 +76,6 @@ export default function AppPage() {
     return tokens.map((t) => t.address);
   }, [tokens, chain?.id]);
 
-  const { data: walletBalanceData } = useWalletBalance({
-    client,
-    chain,
-    address: account?.address,
-    tokenAddress: defaultToken?.address,
-  });
-
   const dataFetching = useDataFetching({
     address: account?.address,
     setUserPortfolio: state.setUserPortfolio,
@@ -134,7 +126,6 @@ export default function AppPage() {
     setDepositMethod: state.setDepositMethod,
     setWithdrawalModalOpen: state.setWithdrawalModalOpen,
     setMobileOfframpModalOpen: state.setMobileOfframpModalOpen,
-    walletBalance: walletBalanceData?.value,
     setJoinGoalModalOpen: state.setJoinGoalModalOpen,
     setSelectedGoalToJoin: state.setSelectedGoalToJoin,
     setJoinGoalError: state.setJoinGoalError,
@@ -159,6 +150,7 @@ export default function AppPage() {
     setJoinGoalError: state.setJoinGoalError,
     fetchUserGoals: dataFetching.fetchUserGoals,
     fetchGroupGoals: dataFetching.fetchGroupGoals,
+    refreshUserPortfolio: dataFetching.refreshUserPortfolio,
   });
 
   const { handleKeyDown } = useKeyboardNavigation({
@@ -234,6 +226,8 @@ export default function AppPage() {
     const depositAmount = state.goalConfirmationOpen
       ? state.goalAmount
       : state.quickSaveAmount;
+    const selectedDepositToken =
+      state.depositMethod === "ONCHAIN" ? state.selectedDepositToken : null;
 
     await walletOperations.handleQuickSaveDeposit(
       depositAmount,
@@ -241,7 +235,7 @@ export default function AppPage() {
       (receipt, usdAmount, selectedToken) => {
         transactionHandlers.handleDepositSuccess(
           receipt,
-          depositAmount,
+          usdAmount.toString(),
           selectedToken,
           defaultToken,
           chain,
@@ -249,13 +243,35 @@ export default function AppPage() {
           state.goalConfirmationOpen,
           state.selectedGoal,
           () => {
-            dataFetching.fetchUserPortfolio();
+            dataFetching.refreshUserPortfolio();
             dataFetching.fetchUserGoals();
           }
         );
       },
-      (error) => transactionHandlers.handleDepositError(error)
+      (error) => transactionHandlers.handleDepositError(error),
+      {
+        depositMethod: state.depositMethod,
+        token: selectedDepositToken,
+      }
     );
+  };
+
+  const handleVaultWithdrawal = async (
+    tokenSymbol: string,
+    depositIds: number[],
+    sponsorGas: boolean = true
+  ) => {
+    await walletOperations.handleVaultWithdrawal(
+      tokenSymbol,
+      depositIds,
+      sponsorGas
+    );
+    await dataFetching.refreshUserPortfolio();
+    await dataFetching.fetchUserGoals();
+    if (account?.address && chain && tokens) {
+      const tokenSymbols = tokens.map((token) => token.symbol);
+      await fetchVaultPositions(chain, account.address, tokenSymbols);
+    }
   };
 
   const handleCreateFirstGoal = () => {
@@ -334,7 +350,7 @@ export default function AppPage() {
               exchangeRate={getKESRate() || undefined}
               handleCreateFirstGoal={handleCreateFirstGoal}
               handleGoalCardClick={modalHandlers.handleGoalCardClick}
-              fetchUserPortfolio={dataFetching.fetchUserPortfolio}
+              fetchUserPortfolio={dataFetching.refreshUserPortfolio}
               fetchUserGoals={dataFetching.fetchUserGoals}
               toggleBalanceVisibility={state.toggleBalanceVisibility}
               setSaveActionsModalOpen={state.setSaveActionsModalOpen}
@@ -358,15 +374,9 @@ export default function AppPage() {
               exchangeRate={getKESRate() || undefined}
               isJoinGoalLoading={state.joinGoalLoading}
               joinGoalError={state.joinGoalError}
-              tokens={tokens}
-              tokenInfos={tokenInfos}
-              supportedStablecoins={supportedStablecoins}
-              defaultToken={defaultToken}
-              copied={state.copied}
-              setCopied={state.setCopied}
               setDepositMethod={state.setDepositMethod}
-              setSelectedTokenForOnramp={state.setSelectedTokenForOnramp}
               setShowOnrampModal={state.setShowOnrampModal}
+              showOnrampModal={state.showOnrampModal}
             />
           )}
 
@@ -460,7 +470,7 @@ export default function AppPage() {
           vaultPositions={vaultPositions}
           vaultPositionsLoading={vaultPositionsLoading}
           onWithdrawalClose={() => state.setWithdrawalModalOpen(false)}
-          onWithdraw={walletOperations.handleVaultWithdrawal}
+          onWithdraw={handleVaultWithdrawal}
           mobileOfframpModalOpen={state.mobileOfframpModalOpen}
           onMobileOfframpClose={() => state.setMobileOfframpModalOpen(false)}
           showOnrampModal={state.showOnrampModal}
@@ -483,6 +493,8 @@ export default function AppPage() {
           setShowOnrampModal={state.setShowOnrampModal}
           depositMethod={state.depositMethod}
           onSettlementTransfer={walletOperations.handleSettlementTransfer}
+          selectedDepositToken={state.selectedDepositToken}
+          setSelectedDepositToken={state.setSelectedDepositToken}
         />
       </div>
     </AppContainer>

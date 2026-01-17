@@ -4,6 +4,8 @@ import { ConnectButton, darkTheme } from "thirdweb/react";
 import { createWallet, inAppWallet } from "thirdweb/wallets";
 import { useChain } from "@/components/ChainProvider";
 import { client } from "@/lib/thirdweb/client";
+import { theme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { CHAINS } from "@/config/chainConfig";
 
@@ -35,6 +37,10 @@ export function ConnectWallet({ className }: { className?: string }) {
   }, []);
 
   const shouldShowButton = !account || !isMiniPay;
+  const buttonClassName = cn(
+    "rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 border border-emerald-400/40 bg-emerald-500/20 text-white backdrop-blur-sm hover:bg-emerald-500/35",
+    className
+  );
 
   return (
     <ConnectButton
@@ -43,8 +49,7 @@ export function ConnectWallet({ className }: { className?: string }) {
       wallets={wallets}
       connectButton={{
         label: "Sign in",
-        className:
-          "rounded-full px-4 py-2 text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#54d22d]/60 bg-gradient-to-r from-[#54d22d] to-[#2e4328] text-white",
+        className: buttonClassName,
       }}
       connectModal={{
         showThirdwebBranding: false,
@@ -54,11 +59,11 @@ export function ConnectWallet({ className }: { className?: string }) {
       }}
       theme={darkTheme({
         colors: {
-          modalBg: "#33280aff",
-          borderColor: "#000000ff",
-          accentText: "#654f3eff",
-          primaryButtonBg: "#0e4a62ff",
-          primaryButtonText: "#ffffffff",
+          modalBg: theme.colors.backgroundDark,
+          borderColor: theme.colors.borderLight,
+          accentText: theme.colors.accent,
+          primaryButtonBg: theme.colors.accent,
+          primaryButtonText: theme.colors.text,
         },
       })}
     />

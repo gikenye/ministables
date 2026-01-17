@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
+import type { TokenBalance } from "@/lib/services/balanceService";
 
 export function useAppState() {
   // UI State
@@ -40,6 +41,8 @@ export function useAppState() {
   const [quickSaveAmountOpen, setQuickSaveAmountOpen] = useState(false);
   const [quickSaveConfirmationOpen, setQuickSaveConfirmationOpen] = useState(false);
   const [quickSaveAmount, setQuickSaveAmount] = useState("100");
+  const [selectedDepositToken, setSelectedDepositToken] =
+    useState<TokenBalance | null>(null);
 
   // Goal Modal State
   const [goalDetailsOpen, setGoalDetailsOpen] = useState(false);
@@ -149,6 +152,8 @@ export function useAppState() {
     setQuickSaveConfirmationOpen,
     quickSaveAmount,
     setQuickSaveAmount,
+    selectedDepositToken,
+    setSelectedDepositToken,
 
     // Goal Modal State
     goalDetailsOpen,
