@@ -50,6 +50,24 @@ const ExpandableQuickSaveCard = ({
 
   const totalSavingsNum = Number.parseFloat(userPositions?.totalValueUSD || "0");
   const quickSaveAmountNum = Number.parseFloat(goal?.currentAmount || "0");
+
+  const getGoalAmountUsd = (goalItem: any) => {
+    const directAmount = Number(goalItem?.currentAmount);
+    if (Number.isFinite(directAmount) && directAmount > 0) return directAmount;
+
+    const targetAmount = Number(goalItem?.targetAmount ?? goalItem?.targetAmountUSD);
+    const progressPercent = Number(goalItem?.progress ?? goalItem?.progressPercent);
+    if (
+      Number.isFinite(targetAmount) &&
+      Number.isFinite(progressPercent) &&
+      targetAmount > 0 &&
+      progressPercent > 0
+    ) {
+      return (targetAmount * progressPercent) / 100;
+    }
+
+    return 0;
+  };
   
   const hasValidExchangeRate = exchangeRate && exchangeRate > 0;
   const totalLocalAmount = hasValidExchangeRate ? totalSavingsNum * exchangeRate : 0;
@@ -150,7 +168,9 @@ const ExpandableQuickSaveCard = ({
               </div>
               
               {/* Other Goals (Draggable & Drop Zone) */}
-              {goals.filter(g => g.category !== "quick").map((g) => (
+              {goals.filter(g => g.category !== "quick").map((g) => {
+                const goalAmountUsd = getGoalAmountUsd(g);
+                return (
                 <div 
                   key={g.id} 
                   draggable
@@ -165,10 +185,12 @@ const ExpandableQuickSaveCard = ({
                     draggedId && draggedId !== g.id ? "border-green-400/50 bg-green-400/10 scale-105" : "bg-white/5 border-white/5 active:scale-95"
                   }`}
                 >
-                   <span className="text-xs font-bold text-white">${Number(g.currentAmount).toFixed(0)}</span>
+                   <span className="text-xs font-bold text-white">
+                    ${goalAmountUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                   </span>
                    <span className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-tighter truncate w-full">{g.title}</span>
                 </div>
-              ))}
+              )})}
               
               <button onClick={onCreateGoal} className="border border-dashed border-white/20 p-3 rounded-2xl flex flex-col items-center justify-center opacity-40 hover:opacity-100 transition">
                 <span className="text-sm font-bold">+</span>

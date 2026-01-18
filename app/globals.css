@@ -33,20 +33,26 @@
   --ring: 0 0% 20%;
   --radius: 0.5rem;
 }
-
 @layer base {
-  html,
-  body {
-    height: 100%;
-    margin: 0;
-    background: #020617;
+  /* Prevent mobile browser zoom on input focus for all form elements */
+  @media (max-width: 768px) {
+    input, 
+    textarea, 
+    select {
+      font-size: 16px !important;
+    }
   }
+}
+
+/* Specific class for extra insurance on custom components */
+.no-zoom {
+  font-size: 16px !important;
+}
 
   body {
     color: hsl(var(--foreground-hsl));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
-}
 
 .space-background {
   position: fixed;

@@ -18,6 +18,26 @@ export function useCombinedGoals({ userPortfolio, userGoals }: UseCombinedGoalsP
       status: "active" as const,
     };
 
+    const getGoalProgressUsd = (goal: any) => {
+      const directProgress =
+        goal.totalProgressUSD ??
+        goal.currentAmountUSD ??
+        goal.userBalanceUSD ??
+        goal.totalContributedUSD ??
+        goal.totalContributedUsd;
+      if (typeof directProgress === "number") return directProgress;
+      if (typeof directProgress === "string" && directProgress !== "") {
+        const parsed = Number(directProgress);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      const targetAmount = Number(goal.targetAmountUSD);
+      const progressPercent = Number(goal.progressPercent);
+      if (Number.isFinite(targetAmount) && Number.isFinite(progressPercent) && targetAmount > 0 && progressPercent > 0) {
+        return (targetAmount * progressPercent) / 100;
+      }
+      return 0;
+    };
+
     const mappedUserGoals = userGoals.map((goal: any) => ({
       id: goal._id,
       metaGoalId: goal.metaGoalId,
@@ -27,7 +47,7 @@ export function useCombinedGoals({ userPortfolio, userGoals }: UseCombinedGoalsP
         goal.targetDate && goal.targetDate !== "0"
           ? `Target: $${goal.targetAmountUSD} by ${new Date(goal.targetDate).toLocaleDateString()}`
           : `Target: $${goal.targetAmountUSD}`,
-      currentAmount: goal.totalProgressUSD?.toString() || "0",
+      currentAmount: getGoalProgressUsd(goal).toString(),
       targetAmount: goal.targetAmountUSD?.toString() || "0",
       progress: Math.min(goal.progressPercent || 0, 100),
       category: "personal" as const,

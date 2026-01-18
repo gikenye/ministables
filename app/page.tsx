@@ -166,61 +166,50 @@ export default function AppPage() {
   });
 
   useEffect(() => {
-    if (account?.address && !state.portfolioLoading && !state.userPortfolio) {
-      dataFetching.fetchUserPortfolio();
-    }
-  }, [account?.address]);
-
-  useEffect(() => {
-    if (account?.address) {
-      dataFetching.fetchUserGoals();
-      dataFetching.fetchLeaderboard();
-    }
-  }, [account?.address]);
-
-  useEffect(() => {
-    if (account && walletOperations.pendingDeposit) {
-      walletOperations.setPendingDeposit(false);
-      transactionHandlers.setDepositError(null);
-      handleQuickSaveDeposit();
-    }
-  }, [account, walletOperations.pendingDeposit]);
-
-  const prefetchedGroupsFor = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!account?.address || prefetchedGroupsFor.current === account.address) {
+    if (!account?.address) {
+      state.setUserPortfolio(null);
+      state.setUserGoals([]);
+      state.setUserScore(null);
+      state.setLeaderboard([]);
+      state.setPortfolioError(null);
+      state.setGoalsError(null);
+      state.setLeaderboardError(null);
       return;
     }
-    prefetchedGroupsFor.current = account.address;
-    dataFetching.fetchGroupGoals();
-    dataFetching.fetchMyGroups();
+
+    state.setUserPortfolio(null);
+    dataFetching.refreshUserPortfolio();
+    dataFetching.fetchUserGoals();
+    dataFetching.fetchLeaderboard();
   }, [account?.address]);
 
-  useEffect(() => {
-    if (state.activeTab !== "groups" || !account?.address) return;
-    if (state.myGroups || state.myGroupsLoading) return;
-    dataFetching.fetchGroupGoals();
-    dataFetching.fetchMyGroups();
-  }, [state.activeTab, account?.address, state.myGroups, state.myGroupsLoading]);
+  const prefetchedGroupsFor = useRef<string | null>(null);
+  const dashboardRefreshAt = useRef(0);
 
   useEffect(() => {
-    const shouldFetch =
-      state.withdrawalModalOpen ||
-      state.mobileOfframpModalOpen ||
-      state.withdrawActionsModalOpen;
-    if (shouldFetch && account?.address && chain && tokens) {
-      const tokenSymbols = tokens.map((token) => token.symbol);
-      fetchVaultPositions(chain, account.address, tokenSymbols);
-    }
-  }, [
-    state.withdrawalModalOpen,
-    state.mobileOfframpModalOpen,
-    state.withdrawActionsModalOpen,
-    account?.address,
-    chain,
-    tokens,
-  ]);
+    if (!account?.address || state.activeTab !== "goals") return;
+
+    const minIntervalMs = 30000;
+
+    const refreshDashboard = (silent = true) => {
+      const now = Date.now();
+      if (now - dashboardRefreshAt.current < minIntervalMs) return;
+      dashboardRefreshAt.current = now;
+      dataFetching.refreshUserPortfolio({ silent });
+    };
+
+    refreshDashboard(true);
+    const interval = setInterval(() => refreshDashboard(true), minIntervalMs);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshDashboard(true);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [account?.address, state.activeTab]);
 
   const handleQuickSaveDeposit = async () => {
     const depositAmount = state.goalConfirmationOpen
@@ -255,6 +244,48 @@ export default function AppPage() {
       }
     );
   };
+
+  useEffect(() => {
+    if (account && walletOperations.pendingDeposit) {
+      walletOperations.setPendingDeposit(false);
+      transactionHandlers.setDepositError(null);
+      handleQuickSaveDeposit();
+    }
+  }, [account, walletOperations.pendingDeposit]);
+
+  useEffect(() => {
+    if (!account?.address || prefetchedGroupsFor.current === account.address) {
+      return;
+    }
+    prefetchedGroupsFor.current = account.address;
+    dataFetching.fetchGroupGoals();
+    dataFetching.fetchMyGroups();
+  }, [account?.address]);
+
+  useEffect(() => {
+    if (state.activeTab !== "groups" || !account?.address) return;
+    if (state.myGroups || state.myGroupsLoading) return;
+    dataFetching.fetchGroupGoals();
+    dataFetching.fetchMyGroups();
+  }, [state.activeTab, account?.address, state.myGroups, state.myGroupsLoading]);
+
+  useEffect(() => {
+    const shouldFetch =
+      state.withdrawalModalOpen ||
+      state.mobileOfframpModalOpen ||
+      state.withdrawActionsModalOpen;
+    if (shouldFetch && account?.address && chain && tokens) {
+      const tokenSymbols = tokens.map((token) => token.symbol);
+      fetchVaultPositions(chain, account.address, tokenSymbols);
+    }
+  }, [
+    state.withdrawalModalOpen,
+    state.mobileOfframpModalOpen,
+    state.withdrawActionsModalOpen,
+    account?.address,
+    chain,
+    tokens,
+  ]);
 
   const handleVaultWithdrawal = async (
     tokenSymbol: string,
