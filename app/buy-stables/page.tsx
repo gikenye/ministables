@@ -41,6 +41,10 @@ export default function ProductionBuyStables() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
+  const [transactionMeta, setTransactionMeta] = useState({
+    transactionCode: "",
+    txHash: "",
+  });
 
   // --- Form State ---
   const [form, setForm] = useState({
@@ -60,9 +64,11 @@ export default function ProductionBuyStables() {
 
   const countryLimits = onrampService.getCountryLimits(form.countryCode);
   const amountNum = parseFloat(form.amount || "0");
-  const feeAmount = amountNum > 0 ? estimateOfframpFee(amountNum, form.countryCode) : 0;
+  const feeAmount =
+    amountNum > 0 ? estimateOfframpFee(amountNum, form.countryCode) : 0;
   const netAmount = Math.max(amountNum - feeAmount, 0);
-  const receiveAmount = exchangeRate && netAmount > 0 ? netAmount / exchangeRate : 0;
+  const receiveAmount =
+    exchangeRate && netAmount > 0 ? netAmount / exchangeRate : 0;
 
   // --- Effects ---
   useEffect(() => {
@@ -73,6 +79,82 @@ export default function ProductionBuyStables() {
     loadRate();
   }, [form.countryCode]);
 
+  useEffect(() => {
+    if (paymentStatus !== "pending" || !transactionMeta.transactionCode) return;
+
+    const maxAttempts = 20;
+    const maxElapsedMs = 60_000;
+    const startTime = Date.now();
+    let attempts = 0;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let isActive = true;
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const pollStatus = async () => {
+      try {
+        attempts += 1;
+        const elapsed = Date.now() - startTime;
+        if (attempts > maxAttempts || elapsed > maxElapsedMs) {
+          stopPolling();
+          if (isActive) {
+            setPaymentStatus("failed");
+            setError("Status check timed out. Please try again.");
+          }
+          return;
+        }
+
+        const status = await onrampService.getTransactionStatus(
+          transactionMeta.transactionCode,
+          form.countryCode
+        );
+
+        const normalizedStatus = status.status?.toUpperCase?.() || "";
+        const txHash = status.transaction_hash || status.tx_hash || "";
+
+        if (
+          txHash &&
+          (normalizedStatus === "SUCCESS" ||
+            normalizedStatus === "COMPLETED" ||
+            normalizedStatus === "COMPLETE")
+        ) {
+          stopPolling();
+          setTransactionMeta((prev) => ({ ...prev, txHash }));
+          setPaymentStatus("completed");
+          return;
+        }
+
+        if (
+          normalizedStatus === "FAILED" ||
+          normalizedStatus === "CANCELLED"
+        ) {
+          stopPolling();
+          setPaymentStatus("failed");
+          setError(
+            status.message || status.failureReason || "Transaction failed"
+          );
+        }
+      } catch (err: any) {
+        stopPolling();
+        if (isActive) {
+          setPaymentStatus("failed");
+          setError(err?.message || "Status check failed");
+        }
+      }
+    };
+
+    interval = setInterval(pollStatus, 4000);
+    return () => {
+      isActive = false;
+      stopPolling();
+    };
+  }, [paymentStatus, transactionMeta.transactionCode, form.countryCode]);
+
   // --- Actions ---
   const handleInitiatePayment = async () => {
     setIsProcessing(true);
@@ -82,7 +164,6 @@ export default function ProductionBuyStables() {
       const request: OnrampRequest = {
         shortcode: formattedPhone,
         amount: amountNum,
-        fee: feeAmount,
         mobile_network: form.mobileNetwork,
         chain: form.chain,
         asset: form.asset,
@@ -95,9 +176,12 @@ export default function ProductionBuyStables() {
         form.walletAddress.trim()
       );
       if (result.success) {
+        setTransactionMeta({
+          transactionCode: result.transaction_code || "",
+          txHash: "",
+        });
         setPaymentStatus("pending");
         setCurrentStep("status");
-        // Trigger polling logic here (similar to your previous effect)
       } else {
         setError(result.error || "Payment failed to initialize");
       }
@@ -309,9 +393,17 @@ export default function ProductionBuyStables() {
                     <span>Subtotal</span>
                     <span>{amountNum} {form.countryCode}</span>
                   </div>
+                  <div className="flex justify-between text-[11px] text-white/40 font-medium">
+                    <span>Fee (included)</span>
+                    <span>{feeAmount.toFixed(2)} {form.countryCode}</span>
+                  </div>
                   <div className="flex justify-between text-base font-bold pt-2">
                     <span>Total Charged</span>
                     <span className="text-teal-400">{amountNum} {form.countryCode}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[9px] text-white/40">
+                    <Info size={12} className="text-teal-400" />
+                    Fee is deducted from the converted amount, not added to your payment.
                   </div>
                 </div>
 
@@ -347,7 +439,27 @@ export default function ProductionBuyStables() {
                     <>
                       <CheckCircle2 size={64} className="text-teal-500 mx-auto" />
                       <h2 className="text-2xl font-bold">Success!</h2>
+                      {transactionMeta.txHash && (
+                        <p className="text-[10px] text-white/50 break-all">
+                          Tx hash: {transactionMeta.txHash}
+                        </p>
+                      )}
                       <button onClick={() => router.push("/")} className="w-full py-4 bg-white text-black font-bold rounded-2xl">Done</button>
+                    </>
+                  ) : paymentStatus === "failed" ? (
+                    <>
+                      <AlertCircle size={64} className="text-red-400 mx-auto" />
+                      <h2 className="text-2xl font-bold">Payment Failed</h2>
+                      <p className="text-[11px] text-red-400/80">{error || "Transaction failed"}</p>
+                      <button
+                        onClick={() => {
+                          setPaymentStatus("idle");
+                          setCurrentStep("payment");
+                        }}
+                        className="w-full py-4 bg-white text-black font-bold rounded-2xl"
+                      >
+                        Try Again
+                      </button>
                     </>
                   ) : null}
                </motion.div>
