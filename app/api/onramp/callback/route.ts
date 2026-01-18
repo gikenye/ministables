@@ -2,17 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
 import { allocateOnrampDeposit } from '@/lib/services/onrampAllocation';
 import { logger } from '@/lib/services/logger';
+import { sanitizeOnrampWebhookPayload } from '@/lib/utils/logSanitizer';
 
 const transactionStore = new Map<string, any>();
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const sanitizedBody = sanitizeOnrampWebhookPayload(body);
     
     logger.info('Onramp webhook received', {
       component: 'onramp.webhook',
       operation: 'request',
-      additional: { body },
+      additional: { body: sanitizedBody },
     });
 
     if (body.transaction_code) {

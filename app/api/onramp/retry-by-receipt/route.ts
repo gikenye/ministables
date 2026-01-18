@@ -15,9 +15,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (typeof receiptNumber !== "string") {
+      return NextResponse.json(
+        { error: "receiptNumber must be a string" },
+        { status: 400 }
+      );
+    }
+
+    const normalizedReceipt = receiptNumber.trim().toLowerCase();
+    if (!normalizedReceipt) {
+      return NextResponse.json(
+        { error: "receiptNumber is required" },
+        { status: 400 }
+      );
+    }
+
     const onrampCollection = await getCollection("onramp_deposits");
     const transaction = await onrampCollection.findOne({
-      receiptNumber,
+      receiptNumber: normalizedReceipt,
     });
 
     if (!transaction) {
@@ -52,7 +67,7 @@ export async function POST(request: NextRequest) {
     logger.info("Retry allocation by receipt", {
       component: "onramp.retryReceipt",
       operation: "allocate",
-      additional: { receiptNumber },
+      additional: { receiptNumber: normalizedReceipt },
     });
 
     const allocationResult = await allocateOnrampDeposit({

@@ -114,7 +114,22 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
   );
 
   if (!claim || !claim.value) {
-    return { success: true, skipped: true, reason: "Allocation already in progress or completed" };
+    const existing = await onrampCollection.findOne({
+      transactionCode: input.transactionCode,
+    });
+    if (!existing) {
+      return {
+        success: false,
+        skipped: false,
+        reason: "Transaction not found",
+        error: "Transaction not found",
+      };
+    }
+    return {
+      success: true,
+      skipped: true,
+      reason: "Allocation already in progress or completed",
+    };
   }
 
   const deposit = claim.value as {

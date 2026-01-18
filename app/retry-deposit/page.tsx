@@ -15,8 +15,8 @@ export default function RetryDepositPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const trimmed = receiptNumber.trim();
-    if (!trimmed) return;
+    const trimmedUpper = receiptNumber.trim().toUpperCase();
+    if (!trimmedUpper) return;
 
     setRequestState("loading");
     setMessage(null);
@@ -25,7 +25,7 @@ export default function RetryDepositPage() {
       const response = await fetch("/api/onramp/retry-by-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiptNumber: trimmed }),
+        body: JSON.stringify({ receiptNumber: trimmedUpper }),
       });
 
       const data = await response.json().catch(() => ({}));

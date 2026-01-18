@@ -6,6 +6,7 @@ import {
   checkExistingJob,
 } from "@/lib/services/disbursementQueue";
 import { logger } from "@/lib/services/logger";
+import { sanitizeOnrampCallbackPayload } from "@/lib/utils/logSanitizer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,12 +16,13 @@ export async function POST(request: NextRequest) {
     });
 
     const body = await request.json();
+    const sanitizedBody = sanitizeOnrampCallbackPayload(body);
 
     // Log the complete callback payload for debugging
     logger.info("KES callback payload received", {
       component: "onramp.scroll.status",
       operation: "payload",
-      additional: { body },
+      additional: { body: sanitizedBody },
     });
 
     const {
@@ -59,13 +61,12 @@ export async function POST(request: NextRequest) {
       logger.warn("Payment failed", {
         component: "onramp.scroll.status",
         operation: "failed",
-        transaction_code,
-        message,
-        failure_reason: message,
-        phone_number,
-        amount,
-        mobile_network,
-        receipt_number,
+        additional: {
+          transactionCode: transaction_code,
+          status,
+          message,
+          payload: sanitizedBody,
+        },
       });
     }
 
@@ -132,10 +133,8 @@ export async function POST(request: NextRequest) {
           component: "onramp.scroll.status",
           operation: "disbursement.check",
           additional: {
-            recipientWallet,
-            amount: originalAmount,
             transactionCode: transaction_code,
-            receiptNumber: receipt_number,
+            callbackPayload: sanitizedBody,
           },
         });
 
@@ -236,8 +235,10 @@ export async function POST(request: NextRequest) {
             component: "onramp.scroll.status",
             operation: "disbursement.validation",
             additional: {
-              recipientWallet,
-              amount: originalAmount,
+              transactionCode: transaction_code,
+              recipientWalletPresent: Boolean(recipientWallet),
+              amountPresent: Boolean(originalAmount),
+              callbackPayload: sanitizedBody,
             },
           });
         }
@@ -250,15 +251,7 @@ export async function POST(request: NextRequest) {
             fullStatus: status,
             transactionKey,
             message: message || "No message provided",
-            allCallbackData: {
-              status,
-              phone_number,
-              amount,
-              mobile_network,
-              receipt_number,
-              message,
-              public_name,
-            },
+            callbackPayload: sanitizedBody,
           },
         });
       }

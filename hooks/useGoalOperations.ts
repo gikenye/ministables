@@ -24,7 +24,7 @@ interface UseGoalOperationsProps {
   setJoinGoalError: (error: string | null) => void;
   fetchUserGoals: () => void;
   fetchGroupGoals: () => void;
-  refreshUserPortfolio?: () => void;
+  refreshUserPortfolio?: (options?: { silent?: boolean }) => void;
 }
 
 export function useGoalOperations(props: UseGoalOperationsProps) {

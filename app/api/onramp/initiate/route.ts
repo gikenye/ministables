@@ -5,6 +5,7 @@ import { parseUnits } from "viem";
 import { base, celo, scroll } from "thirdweb/chains";
 import { allocateOnrampDeposit } from "@/lib/services/onrampAllocation";
 import { logger } from "@/lib/services/logger";
+import { sanitizeOnrampInitiatePayload } from "@/lib/utils/logSanitizer";
 
 const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
@@ -58,10 +59,12 @@ export async function POST(request: NextRequest) {
       vault_address,
     } = body;
 
+    const sanitizedRequestBody = sanitizeOnrampInitiatePayload(body);
+
     logger.info("Received onramp request", {
       component: "onramp.initiate",
       operation: "payload",
-      additional: { body },
+      additional: { body: sanitizedRequestBody },
     });
 
     if (
@@ -281,20 +284,27 @@ async function pollAndAllocate(
           operation: "complete",
           additional: { transactionCode },
         });
+        if (!txData.amount_in_usd) {
+          logger.warn("amount_in_usd missing from status response", {
+            component: "onramp.poller",
+            operation: "status",
+            additional: { transactionCode },
+          });
+          await onrampCollection.updateOne(
+            { transactionCode },
+            {
+              $set: {
+                status: "AWAITING_AMOUNT",
+                lastRetryAttemptAt: new Date(),
+                updatedAt: new Date(),
+              },
+            }
+          );
+          return;
+        }
         const decimals = ASSET_DECIMALS[asset.toUpperCase()] || 18;
         let amountInWei = "0";
-        if (txData.amount_in_usd) {
-          amountInWei = parseUnits(
-            txData.amount_in_usd,
-            decimals
-          ).toString();
-        } else {
-        logger.warn("amount_in_usd missing from status response", {
-          component: "onramp.poller",
-          operation: "status",
-          additional: { transactionCode },
-        });
-        }
+        amountInWei = parseUnits(txData.amount_in_usd, decimals).toString();
 
         logger.info("Updating onramp deposit status", {
           component: "onramp.poller",

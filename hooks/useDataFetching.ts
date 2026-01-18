@@ -69,11 +69,14 @@ export function useDataFetching(props: UseDataFetchingProps) {
     }
   }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
 
-  const refreshUserPortfolio = useCallback(async () => {
+  const refreshUserPortfolio = useCallback(async (options?: { silent?: boolean }) => {
     if (!address) return;
 
-    setPortfolioLoading(true);
-    setPortfolioError(null);
+    const shouldSetLoading = !options?.silent;
+    if (shouldSetLoading) {
+      setPortfolioLoading(true);
+      setPortfolioError(null);
+    }
 
     try {
       const response = await fetch("/api/user-balances", {
@@ -95,20 +98,24 @@ export function useDataFetching(props: UseDataFetchingProps) {
       setUserPortfolio(data);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      setPortfolioError(errorMessage);
-      setUserPortfolio({
-        totalValueUSD: "0",
-        formattedLeaderboardScore: "0.00",
-        leaderboardRank: 0,
-        assetBalances: [],
-      });
+      if (shouldSetLoading) {
+        setPortfolioError(errorMessage);
+        setUserPortfolio({
+          totalValueUSD: "0",
+          formattedLeaderboardScore: "0.00",
+          leaderboardRank: 0,
+          assetBalances: [],
+        });
+      }
       reportError("Failed to refresh user portfolio", {
         component: "useDataFetching",
         operation: "refreshUserPortfolio",
         additional: { error: errorMessage },
       });
     } finally {
-      setPortfolioLoading(false);
+      if (shouldSetLoading) {
+        setPortfolioLoading(false);
+      }
     }
   }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
 
