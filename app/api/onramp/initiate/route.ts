@@ -3,16 +3,11 @@ import { getCollection } from "@/lib/mongodb";
 import { getVaultAddress } from "@/config/chainConfig";
 import { parseUnits } from "viem";
 import { base, celo, scroll } from "thirdweb/chains";
+import { allocateOnrampDeposit } from "@/lib/services/onrampAllocation";
+import { logger } from "@/lib/services/logger";
 
 const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL;
-
-console.log(
-  "🔧 Initiate route loaded with ALLOCATE_API_URL:",
-  ALLOCATE_API_URL
-);
-
 const ASSET_DECIMALS: Record<string, number> = {
   USDC: 6,
   USDT: 6,
@@ -44,7 +39,10 @@ const CHAIN_ID_MAPPING: Record<string, number> = {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("💳 Initiating onramp - API route called");
+    logger.info("Initiating onramp", {
+      component: "onramp.initiate",
+      operation: "request",
+    });
 
     const body = await request.json();
     const {
@@ -60,7 +58,11 @@ export async function POST(request: NextRequest) {
       vault_address,
     } = body;
 
-    console.log("📥 Received request body:", JSON.stringify(body, null, 2));
+    logger.info("Received onramp request", {
+      component: "onramp.initiate",
+      operation: "payload",
+      additional: { body },
+    });
 
     if (
       !shortcode ||
@@ -70,7 +72,10 @@ export async function POST(request: NextRequest) {
       !asset ||
       !address
     ) {
-      console.log("❌ Onramp failed - Missing required fields");
+      logger.warn("Onramp missing required fields", {
+        component: "onramp.initiate",
+        operation: "validation",
+      });
       return NextResponse.json(
         {
           error:
@@ -87,7 +92,11 @@ export async function POST(request: NextRequest) {
     // Resolve chain name to numeric chain ID
     const vaultChainId = CHAIN_ID_MAPPING[chain];
     if (!vaultChainId) {
-      console.log("❌ Unsupported chain for vault lookup:", chain);
+      logger.warn("Unsupported chain for vault lookup", {
+        component: "onramp.initiate",
+        operation: "validation",
+        additional: { chain },
+      });
       return NextResponse.json(
         {
           error: `Unsupported chain: ${chain}. Supported chains: ${Object.keys(CHAIN_ID_MAPPING).join(", ")}`,
@@ -102,7 +111,11 @@ export async function POST(request: NextRequest) {
     // Map chain name to Pretium API format
     const pretiumChain = CHAIN_MAPPING[chain];
     if (!pretiumChain) {
-      console.log("❌ Unsupported chain:", chain);
+      logger.warn("Unsupported chain", {
+        component: "onramp.initiate",
+        operation: "validation",
+        additional: { chain },
+      });
       return NextResponse.json(
         {
           error: `Unsupported chain: ${chain}. Supported chains: ${Object.keys(CHAIN_MAPPING).join(", ")}`,
@@ -122,9 +135,13 @@ export async function POST(request: NextRequest) {
       callback_url,
     };
 
-    console.log("📤 Sending to Pretium API:", {
-      endpoint: `${PRETIUM_BASE_URI}${endpoint}`,
-      requestBody: JSON.stringify(requestBody, null, 2),
+    logger.info("Sending to Pretium API", {
+      component: "onramp.initiate",
+      operation: "pretium.request",
+      additional: {
+        endpoint: `${PRETIUM_BASE_URI}${endpoint}`,
+        requestBody,
+      },
     });
 
     const response = await fetch(`${PRETIUM_BASE_URI}${endpoint}`, {
@@ -139,10 +156,14 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.log("❌ Pretium API Error Response:", {
-        status: response.status,
-        statusText: response.statusText,
-        data: JSON.stringify(data, null, 2),
+      logger.warn("Pretium API error response", {
+        component: "onramp.initiate",
+        operation: "pretium.response",
+        additional: {
+          status: response.status,
+          statusText: response.statusText,
+          data,
+        },
       });
       return NextResponse.json({
         success: false,
@@ -168,6 +189,10 @@ export async function POST(request: NextRequest) {
       mobileNetwork: mobile_network,
       countryCode: currency_code,
       status: "PENDING",
+      provider: {
+        name: "pretium",
+        initiateResponse: data,
+      },
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -186,10 +211,17 @@ export async function POST(request: NextRequest) {
       5000
     );
 
-    console.log("✅ Onramp initiated successfully:", data);
+    logger.info("Onramp initiated successfully", {
+      component: "onramp.initiate",
+      operation: "success",
+      additional: { data },
+    });
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("❌ Onramp initiation error:", error.message);
+    logger.error(error, {
+      component: "onramp.initiate",
+      operation: "error",
+    });
     return NextResponse.json(
       {
         error: error.message || "Failed to initiate onramp",
@@ -224,21 +256,56 @@ async function pollAndAllocate(
       const statusData = await statusResponse.json();
       const txData = statusData.data?.data || statusData.data;
 
-      if (txData?.status === "COMPLETE" && txData?.transaction_hash) {
-        console.log("✅ Transaction COMPLETE detected:", transactionCode);
-        const onrampCollection = await getCollection("onramp_deposits");
-        const decimals = ASSET_DECIMALS[asset.toUpperCase()] || 18;
-        const amountInWei = parseUnits(
-          txData.amount_in_usd,
-          decimals
-        ).toString();
+      const onrampCollection = await getCollection("onramp_deposits");
+      await onrampCollection.updateOne(
+        { transactionCode },
+        {
+          $set: {
+            "provider.name": "pretium",
+            "provider.lastStatusPayload": statusData,
+            "provider.lastStatusAt": new Date(),
+            updatedAt: new Date(),
+          },
+          $push: {
+            "provider.statusHistory": {
+              $each: [{ receivedAt: new Date(), payload: statusData }],
+              $slice: -20,
+            },
+          },
+        }
+      );
 
-        console.log("💾 Updating database with:", {
-          status: "COMPLETED",
-          txHash: txData.transaction_hash,
-          receiptNumber: txData.receipt_number,
-          amountInUsd: txData.amount_in_usd,
-          amountInWei,
+      if (txData?.status === "COMPLETE") {
+        logger.info("Transaction complete detected", {
+          component: "onramp.poller",
+          operation: "complete",
+          additional: { transactionCode },
+        });
+        const decimals = ASSET_DECIMALS[asset.toUpperCase()] || 18;
+        let amountInWei = "0";
+        if (txData.amount_in_usd) {
+          amountInWei = parseUnits(
+            txData.amount_in_usd,
+            decimals
+          ).toString();
+        } else {
+        logger.warn("amount_in_usd missing from status response", {
+          component: "onramp.poller",
+          operation: "status",
+          additional: { transactionCode },
+        });
+        }
+
+        logger.info("Updating onramp deposit status", {
+          component: "onramp.poller",
+          operation: "db.update",
+          additional: {
+            status: "COMPLETED",
+            txHash: txData.transaction_hash || "missing",
+            receiptNumber: txData.receipt_number,
+            amountInUsd: txData.amount_in_usd,
+            amountInWei,
+          },
         });
 
         await onrampCollection.updateOne(
@@ -246,155 +313,44 @@ async function pollAndAllocate(
           {
             $set: {
               status: "COMPLETED",
-              txHash: txData.transaction_hash,
-              receiptNumber: txData.receipt_number,
-              amountInUsd: txData.amount_in_usd,
-              updatedAt: new Date(),
+                ...(txData.transaction_hash
+                  ? { txHash: txData.transaction_hash }
+                  : {}),
+                receiptNumber: txData.receipt_number,
+                amountInUsd: txData.amount_in_usd,
+                updatedAt: new Date(),
             },
           }
         );
 
-        if (ALLOCATE_API_URL) {
-          const allocatePayload = {
-            asset: asset.toUpperCase(),
-            userAddress,
-            amount: amountInWei,
-            txHash: txData.transaction_hash,
-          };
-          console.log(
-            "📦 Calling allocation API at:",
-            `${ALLOCATE_API_URL}/allocate`
-          );
-          console.log("📦 Payload:", JSON.stringify(allocatePayload, null, 2));
-
-          try {
-            const allocateResponse = await fetch(
-              `${ALLOCATE_API_URL}/allocate`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Accept: "application/json",
-                },
-                body: JSON.stringify(allocatePayload),
-              }
-            );
-
-            let allocateResult;
-            try {
-              allocateResult = await allocateResponse.json();
-            } catch (parseError) {
-              console.error(
-                "❌ Failed to parse allocation response as JSON:",
-                parseError
-              );
-              allocateResult = {
-                success: false,
-                error: "Invalid response format from allocation service",
-                rawResponse: await allocateResponse.text(),
-              };
-            }
-
-            console.log(
-              "✅ Allocation response status:",
-              allocateResponse.status
-            );
-            console.log(
-              "✅ Allocation response:",
-              JSON.stringify(allocateResult, null, 2)
-            );
-
-            // Update database with allocation result
-            await onrampCollection.updateOne(
-              { transactionCode },
-              {
-                $set: {
-                  allocation: {
-                    ...allocateResult,
-                    responseStatus: allocateResponse.status,
-                    timestamp: new Date(),
-                  },
-                  updatedAt: new Date(),
-                },
-              }
-            );
-
-            // Log success/failure clearly
-            if (allocateResponse.ok && allocateResult.success !== false) {
-              console.log(
-                "🎉 Allocation completed successfully for transaction:",
-                transactionCode
-              );
-            } else {
-              console.error("❌ Allocation failed with response:", {
-                status: allocateResponse.status,
-                result: allocateResult,
-              });
-            }
-          } catch (allocError: any) {
-            console.error("❌ Allocation API call failed:", {
-              error: allocError.message,
-              transactionCode,
-              userAddress,
-              amount: amountInWei,
-            });
-
-            await onrampCollection.updateOne(
-              { transactionCode },
-              {
-                $set: {
-                  allocation: {
-                    success: false,
-                    error: allocError.message,
-                    timestamp: new Date(),
-                    retryable: true,
-                  },
-                  updatedAt: new Date(),
-                },
-              }
-            );
-
-            console.error(
-              "❌ Allocation failed - transaction requires manual retry via /api/onramp/retry-allocation:",
-              {
-                transactionCode,
-                userAddress,
-                amount: amountInWei,
-                txHash: txData.transaction_hash,
-              }
-            );
-          }
-        } else {
-          console.log(
-            "⚠️ ALLOCATE_API_URL not configured, skipping allocation"
-          );
-
-          // Update database to indicate allocation was skipped
-          await onrampCollection.updateOne(
-            { transactionCode },
-            {
-              $set: {
-                allocation: {
-                  success: false,
-                  error: "ALLOCATE_API_URL not configured",
-                  skipped: true,
-                  timestamp: new Date(),
-                },
-                updatedAt: new Date(),
-              },
-            }
-          );
-        }
+        logger.info("Triggering allocation", {
+          component: "onramp.poller",
+          operation: "allocate",
+          additional: { transactionCode },
+        });
+        await allocateOnrampDeposit({
+          transactionCode,
+          asset,
+          userAddress,
+          amountInUsd: txData.amount_in_usd,
+          txHash: txData.transaction_hash,
+          providerPayload: statusData,
+          source: "poller",
+        });
         return;
       }
 
       if (txData?.status === "FAILED" || txData?.status === "CANCELLED") {
-        console.log("❌ Transaction FAILED/CANCELLED detected:", {
-          transactionCode,
-          status: txData.status,
-          message: txData.message,
-          failureReason:
-            txData.message || "Transaction was cancelled or failed",
+        logger.warn("Transaction failed or cancelled", {
+          component: "onramp.poller",
+          operation: "failed",
+          additional: {
+            transactionCode,
+            status: txData.status,
+            message: txData.message,
+            failureReason:
+              txData.message || "Transaction was cancelled or failed",
+          },
         });
 
         const onrampCollection = await getCollection("onramp_deposits");
@@ -417,7 +373,10 @@ async function pollAndAllocate(
         setTimeout(poll, 5000);
       }
     } catch (error) {
-      console.error("❌ Polling error:", error);
+      logger.error(error as Error, {
+        component: "onramp.poller",
+        operation: "error",
+      });
     }
   };
 

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
+import { logger } from "@/lib/services/logger";
 
 const KES_COLLECT = process.env.KES_COLLECT;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("💳 Initiating onramp - API route called");
+    logger.info("Initiating KES onramp", {
+      component: "onramp.scroll.initiate",
+      operation: "request",
+    });
 
     const body = await request.json();
     const {
@@ -18,7 +22,10 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!shortcode || !amount || !mobile_network || !callback_url || !wallet_address) {
-      console.log("❌ KES collection failed - Missing required fields");
+      logger.warn("KES collection missing required fields", {
+        component: "onramp.scroll.initiate",
+        operation: "validation",
+      });
       return NextResponse.json(
         {
           error: "Shortcode, amount, mobile_network, callback_url, and wallet_address are required",
@@ -35,10 +42,14 @@ export async function POST(request: NextRequest) {
       throw new Error("PRETIUM_API_KEY environment variable is not set");
     }
 
-    console.log("🔧 Fiat Collection Config:", {
-      baseURI: KES_COLLECT || "NOT_SET",
-      apiKeyPresent: !!PRETIUM_API_KEY,
-      apiKeyLength: PRETIUM_API_KEY ? PRETIUM_API_KEY.length : 0,
+    logger.info("Fiat collection config loaded", {
+      component: "onramp.scroll.initiate",
+      operation: "config",
+      additional: {
+        baseURI: KES_COLLECT || "NOT_SET",
+        apiKeyPresent: !!PRETIUM_API_KEY,
+        apiKeyLength: PRETIUM_API_KEY ? PRETIUM_API_KEY.length : 0,
+      },
     });
 
     const requestBody = {
@@ -49,10 +60,18 @@ export async function POST(request: NextRequest) {
       wallet_address,
     };
 
-    console.log("📤 Onramp request payload:", requestBody);
+    logger.info("Onramp request payload", {
+      component: "onramp.scroll.initiate",
+      operation: "payload",
+      additional: { requestBody },
+    });
 
     const fullUrl = `${KES_COLLECT}`;
-    console.log("🌐 Making request to:", fullUrl);
+    logger.info("Making request to fiat collection API", {
+      component: "onramp.scroll.initiate",
+      operation: "request",
+      additional: { url: fullUrl },
+    });
 
     let response;
     try {
@@ -66,11 +85,15 @@ export async function POST(request: NextRequest) {
         // 30 second timeout handled by Next.js
       });
     } catch (fetchError) {
-      console.error("🚫 Network/Fetch error:", {
-        message:
-          fetchError instanceof Error ? fetchError.message : String(fetchError),
-        url: fullUrl,
-        cause: fetchError instanceof Error ? fetchError.cause : undefined,
+      logger.error("Network/Fetch error", {
+        component: "onramp.scroll.initiate",
+        operation: "request.error",
+        additional: {
+          message:
+            fetchError instanceof Error ? fetchError.message : String(fetchError),
+          url: fullUrl,
+          cause: fetchError instanceof Error ? fetchError.cause : undefined,
+        },
       });
       throw new Error(
         `Network error: Unable to reach API at ${fullUrl}. ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`
@@ -78,23 +101,31 @@ export async function POST(request: NextRequest) {
     }
 
     const responseText = await response.text();
-    console.log("📥 Raw API response:", {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      body:
-        responseText.substring(0, 500) +
-        (responseText.length > 500 ? "..." : ""),
+    logger.info("Raw API response received", {
+      component: "onramp.scroll.initiate",
+      operation: "response",
+      additional: {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body:
+          responseText.substring(0, 500) +
+          (responseText.length > 500 ? "..." : ""),
+      },
     });
 
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error("❌ Failed to parse API response as JSON:", {
-        responseText: responseText.substring(0, 1000),
-        parseError:
-          parseError instanceof Error ? parseError.message : String(parseError),
+      logger.error("Failed to parse API response as JSON", {
+        component: "onramp.scroll.initiate",
+        operation: "response.parse",
+        additional: {
+          responseText: responseText.substring(0, 1000),
+          parseError:
+            parseError instanceof Error ? parseError.message : String(parseError),
+        },
       });
       throw new Error(
         `API returned non-JSON response: ${response.status} ${response.statusText}`
@@ -105,7 +136,11 @@ export async function POST(request: NextRequest) {
       throw new Error(data.error || `HTTP error! status: ${response.status}`);
     }
 
-    console.log("✅ fiat collection initiated successfully:", data);
+    logger.info("Fiat collection initiated successfully", {
+      component: "onramp.scroll.initiate",
+      operation: "success",
+      additional: { data },
+    });
     
     // Store initial transaction with wallet address
     try {
@@ -129,18 +164,25 @@ export async function POST(request: NextRequest) {
           },
           { upsert: true }
         );
-        console.log("💾 Initial transaction stored:", transactionCode);
+        logger.info("Initial transaction stored", {
+          component: "onramp.scroll.initiate",
+          operation: "db.update",
+          additional: { transactionCode },
+        });
       }
     } catch (dbError) {
-      console.error("❌ Failed to store initial transaction:", dbError);
+      logger.error(dbError as Error, {
+        component: "onramp.scroll.initiate",
+        operation: "db.error",
+      });
       // Don't fail the API call if DB storage fails
     }
     
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("❌ fiat collection initiation error details:", {
-      message: error.message,
-      stack: error.stack,
+    logger.error(error, {
+      component: "onramp.scroll.initiate",
+      operation: "error",
     });
 
     return NextResponse.json(
