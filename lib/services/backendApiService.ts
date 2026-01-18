@@ -4,10 +4,13 @@
  */
 
 // Environment variable configuration
+import { logger } from "@/lib/services/logger";
+
 const ALLOCATE_API_URL = process.env.NEXT_PUBLIC_ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
 if (!process.env.NEXT_PUBLIC_ALLOCATE_API_URL && !process.env.ALLOCATE_API_URL) {
-  console.warn(
-    "ALLOCATE_API_URL environment variable not set. Using fallback URL for development."
+  logger.warn(
+    "ALLOCATE_API_URL environment variable not set. Using fallback URL for development.",
+    { component: "backendApiService", operation: "config" }
   );
 }
 
@@ -40,6 +43,7 @@ export interface AllocateRequest {
   userAddress: string;
   amount: string; // Amount in wei as string
   txHash: string; // Transaction hash of the deposit
+  providerPayload?: unknown;
   targetGoalId?: string; // Optional target goal ID for goal-specific deposits
   lockTier?: number; // Lock tier in days (default: 30)
 }
@@ -304,8 +308,9 @@ export class BackendApiClient {
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || ALLOCATE_API_URL;
     if (!this.baseUrl) {
-      console.error(
-        "BackendApiClient: No API base URl set. API calls will fail."
+      logger.error(
+        "BackendApiClient: No API base URL set. API calls will fail.",
+        { component: "backendApiService", operation: "init" }
       );
     }
   }
@@ -330,11 +335,15 @@ export class BackendApiClient {
         const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
-        console.error("[BackendApiClient] API ERROR:", {
+        logger.error("[BackendApiClient] API ERROR", {
+          component: "backendApiService",
+          operation: "response.error",
+          additional: {
           url,
           status: response.status,
           statusText: response.statusText,
           errorData,
+          },
         });
         const error = new Error(
           errorData.error || `HTTP ${response.status}: ${response.statusText}`
@@ -346,10 +355,14 @@ export class BackendApiClient {
 
       return await response.json();
     } catch (error) {
-      console.error("[BackendApiClient] REQUEST FAILED:", {
-        url,
-        error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined,
+      logger.error("[BackendApiClient] REQUEST FAILED", {
+        component: "backendApiService",
+        operation: "request.error",
+        additional: {
+          url,
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined,
+        },
       });
       if (error instanceof Error) {
         throw error;
@@ -361,7 +374,7 @@ export class BackendApiClient {
   // Allocation API methods
   async allocateDeposit(request: AllocateRequest): Promise<AllocateResponse> {
     const result = await this.request<AllocateResponse>(
-      `${API_ENDPOINTS.USER_POSITIONS}?action=allocate`,
+      API_ENDPOINTS.ALLOCATE,
       {
         method: "POST",
         body: JSON.stringify(request),

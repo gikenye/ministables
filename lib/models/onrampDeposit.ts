@@ -14,14 +14,38 @@ export interface OnrampDeposit {
   status: 'PENDING' | 'COMPLETED' | 'FAILED';
   receiptNumber?: string;
   amountInUsd?: string;
+  provider?: {
+    name?: string;
+    initiateResponse?: unknown;
+    lastStatusPayload?: unknown;
+    lastWebhookPayload?: unknown;
+    lastStatusAt?: Date;
+    lastWebhookAt?: Date;
+    statusHistory?: Array<{ receivedAt: Date; payload: unknown }>;
+    webhookHistory?: Array<{ receivedAt: Date; payload: unknown }>;
+  };
   allocation?: {
     success: boolean;
+    status?: 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
     depositId?: string;
     shares?: string;
     allocationTxHash?: string;
     onrampTxHash?: string;
     duration?: string;
     error?: string;
+    response?: unknown;
+    responseStatus?: number;
+    request?: unknown;
+    lastAttemptAt?: Date;
+    attempts?: Array<{
+      status: 'SUCCESS' | 'FAILED';
+      source: 'poller' | 'webhook' | 'retry';
+      attemptedAt: Date;
+      request: unknown;
+      response?: unknown;
+      responseStatus?: number;
+      error?: string;
+    }>;
   };
   createdAt: Date;
   updatedAt: Date;

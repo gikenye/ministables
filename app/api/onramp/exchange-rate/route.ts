@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/services/logger';
 
 const PRETIUM_BASE_URI = process.env.PRETIUM_BASE_URI;
 const PRETIUM_API_KEY = process.env.PRETIUM_API_KEY;
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📊 Getting exchange rate - API route called');
+    logger.info('Getting exchange rate', {
+      component: 'onramp.exchangeRate',
+      operation: 'request',
+    });
     
     const body = await request.json();
     const { currency_code } = body;
     
     if (!currency_code) {
-      console.log('❌ Exchange rate failed - No currency code provided');
+      logger.warn('Exchange rate missing currency', {
+        component: 'onramp.exchangeRate',
+        operation: 'validation',
+      });
       return NextResponse.json({ error: 'Currency code is required' }, { status: 400 });
     }
 
@@ -23,10 +30,14 @@ export async function POST(request: NextRequest) {
       throw new Error('PRETIUM_API_KEY environment variable is not set');
     }
 
-    console.log('🔧 Pretium Config:', {
-      baseURI: PRETIUM_BASE_URI || 'NOT_SET',
-      apiKeyPresent: !!PRETIUM_API_KEY,
-      apiKeyLength: PRETIUM_API_KEY ? PRETIUM_API_KEY.length : 0
+    logger.info('Pretium config loaded', {
+      component: 'onramp.exchangeRate',
+      operation: 'config',
+      additional: {
+        baseURI: PRETIUM_BASE_URI || 'NOT_SET',
+        apiKeyPresent: !!PRETIUM_API_KEY,
+        apiKeyLength: PRETIUM_API_KEY ? PRETIUM_API_KEY.length : 0,
+      },
     });
 
     const response = await fetch(`${PRETIUM_BASE_URI}/v1/exchange-rate`, {
@@ -44,13 +55,17 @@ export async function POST(request: NextRequest) {
       throw new Error(data.error || `HTTP error! status: ${response.status}`);
     }
 
-    console.log('✅ Exchange rate retrieved successfully:', data);
+    logger.info('Exchange rate retrieved successfully', {
+      component: 'onramp.exchangeRate',
+      operation: 'success',
+      additional: { data },
+    });
     return NextResponse.json({ success: true, data });
 
   } catch (error: any) {
-    console.error('❌ Exchange rate error details:', {
-      message: error.message,
-      stack: error.stack
+    logger.error(error, {
+      component: 'onramp.exchangeRate',
+      operation: 'error',
     });
     
     return NextResponse.json({

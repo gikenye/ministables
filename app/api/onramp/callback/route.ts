@@ -1,33 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
-import { parseUnits } from 'viem';
+import { allocateOnrampDeposit } from '@/lib/services/onrampAllocation';
+import { logger } from '@/lib/services/logger';
 
 const transactionStore = new Map<string, any>();
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL;
-
-console.log('🔧 Callback route loaded with ALLOCATE_API_URL:', ALLOCATE_API_URL);
-
-const ASSET_DECIMALS: Record<string, number> = {
-  USDC: 6,
-  USDT: 6,
-  cUSD: 18,
-  CUSD: 18,
-};
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    console.log('📥 Onramp webhook received:', body);
+    logger.info('Onramp webhook received', {
+      component: 'onramp.webhook',
+      operation: 'request',
+      additional: { body },
+    });
 
     if (body.transaction_code) {
       transactionStore.set(body.transaction_code, { ...body, updated_at: new Date().toISOString() });
       
       const onrampCollection = await getCollection('onramp_deposits');
+      const normalizedStatus =
+        body.status === 'COMPLETE' || body.status === 'SUCCESS'
+          ? 'COMPLETED'
+          : body.status === 'FAILED' || body.status === 'CANCELLED'
+            ? 'FAILED'
+            : 'PENDING';
       const updateData: any = {
-        status: body.status === 'COMPLETE' || body.status === 'SUCCESS' ? 'COMPLETED' : 
-                body.status === 'FAILED' || body.status === 'CANCELLED' ? 'FAILED' : 'PENDING',
+        status: normalizedStatus,
         updatedAt: new Date(),
+        'provider.name': 'pretium',
+        'provider.lastWebhookPayload': body,
+        'provider.lastWebhookAt': new Date(),
       };
 
       if (body.receipt_number) updateData.receiptNumber = body.receipt_number;
@@ -36,52 +39,62 @@ export async function POST(request: NextRequest) {
 
       await onrampCollection.updateOne(
         { transactionCode: body.transaction_code },
-        { $set: updateData }
+        {
+          $set: updateData,
+          $setOnInsert: {
+            transactionCode: body.transaction_code,
+            createdAt: new Date(),
+          },
+          $push: {
+            'provider.webhookHistory': {
+              $each: [{ receivedAt: new Date(), payload: body }],
+              $slice: -20,
+            },
+          },
+        },
+        { upsert: true }
       );
       
-      console.log('✅ Transaction status stored:', body.transaction_code);
+      logger.info('Transaction status stored', {
+        component: 'onramp.webhook',
+        operation: 'db.update',
+        additional: { transactionCode: body.transaction_code },
+      });
 
-      if (updateData.status === 'COMPLETED' && updateData.txHash && body.amount_in_usd) {
+      if (normalizedStatus === 'COMPLETED' && updateData.txHash) {
         const deposit = await onrampCollection.findOne({ transactionCode: body.transaction_code });
-        if (deposit && ALLOCATE_API_URL) {
-          const decimals = ASSET_DECIMALS[deposit.asset.toUpperCase()] || 18;
-          const amountInWei = parseUnits(body.amount_in_usd, decimals).toString();
-          const allocatePayload = {
-            asset: deposit.asset.toUpperCase(),
+        if (deposit?.userAddress && deposit?.asset) {
+          logger.info('Webhook triggering allocation', {
+            component: 'onramp.webhook',
+            operation: 'allocate',
+            additional: { transactionCode: body.transaction_code },
+          });
+          await allocateOnrampDeposit({
+            transactionCode: body.transaction_code,
+            asset: deposit.asset,
             userAddress: deposit.userAddress,
-            amount: amountInWei,
+            amountInUsd: body.amount_in_usd,
+            amountFallback: deposit.amountInUsd || deposit.amount,
             txHash: updateData.txHash,
-          };
-          console.log('📦 Webhook calling allocation API:', allocatePayload);
-          try {
-            const allocateResponse = await fetch(`${ALLOCATE_API_URL}/allocate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(allocatePayload),
-            });
-            const allocateResult = await allocateResponse.json();
-            console.log('✅ Webhook allocation response:', allocateResult);
-            
-            await onrampCollection.updateOne(
-              { transactionCode: body.transaction_code },
-              { $set: { allocation: allocateResult, updatedAt: new Date() } }
-            );
-          } catch (allocError: any) {
-            console.error('❌ Webhook allocation failed:', allocError.message);
-            await onrampCollection.updateOne(
-              { transactionCode: body.transaction_code },
-              { $set: { allocation: { success: false, error: allocError.message }, updatedAt: new Date() } }
-            );
-          }
-        } else if (!ALLOCATE_API_URL) {
-          console.log('⚠️ ALLOCATE_API_URL not configured');
+            providerPayload: body,
+            source: 'webhook',
+          });
+        } else {
+          logger.warn('Deposit missing required fields for allocation', {
+            component: 'onramp.webhook',
+            operation: 'allocate',
+            additional: { transactionCode: body.transaction_code },
+          });
         }
       }
     }
 
     return NextResponse.json({ success: true, message: 'Webhook received' });
   } catch (error) {
-    console.error('❌ Onramp webhook error:', error);
+    logger.error(error as Error, {
+      component: 'onramp.webhook',
+      operation: 'error',
+    });
     return NextResponse.json({ success: false, error: 'Webhook processing failed' }, { status: 500 });
   }
 }
@@ -102,7 +115,10 @@ export async function GET(request: NextRequest) {
     const deposit = await onrampCollection.findOne({ transactionCode: transaction_code });
     if (deposit) return NextResponse.json({ success: true, data: deposit });
   } catch (error) {
-    console.error('Error fetching from database:', error);
+    logger.error(error as Error, {
+      component: 'onramp.webhook',
+      operation: 'db.fetch',
+    });
   }
   
   return NextResponse.json({ success: false, message: 'No webhook received yet' });

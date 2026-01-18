@@ -5,46 +5,42 @@ import { logger } from "@/lib/services/logger";
 
 export async function POST(request: NextRequest) {
   try {
-    logger.info("Retrying allocation", {
-      component: "onramp.retry",
-      operation: "request",
-    });
-
     const body = await request.json();
-    const { transactionCode } = body;
+    const { receiptNumber } = body;
 
-    if (!transactionCode) {
+    if (!receiptNumber) {
       return NextResponse.json(
-        {
-          error: "Transaction code is required",
-        },
+        { error: "receiptNumber is required" },
         { status: 400 }
       );
     }
 
-    // Get the completed transaction from database
     const onrampCollection = await getCollection("onramp_deposits");
-    const transaction = await onrampCollection.findOne({ transactionCode });
+    const transaction = await onrampCollection.findOne({
+      receiptNumber,
+    });
 
     if (!transaction) {
       return NextResponse.json(
-        {
-          error: "Transaction not found",
-        },
+        { error: "Transaction not found for receipt number" },
         { status: 404 }
       );
     }
 
     if (transaction.status !== "COMPLETED") {
       return NextResponse.json(
-        {
-          error: "Transaction is not completed yet",
-        },
+        { error: "Transaction is not completed yet" },
         { status: 400 }
       );
     }
 
-    // Check if allocation was already successful
+    if (!transaction.userAddress || !transaction.asset) {
+      return NextResponse.json(
+        { error: "Transaction missing required allocation fields" },
+        { status: 400 }
+      );
+    }
+
     if (transaction.allocation?.success === true) {
       return NextResponse.json({
         success: true,
@@ -53,28 +49,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    logger.info("Retrying allocation via backendApiService", {
-      component: "onramp.retry",
+    logger.info("Retry allocation by receipt", {
+      component: "onramp.retryReceipt",
       operation: "allocate",
-      additional: { transactionCode },
+      additional: { receiptNumber },
     });
+
     const allocationResult = await allocateOnrampDeposit({
-      transactionCode,
+      transactionCode: transaction.transactionCode,
       asset: transaction.asset,
       userAddress: transaction.userAddress,
       amountInUsd: transaction.amountInUsd,
       amountFallback: transaction.amount,
       txHash: transaction.txHash,
-      providerPayload: transaction.provider?.lastWebhookPayload || transaction.provider?.lastStatusPayload,
+      providerPayload:
+        transaction.provider?.lastWebhookPayload ||
+        transaction.provider?.lastStatusPayload,
       source: "retry",
     });
 
     if (allocationResult.success && !allocationResult.skipped) {
-      logger.info("Retry allocation completed", {
-        component: "onramp.retry",
-        operation: "success",
-        additional: { transactionCode },
-      });
       return NextResponse.json({
         success: true,
         allocation: allocationResult.response,
@@ -98,13 +92,11 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     logger.error(error, {
-      component: "onramp.retry",
+      component: "onramp.retryReceipt",
       operation: "error",
     });
     return NextResponse.json(
-      {
-        error: error.message || "Failed to retry allocation",
-      },
+      { error: error.message || "Failed to retry allocation" },
       { status: 500 }
     );
   }

@@ -5,15 +5,23 @@ import {
   enqueueDisbursement,
   checkExistingJob,
 } from "@/lib/services/disbursementQueue";
+import { logger } from "@/lib/services/logger";
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📞 KES callback received");
+    logger.info("KES callback received", {
+      component: "onramp.scroll.status",
+      operation: "request",
+    });
 
     const body = await request.json();
 
     // Log the complete callback payload for debugging
-    console.log("📥 Complete callback payload:", JSON.stringify(body, null, 2));
+    logger.info("KES callback payload received", {
+      component: "onramp.scroll.status",
+      operation: "payload",
+      additional: { body },
+    });
 
     const {
       shortcode,
@@ -37,19 +45,20 @@ export async function POST(request: NextRequest) {
       reference ||
       `${shortcode}_${phone_number}_${amount}_${Date.now()}`;
 
-    console.log(
-      "✅ Processing transaction:",
-      transactionKey,
-      "Status:",
-      status
-    );
+    logger.info("Processing transaction", {
+      component: "onramp.scroll.status",
+      operation: "process",
+      additional: { transactionKey, status },
+    });
 
     // Log failure details if payment failed
     if (
       status?.toUpperCase() === "FAILED" ||
       status?.toUpperCase() === "FAILURE"
     ) {
-      console.log("❌ Payment FAILED - Details:", {
+      logger.warn("Payment failed", {
+        component: "onramp.scroll.status",
+        operation: "failed",
         transaction_code,
         message,
         failure_reason: message,
@@ -107,7 +116,11 @@ export async function POST(request: NextRequest) {
         { upsert: true }
       );
 
-      console.log("💾 Transaction saved:", transactionKey);
+      logger.info("Transaction saved", {
+        component: "onramp.scroll.status",
+        operation: "db.update",
+        additional: { transactionKey },
+      });
 
       // Handle successful payment - enqueue USDC disbursement
       if (
@@ -115,14 +128,15 @@ export async function POST(request: NextRequest) {
         status?.toUpperCase() === "COMPLETED" ||
         status?.toUpperCase() === "COMPLETE"
       ) {
-        console.log(
-          "💰 Payment successful, checking disbursement conditions..."
-        );
-        console.log("🔍 Disbursement check:", {
-          recipientWallet,
-          amount: originalAmount,
-          transactionCode: transaction_code,
-          receiptNumber: receipt_number,
+        logger.info("Payment successful, checking disbursement conditions", {
+          component: "onramp.scroll.status",
+          operation: "disbursement.check",
+          additional: {
+            recipientWallet,
+            amount: originalAmount,
+            transactionCode: transaction_code,
+            receiptNumber: receipt_number,
+          },
         });
 
         if (recipientWallet && originalAmount) {
@@ -130,12 +144,15 @@ export async function POST(request: NextRequest) {
           const existingJob = await checkExistingJob(transactionKey);
 
           if (existingJob) {
-            console.log(
-              `ℹ️ Disbursement already exists for transaction: ${transactionKey}`
-            );
-            console.log(
-              `   Job ID: ${existingJob._id}, Status: ${existingJob.status}`
-            );
+            logger.info("Disbursement already exists", {
+              component: "onramp.scroll.status",
+              operation: "disbursement.exists",
+              additional: {
+                transactionKey,
+                jobId: existingJob._id,
+                status: existingJob.status,
+              },
+            });
 
             // Update transaction with existing job info
             await db.collection("kes_transactions").updateOne(
@@ -155,7 +172,11 @@ export async function POST(request: NextRequest) {
           } else {
             // Enqueue new disbursement job
             try {
-              console.log("🚀 Enqueueing USDC disbursement...");
+              logger.info("Enqueueing USDC disbursement", {
+                component: "onramp.scroll.status",
+                operation: "disbursement.enqueue",
+                additional: { transactionKey },
+              });
 
               const jobId = await enqueueDisbursement(
                 recipientWallet,
@@ -163,7 +184,11 @@ export async function POST(request: NextRequest) {
                 transactionKey
               );
 
-              console.log(`✅ Disbursement job enqueued: ${jobId}`);
+              logger.info("Disbursement job enqueued", {
+                component: "onramp.scroll.status",
+                operation: "disbursement.enqueued",
+                additional: { jobId, transactionKey },
+              });
 
               // Update transaction with job ID
               await db.collection("kes_transactions").updateOne(
@@ -185,10 +210,10 @@ export async function POST(request: NextRequest) {
                 amountKES: originalAmount,
               });
             } catch (disbursementError) {
-              console.error(
-                "❌ Failed to enqueue disbursement:",
-                disbursementError
-              );
+              logger.error(disbursementError as Error, {
+                component: "onramp.scroll.status",
+                operation: "disbursement.error",
+              });
 
               // Update transaction with queueing failure
               await db.collection("kes_transactions").updateOne(
@@ -207,16 +232,21 @@ export async function POST(request: NextRequest) {
             }
           }
         } else {
-          console.warn("⚠️ Cannot disburse: missing wallet address or amount", {
-            recipientWallet,
-            amount: originalAmount,
+          logger.warn("Cannot disburse: missing wallet address or amount", {
+            component: "onramp.scroll.status",
+            operation: "disbursement.validation",
+            additional: {
+              recipientWallet,
+              amount: originalAmount,
+            },
           });
         }
       } else {
-        console.log(
-          "🔄 Status not eligible for disbursement:",
-          status?.toUpperCase(),
-          {
+        logger.info("Status not eligible for disbursement", {
+          component: "onramp.scroll.status",
+          operation: "disbursement.skip",
+          additional: {
+            status: status?.toUpperCase(),
             fullStatus: status,
             transactionKey,
             message: message || "No message provided",
@@ -229,8 +259,8 @@ export async function POST(request: NextRequest) {
               message,
               public_name,
             },
-          }
-        );
+          },
+        });
       }
 
       // Emit real-time event
@@ -243,7 +273,10 @@ export async function POST(request: NextRequest) {
         wallet_address: recipientWallet,
       });
     } catch (dbError) {
-      console.error("❌ Database error:", dbError);
+      logger.error(dbError as Error, {
+        component: "onramp.scroll.status",
+        operation: "db.error",
+      });
       // Don't fail the callback if DB fails
     }
 
@@ -256,7 +289,10 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("❌ KES collect callback error:", error);
+    logger.error(error as Error, {
+      component: "onramp.scroll.status",
+      operation: "error",
+    });
     return NextResponse.json(
       {
         error: "Invalid callback",

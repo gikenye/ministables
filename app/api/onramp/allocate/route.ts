@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL;
+import {
+  BackendApiClient,
+  SUPPORTED_ASSETS,
+  type SupportedAsset,
+} from '@/lib/services/backendApiService';
+import { logger } from '@/lib/services/logger';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { asset, userAddress, amount, txHash } = body;
+    const { asset, userAddress, amount, txHash, providerPayload } = body;
 
     if (!asset || !userAddress || !amount || !txHash) {
       return NextResponse.json(
@@ -14,33 +18,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!ALLOCATE_API_URL) {
-      console.error('❌ ALLOCATE_API_URL not configured');
+    const baseUrl =
+      process.env.ALLOCATE_API_URL || process.env.NEXT_PUBLIC_ALLOCATE_API_URL;
+    if (!baseUrl) {
+      logger.error('ALLOCATE_API_URL not configured', {
+        component: 'onramp.allocate',
+        operation: 'config',
+      });
       return NextResponse.json(
         { error: 'Allocation service not configured' },
         { status: 500 }
       );
     }
 
-    console.log('📦 Calling allocation API:', { asset, userAddress, amount, txHash });
-
-    const response = await fetch(`${ALLOCATE_API_URL}/allocate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asset, userAddress, amount, txHash }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Allocation failed');
+    const normalizedAsset = SUPPORTED_ASSETS.find(
+      (supported) => supported.toLowerCase() === asset?.toLowerCase()
+    );
+    if (!normalizedAsset) {
+      return NextResponse.json(
+        { error: `Unsupported asset: ${asset}` },
+        { status: 400 }
+      );
     }
 
-    console.log('✅ Allocation successful:', data);
+    logger.info('Calling allocation API via backendApiService', {
+      component: 'onramp.allocate',
+      operation: 'request',
+      asset: normalizedAsset,
+      userAddress,
+      amount,
+      txHash,
+    });
+
+    const client = new BackendApiClient(baseUrl);
+    const data = await client.allocateDeposit({
+      asset: normalizedAsset as SupportedAsset,
+      userAddress,
+      amount,
+      txHash,
+      providerPayload,
+    });
+
+    logger.info('Allocation successful', {
+      component: 'onramp.allocate',
+      operation: 'success',
+      additional: { data },
+    });
     return NextResponse.json(data);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Allocation failed";
-    console.error('❌ Allocation error:', message);
+    logger.error(message, {
+      component: 'onramp.allocate',
+      operation: 'error',
+    });
     return NextResponse.json(
       { error: message },
       { status: 500 }
