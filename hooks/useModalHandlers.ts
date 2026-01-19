@@ -16,6 +16,7 @@ interface UseModalHandlersProps {
   setSaveActionsModalOpen: (open: boolean) => void;
   setWithdrawActionsModalOpen: (open: boolean) => void;
   setShowOnrampModal: (open: boolean) => void;
+  setOnrampTargetGoalId: (goalId: string | null) => void;
   setDepositMethod: (method: "ONCHAIN" | "MPESA") => void;
   setWithdrawalModalOpen: (open: boolean) => void;
   setMobileOfframpModalOpen: (open: boolean) => void;
@@ -44,6 +45,7 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setSaveActionsModalOpen,
     setWithdrawActionsModalOpen,
     setShowOnrampModal,
+    setOnrampTargetGoalId,
     setDepositMethod,
     setWithdrawalModalOpen,
     setMobileOfframpModalOpen,
@@ -74,6 +76,7 @@ const handleSaveActionSelect = useCallback(
 
       if (actionId === "onramp") {
         setDepositMethod("MPESA");
+        setOnrampTargetGoalId(null);
         setShowOnrampModal(true);
       } 
       else if (actionId === "onchain") {
@@ -84,6 +87,7 @@ const handleSaveActionSelect = useCallback(
     [
       setSaveActionsModalOpen,
       setShowOnrampModal,
+      setOnrampTargetGoalId,
       setDepositMethod,
       setQuickSaveAmountOpen,
     ]

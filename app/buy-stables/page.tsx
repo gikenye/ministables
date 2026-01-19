@@ -173,7 +173,7 @@ export default function ProductionBuyStables() {
       const result = await onrampService.initiateOnramp(
         request,
         form.countryCode,
-        form.walletAddress.trim()
+        { vaultAddress: form.walletAddress.trim() }
       );
       if (result.success) {
         setTransactionMeta({

@@ -3,20 +3,31 @@ import {
   AllocateRequest,
   isValidEthereumAddress,
   isValidTransactionHash,
+  mapTokenSymbolToAsset,
 } from "@/lib/services/backendApiService";
 import { VAULT_CONTRACTS } from "@/config/chainConfig";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tokenSymbol, userAddress, amount, txHash, targetGoalId, lockTier, chainId } = body;
+    const {
+      tokenSymbol,
+      asset,
+      userAddress,
+      amount,
+      txHash,
+      targetGoalId,
+      lockTier,
+      chainId,
+    } = body;
+    const resolvedSymbol = tokenSymbol || asset;
 
     // Validate required fields
-    if (!tokenSymbol || !userAddress || !amount || !txHash || !chainId) {
+    if (!resolvedSymbol || !userAddress || !amount || !txHash) {
       return NextResponse.json(
         {
           error:
-            "Missing required fields: tokenSymbol, userAddress, amount, txHash, chainId",
+            "Missing required fields: tokenSymbol or asset, userAddress, amount, txHash",
         },
         { status: 400 }
       );
@@ -46,33 +57,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get supported tokens from chain config
-    const vaultContracts = VAULT_CONTRACTS[chainId];
-    
-    if (!vaultContracts) {
+    const normalizedSymbol = resolvedSymbol.toUpperCase();
+    const mappedAsset = mapTokenSymbolToAsset(resolvedSymbol);
+    if (!mappedAsset) {
       return NextResponse.json(
-        { error: `Chain ${chainId} not supported for deposits` },
+        { error: `Unsupported token: ${resolvedSymbol}` },
         { status: 400 }
       );
     }
-    
-    const supportedSymbols = Object.keys(vaultContracts);
-    const normalizedSymbol = tokenSymbol.toUpperCase();
-    
-    if (!supportedSymbols.includes(normalizedSymbol)) {
-      return NextResponse.json(
-        {
-          error: `Unsupported token: ${tokenSymbol}. Supported tokens: ${supportedSymbols.join(", ")}`,
-        },
-        { status: 400 }
-      );
+
+    // Get supported tokens from chain config when chainId is provided
+    let supportedSymbols: string[] | null = null;
+    if (typeof chainId === "number") {
+      const vaultContracts = VAULT_CONTRACTS[chainId];
+      if (!vaultContracts) {
+        return NextResponse.json(
+          { error: `Chain ${chainId} not supported for deposits` },
+          { status: 400 }
+        );
+      }
+      supportedSymbols = Object.keys(vaultContracts);
+      if (!supportedSymbols.includes(normalizedSymbol)) {
+        return NextResponse.json(
+          {
+            error: `Unsupported token: ${resolvedSymbol}. Supported tokens: ${supportedSymbols.join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
     }
-    
-    const asset = normalizedSymbol;
 
     // Prepare allocation request
     const allocateRequest: AllocateRequest = {
-      asset,
+      asset: mappedAsset,
       userAddress,
       amount,
       txHash,
@@ -81,13 +98,13 @@ export async function POST(request: NextRequest) {
     };
 
     console.log("[API] Calling backend allocation service:", {
-      asset,
+      asset: mappedAsset,
       userAddress,
       amount: amount.substring(0, 10) + "...", // Log truncated amount for privacy
       txHash,
       targetGoalId: targetGoalId || 'quicksave (default)',
       lockTier: lockTier || 30,
-      chainId,
+      chainId: typeof chainId === "number" ? chainId : undefined,
       supportedSymbols,
     });
 

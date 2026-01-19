@@ -1,18 +1,19 @@
 import { useCallback } from "react";
-import { backendApiClient, type CreateGoalRequest, type GroupSavingsGoal } from "@/lib/services/backendApiService";
+import {
+  backendApiClient,
+  mapTokenSymbolToAsset,
+  type CreateGoalRequest,
+  type GroupSavingsGoal,
+} from "@/lib/services/backendApiService";
 import { reportError, reportInfo, reportWarning } from "@/lib/services/errorReportingService";
 import { formatUsdFromKes } from "@/lib/utils";
-import { getBestStablecoinForDeposit, type TokenBalance } from "@/lib/services/balanceService";
-import { getContract, prepareContractCall } from "thirdweb";
+import { type TokenBalance } from "@/lib/services/balanceService";
 import { parseUnits } from "viem";
-import { getVaultAddress, hasVaultContracts } from "@/config/chainConfig";
-import { vaultABI } from "@/lib/constants";
 import { activityService } from "@/lib/services/activityService";
 
 interface UseGoalOperationsProps {
   address?: string;
   chain: any;
-  client: any;
   getKESRate: () => number | null;
   setCustomGoalLoading: (loading: boolean) => void;
   setCustomGoalModalOpen: (open: boolean) => void;
@@ -25,13 +26,19 @@ interface UseGoalOperationsProps {
   fetchUserGoals: () => void;
   fetchGroupGoals: () => void;
   refreshUserPortfolio?: (options?: { silent?: boolean }) => void;
+  handleWalletDeposit: (
+    depositAmount: string,
+    onStatus: (status: string) => void,
+    onSuccess: (receipt: any, usdAmount: number, token: any) => void,
+    onError: (error: Error) => void,
+    options?: { depositMethod?: "ONCHAIN" | "MPESA"; token?: TokenBalance }
+  ) => Promise<void>;
 }
 
 export function useGoalOperations(props: UseGoalOperationsProps) {
   const {
     address,
     chain,
-    client,
     getKESRate,
     setCustomGoalLoading,
     setCustomGoalModalOpen,
@@ -44,6 +51,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
     fetchUserGoals,
     fetchGroupGoals,
     refreshUserPortfolio,
+    handleWalletDeposit,
   } = props;
 
   const handleCreateCustomGoal = useCallback(
@@ -227,7 +235,11 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
     async (
       selectedGoalToJoin: GroupSavingsGoal | null,
       amount: string,
-      options?: { depositMethod?: "ONCHAIN" | "MPESA"; token?: TokenBalance }
+      options?: {
+        depositMethod?: "ONCHAIN" | "MPESA";
+        token?: TokenBalance;
+        context?: "join" | "deposit";
+      }
     ) => {
       if (!selectedGoalToJoin || !address) return;
       if (!chain?.id) {
@@ -237,92 +249,128 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
 
       setJoinGoalLoading(true);
       setJoinGoalError(null);
+      const errorFallback =
+        options?.context === "deposit"
+          ? "Deposit failed. Please try again."
+          : "Failed to join group goal";
+      const resolveErrorMessage = (error: unknown) => {
+        if (error instanceof Error && error.message) return error.message;
+        if (typeof error === "string" && error.trim()) return error;
+        if (error && typeof error === "object") {
+          const possibleMessage =
+            (error as { message?: string; error?: string; shortMessage?: string; reason?: string })
+              .message ||
+            (error as { error?: string }).error ||
+            (error as { shortMessage?: string }).shortMessage ||
+            (error as { reason?: string }).reason;
+          if (typeof possibleMessage === "string" && possibleMessage.trim()) {
+            return possibleMessage;
+          }
+        }
+        return errorFallback;
+      };
 
       try {
         const depositMethod = options?.depositMethod ?? "MPESA";
-        let usdAmount = 0;
-        if (depositMethod === "ONCHAIN") {
-          const parsedAmount = parseFloat(amount);
-          if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-            throw new Error("Enter a valid amount");
-          }
-          usdAmount = parsedAmount;
-        } else {
-          const exchangeRate = getKESRate();
-          if (!exchangeRate) {
-            throw new Error("Exchange rate not available");
-          }
-          const kesAmount = parseFloat(amount);
-          usdAmount = formatUsdFromKes(kesAmount, exchangeRate);
-        }
+        const selectedToken = options?.token || null;
 
-        const preferredToken = options?.token || null;
-        const bestToken =
-          preferredToken || (await getBestStablecoinForDeposit(address, chain.id));
-        if (!bestToken) {
-          throw new Error(
-            "No stablecoin with balance available. Please add funds to your wallet first."
-          );
-        }
+        await handleWalletDeposit(
+          amount,
+          () => {},
+          async (receipt, usdAmount, token) => {
+            try {
+              const resolvedToken = token || selectedToken;
+              const tokenSymbol = resolvedToken?.symbol;
+              const mappedAsset = tokenSymbol
+                ? mapTokenSymbolToAsset(tokenSymbol)
+                : null;
 
-        if (bestToken.balance < usdAmount) {
-          throw new Error(
-            `Insufficient balance. You have $${bestToken.balance.toFixed(
-              2
-            )} but need $${usdAmount.toFixed(2)}`
-          );
-        }
+              if (!mappedAsset) {
+                throw new Error("Unsupported token for group goal deposit");
+              }
 
-        const selectedToken = {
-          address: bestToken.address,
-          symbol: bestToken.symbol,
-          decimals: bestToken.decimals,
-        };
+              const targetGoalId =
+                selectedGoalToJoin.onChainGoals?.[mappedAsset] ||
+                selectedGoalToJoin.goalIds?.[mappedAsset];
+              if (!targetGoalId) {
+                throw new Error("This group goal cannot accept the selected asset");
+              }
 
-        const chainId = chain.id;
-        const isVaultChain = hasVaultContracts(chainId);
+              const decimals = resolvedToken?.decimals ?? 6;
+              const amountWei = parseUnits(usdAmount.toString(), decimals).toString();
 
-        if (!isVaultChain) {
-          throw new Error("This chain is not yet supported for deposits");
-        }
+              await backendApiClient.joinGoalWithAllocation({
+                asset: mappedAsset,
+                userAddress: address,
+                amount: amountWei,
+                txHash: receipt.transactionHash,
+                targetGoalId,
+                tokenSymbol: tokenSymbol || undefined,
+                chainId: chain.id,
+              });
 
-        const amountWei = parseUnits(usdAmount.toString(), selectedToken.decimals);
-        const vaultAddress = getVaultAddress(chainId, selectedToken.symbol);
+              activityService.trackDeposit(
+                usdAmount,
+                tokenSymbol || "USDC",
+                receipt.transactionHash,
+                selectedGoalToJoin.name,
+                address
+              );
 
-        const vaultContract = getContract({
-          client,
-          chain: chain,
-          address: vaultAddress,
-          abi: vaultABI,
-        });
+              reportInfo("Group goal deposit completed", {
+                component: "useGoalOperations",
+                operation: "handleJoinGoalWithAmount",
+                transactionHash: receipt.transactionHash,
+                goalId: selectedGoalToJoin.metaGoalId,
+              });
 
-        const lockTierId = 1;
+              fetchGroupGoals();
+              refreshUserPortfolio?.();
+            } catch (allocationError) {
+              reportWarning("Deposit completed but allocation failed", {
+                component: "useGoalOperations",
+                operation: "handleJoinGoalWithAmount",
+                additional: { error: allocationError },
+              });
 
-        const depositTx = prepareContractCall({
-          contract: vaultContract,
-          method: "deposit",
-          params: [amountWei, BigInt(lockTierId)],
-          erc20Value: {
-            tokenAddress: selectedToken.address,
-            amountWei,
+              setJoinGoalError(resolveErrorMessage(allocationError));
+            } finally {
+              setJoinGoalLoading(false);
+            }
           },
-        });
-
-        // Transaction processing would continue here...
-        // Omitted for brevity as this is complex blockchain logic
+          (error) => {
+            setJoinGoalError(resolveErrorMessage(error));
+            setJoinGoalLoading(false);
+            reportError(resolveErrorMessage(error), {
+              component: "useGoalOperations",
+              operation: "handleJoinGoalWithAmount",
+              additional: { error },
+            });
+          },
+          {
+            depositMethod,
+            token: selectedToken || undefined,
+          }
+        );
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to join group goal";
-        setJoinGoalError(errorMessage);
-        reportError("Failed to join group goal", {
+        setJoinGoalError(resolveErrorMessage(error));
+        setJoinGoalLoading(false);
+        reportError(resolveErrorMessage(error), {
           component: "useGoalOperations",
           operation: "handleJoinGoalWithAmount",
           additional: { error },
         });
-      } finally {
-        setJoinGoalLoading(false);
       }
     },
-    [address, chain, client, getKESRate, setJoinGoalLoading, setJoinGoalError]
+    [
+      address,
+      chain,
+      fetchGroupGoals,
+      handleWalletDeposit,
+      refreshUserPortfolio,
+      setJoinGoalLoading,
+      setJoinGoalError,
+    ]
   );
 
   return {

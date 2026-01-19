@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
             amountFallback: deposit.amountInUsd || deposit.amount,
             txHash: updateData.txHash,
             providerPayload: body,
+            targetGoalId: deposit.targetGoalId,
             source: 'webhook',
           });
         } else {

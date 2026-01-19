@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       amountFallback: transaction.amount,
       txHash: transaction.txHash,
       providerPayload: transaction.provider?.lastWebhookPayload || transaction.provider?.lastStatusPayload,
+      targetGoalId: transaction.targetGoalId,
       source: "retry",
     });
 

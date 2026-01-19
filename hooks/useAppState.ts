@@ -85,6 +85,7 @@ export function useAppState() {
   // Onramp Modal State
   const [showOnrampModal, setShowOnrampModal] = useState(false);
   const [selectedTokenForOnramp, setSelectedTokenForOnramp] = useState("");
+  const [onrampTargetGoalId, setOnrampTargetGoalId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const toggleBalanceVisibility = () => setShowBalances(!showBalances);
@@ -206,6 +207,8 @@ export function useAppState() {
     setShowOnrampModal,
     selectedTokenForOnramp,
     setSelectedTokenForOnramp,
+    onrampTargetGoalId,
+    setOnrampTargetGoalId,
     copied,
     setCopied,
   };

@@ -37,6 +37,7 @@ interface AllocateOnrampInput {
   amountFallback?: string;
   txHash?: string;
   providerPayload?: unknown;
+  targetGoalId?: string;
   source: AllocationSource;
 }
 
@@ -136,6 +137,7 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
     amount?: string;
     amountInUsd?: string;
     asset?: string;
+    targetGoalId?: string;
     provider?: {
       lastWebhookPayload?: unknown;
       lastStatusPayload?: unknown;
@@ -202,6 +204,7 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
     userAddress: input.userAddress,
     amount: amountInWei,
     txHash: input.txHash,
+    targetGoalId: input.targetGoalId || deposit.targetGoalId,
     ...(providerPayload ? { providerPayload } : {}),
   };
 
