@@ -35,13 +35,21 @@ interface ClanTabProps {
   onJoinGroupGoalWithAmount: (
     goal: GroupSavingsGoal,
     amount: string,
-    options?: { depositMethod?: "ONCHAIN" | "MPESA"; token?: TokenBalance }
+    options?: {
+      depositMethod?: "ONCHAIN" | "MPESA";
+      token?: TokenBalance;
+      context?: "join" | "deposit";
+    }
   ) => void;
   exchangeRate?: number;
-  isJoinGoalLoading: boolean;
-  joinGoalError: string | null;
+  isDepositLoading: boolean;
+  depositError: string | null;
+  depositSuccess: { amount: string } | null;
+  transactionStatus: string | null;
+  onResetDepositState: () => void;
   setDepositMethod: (method: "ONCHAIN" | "MPESA") => void;
   setShowOnrampModal: (show: boolean) => void;
+  setOnrampTargetGoalId: (goalId: string | null) => void;
   showOnrampModal: boolean;
 }
 
@@ -108,11 +116,15 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   onOpenWithdrawActions,
   onJoinGroupGoalWithAmount,
   exchangeRate,
-  isJoinGoalLoading,
-  joinGoalError,
+  isDepositLoading,
+  depositError,
+  depositSuccess,
+  onResetDepositState,
   setDepositMethod,
   setShowOnrampModal,
+  setOnrampTargetGoalId,
   showOnrampModal,
+  transactionStatus,
 }) => {
   const activeAccount = useActiveAccount();
   const { chain } = useChain();
@@ -125,9 +137,6 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const [inviteAddress, setInviteAddress] = useState("");
   const [isInviting, setIsInviting] = useState(false);
   const [clanDepositMethod, setClanDepositMethod] = useState<"ONCHAIN" | "MPESA">("ONCHAIN");
-  const [depositAttempted, setDepositAttempted] = useState(false);
-  const [submittedDepositAmount, setSubmittedDepositAmount] = useState<string | null>(null);
-  const [depositSuccess, setDepositSuccess] = useState<{ amount: string } | null>(null);
   const [stablecoinBalances, setStablecoinBalances] = useState<TokenBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [selectedDepositToken, setSelectedDepositToken] = useState<TokenBalance | null>(null);
@@ -199,26 +208,29 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   };
 
   const resetDepositFlow = useCallback(() => {
-    setDepositAttempted(false);
-    setSubmittedDepositAmount(null);
-    setDepositSuccess(null);
-  }, []);
+    onResetDepositState();
+  }, [onResetDepositState]);
 
   useEffect(() => {
-    if (!isDepositModalOpen) {
+    if (!isDepositModalOpen && !isDepositLoading) {
+      if (depositSuccess) {
+        toast.success("Deposit complete.");
+      } else if (depositError) {
+        toast.error(depositError);
+      }
       resetDepositFlow();
     }
-  }, [isDepositModalOpen, resetDepositFlow]);
+  }, [
+    isDepositModalOpen,
+    isDepositLoading,
+    depositSuccess,
+    depositError,
+    resetDepositFlow,
+  ]);
 
   useEffect(() => {
     resetDepositFlow();
   }, [selectedGoal?.metaGoalId, resetDepositFlow]);
-
-  useEffect(() => {
-    if (!depositAttempted || isJoinGoalLoading) return;
-    if (joinGoalError || !submittedDepositAmount) return;
-    setDepositSuccess({ amount: submittedDepositAmount });
-  }, [depositAttempted, isJoinGoalLoading, joinGoalError, submittedDepositAmount]);
 
   const pickDefaultToken = useCallback((balances: TokenBalance[]) => {
     const priorityOrder = ["USDC", "USDT", "CUSD"];
@@ -425,14 +437,18 @@ export const ClanTab: React.FC<ClanTabProps> = ({
         onActionSelect={(id) => {
           setIsSaveActionsOpen(false);
           if (id === "onramp") {
+            const targetGoalId =
+              selectedGoal?.onChainGoals?.USDC || selectedGoal?.goalIds?.USDC || null;
             setClanDepositMethod("MPESA");
             setDepositAmount("100");
             setDepositMethod("MPESA");
+            setOnrampTargetGoalId(targetGoalId);
             setShowOnrampModal(true);
           } else {
             setClanDepositMethod("ONCHAIN");
             setDepositAmount("0");
             setDepositMethod("ONCHAIN");
+            setOnrampTargetGoalId(null);
             setIsAmountModalOpen(true);
           }
         }}
@@ -461,20 +477,19 @@ export const ClanTab: React.FC<ClanTabProps> = ({
             isOpen={isDepositModalOpen}
             onClose={() => {
               setIsDepositModalOpen(false);
-              resetDepositFlow();
             }}
             amount={depositAmount}
             onDeposit={() => {
-              setDepositSuccess(null);
-              setDepositAttempted(true);
-              setSubmittedDepositAmount(depositAmount);
+              resetDepositFlow();
               onJoinGroupGoalWithAmount(selectedGoal, depositAmount, {
                 depositMethod: clanDepositMethod,
                 token: selectedDepositToken || undefined,
+                context: "deposit",
               });
             }}
-            isLoading={isJoinGoalLoading}
-            error={joinGoalError}
+            isLoading={isDepositLoading}
+            error={depositError}
+            transactionStatus={transactionStatus}
             depositSuccess={depositSuccess}
             goalTitle={selectedGoal.name}
             depositMethod={clanDepositMethod}

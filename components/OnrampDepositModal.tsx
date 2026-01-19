@@ -28,6 +28,7 @@ interface OnrampDepositModalProps {
   onClose: () => void;
   selectedAsset: string;
   assetSymbol: string;
+  targetGoalId?: string;
   onSuccess?: (transactionCode: string, amount: number) => void;
 }
 
@@ -36,6 +37,7 @@ export function OnrampDepositModal({
   onClose,
   selectedAsset,
   assetSymbol,
+  targetGoalId,
   onSuccess,
 }: OnrampDepositModalProps) {
   const account = useActiveAccount();
@@ -204,6 +206,7 @@ export function OnrampDepositModal({
         chain: chain?.name || "celo",
         asset: selectedAsset,
         address: account.address,
+        target_goal_id: targetGoalId,
       };
       const result = await onrampService.initiateOnramp(onrampRequest);
       if (result.success) {

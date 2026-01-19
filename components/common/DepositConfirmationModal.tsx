@@ -181,6 +181,13 @@ export const DepositConfirmationModal = ({
                     : "Check your phone for the M-Pesa prompt"}
                 </p>
               </div>
+
+              {transactionStatus && (
+                <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold text-white/70 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" />
+                  <span>{transactionStatus}</span>
+                </div>
+              )}
             </motion.div>
           )}
 

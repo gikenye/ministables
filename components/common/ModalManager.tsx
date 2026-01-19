@@ -104,6 +104,7 @@ interface ModalManagerProps {
   // Onramp Modal
   showOnrampModal: boolean;
   selectedTokenForOnramp: string;
+  onrampTargetGoalId: string | null;
   tokenInfos: any;
   onOnrampClose: () => void;
   onOnrampSuccess: () => void;
@@ -183,6 +184,7 @@ export function ModalManager(props: ModalManagerProps) {
     onSettlementTransfer,
     showOnrampModal,
     selectedTokenForOnramp,
+    onrampTargetGoalId,
     tokenInfos,
     onOnrampClose,
     onOnrampSuccess,
@@ -650,6 +652,7 @@ export function ModalManager(props: ModalManagerProps) {
         onClose={onOnrampClose}
         selectedAsset={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
         assetSymbol={tokenInfos[selectedTokenForOnramp]?.symbol || "USDC"}
+        targetGoalId={onrampTargetGoalId || undefined}
         onSuccess={onOnrampSuccess}
       />
     </>

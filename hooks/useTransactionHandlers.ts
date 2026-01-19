@@ -60,6 +60,7 @@ export function useTransactionHandlers() {
     }
 
     setDepositError(userMessage);
+    setIsDepositLoading(false);
   };
 
   /**
@@ -131,6 +132,8 @@ export function useTransactionHandlers() {
           amount: amountWei.toString(),
           txHash: receipt.transactionHash,
           targetGoalId,
+          tokenSymbol: selectedToken?.symbol || defaultToken.symbol,
+          chainId: chain?.id,
         };
 
         try {

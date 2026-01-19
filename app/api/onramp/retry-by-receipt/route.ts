@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       providerPayload:
         transaction.provider?.lastWebhookPayload ||
         transaction.provider?.lastStatusPayload,
+      targetGoalId: transaction.targetGoalId,
       source: "retry",
     });
 

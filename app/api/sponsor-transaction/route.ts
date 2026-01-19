@@ -50,14 +50,14 @@ export async function POST(request: NextRequest) {
     if (!userAddress || !chainIdRaw) {
       return NextResponse.json(
         { error: "Missing required fields: userAddress, chainId" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!ethers.utils.isAddress(userAddress)) {
       return NextResponse.json(
         { error: "Invalid userAddress format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -70,14 +70,14 @@ export async function POST(request: NextRequest) {
     if (!GAS_SPONSORSHIP_CONFIG.ENABLED) {
       return NextResponse.json(
         { error: "Gas sponsorship is disabled" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     if (!GAS_SPONSORSHIP_CONFIG.SPONSOR_PK) {
       return NextResponse.json(
         { error: "Sponsor wallet not configured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     if (!rpcUrl) {
       return NextResponse.json(
         { error: `Unsupported chain ${chainId}` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -94,13 +94,15 @@ export async function POST(request: NextRequest) {
     const normalizedGasLimit = normalizeGasLimit(gasLimit);
 
     const network = RPC_NETWORKS[chainId];
+    // Next.js (Node/undici) + ethers web fetcher can throw: Referrer "client" is not a valid URL.
+    // Passing a ConnectionInfo with skipFetchSetup avoids ethers' fetch setup (including setting referrer).
     const provider = new ethers.providers.StaticJsonRpcProvider(
-      rpcUrl,
-      network
+      { url: rpcUrl, skipFetchSetup: true },
+      network,
     );
     const sponsorWallet = new ethers.Wallet(
       GAS_SPONSORSHIP_CONFIG.SPONSOR_PK,
-      provider
+      provider,
     );
 
     const feeData = await provider.getFeeData();
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     if (maxFeePerGas.lte(0)) {
       return NextResponse.json(
         { error: "Unable to estimate gas fee" },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
@@ -120,13 +122,13 @@ export async function POST(request: NextRequest) {
       userAddress,
       estimatedGas,
       provider,
-      sponsorWallet
+      sponsorWallet,
     );
 
     if (!sponsorResult.success) {
       return NextResponse.json(
         { error: sponsorResult.error || "Gas sponsorship failed" },
-        { status: getErrorStatus(sponsorResult.error) }
+        { status: getErrorStatus(sponsorResult.error) },
       );
     }
 
@@ -137,18 +139,21 @@ export async function POST(request: NextRequest) {
       gasLimit: normalizedGasLimit,
       sponsoredAmountWei: estimatedGas.toString(),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[API] Gas sponsorship failed:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+
+    const message =
+      process.env.NODE_ENV === "development"
+        ? error?.message || String(error)
+        : "Internal server error";
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function GET() {
   return NextResponse.json(
     { error: "Method not allowed. Use POST." },
-    { status: 405 }
+    { status: 405 },
   );
 }

@@ -8,8 +8,9 @@ import {
   SupportedAsset,
 } from "@/lib/services/backendApiService";
 import { getVaultAddress } from "@/config/chainConfig";
-import { celo } from "thirdweb/chains";
 import { reportError, reportInfo } from "@/lib/services/errorReportingService";
+import { celo } from "thirdweb/chains";
+import { useChain } from "@/components/ChainProvider";
 
 // Enhanced goal interface that combines backend data with frontend needs
 export interface BackendGoal
@@ -60,6 +61,7 @@ export function useBackendGoals(
   tokenSymbol: string = "USDC"
 ): UseBackendGoalsResult {
   const account = useActiveAccount();
+  const { chain } = useChain();
   const [goals, setGoals] = useState<BackendGoal[]>([]);
   const [quicksaveGoal, setQuicksaveGoal] = useState<BackendGoal | null>(null);
   const [loading, setLoading] = useState(false);
@@ -170,9 +172,10 @@ export function useBackendGoals(
           tokenSymbol: symbol,
         });
 
+        const chainId = chain?.id || celo.id;
         const params = new URLSearchParams({
           userAddress: address,
-          vaultAddress: getVaultAddress(celo.id, symbol),
+          vaultAddress: getVaultAddress(chainId, symbol),
         });
         const response = await fetch(`/api/user-balances?${params}`);
 
@@ -208,7 +211,7 @@ export function useBackendGoals(
         return null;
       }
     },
-    [account?.address, tokenSymbol]
+    [account?.address, chain?.id, tokenSymbol]
   );
 
   // Fetch and update quicksave goal

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { backendApiClient } from "@/lib/services/backendApiService";
 import { reportError, reportWarning } from "@/lib/services/errorReportingService";
 
@@ -41,16 +41,43 @@ export function useDataFetching(props: UseDataFetchingProps) {
     setMyGroupsLoading,
   } = props;
 
+  // Track the latest address so we can ignore stale async results after disconnect/account switch
+  const addressRef = useRef<string | undefined>(address);
+  useEffect(() => {
+    addressRef.current = address;
+  }, [address]);
+
+  // Per-operation request ids so only the latest result applies
+  const portfolioReqIdRef = useRef(0);
+  const goalsReqIdRef = useRef(0);
+  const leaderboardReqIdRef = useRef(0);
+  const groupGoalsReqIdRef = useRef(0);
+  const myGroupsReqIdRef = useRef(0);
+
+  // Abort controllers for fetch() calls
+  const portfolioAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      portfolioAbortRef.current?.abort();
+    };
+  }, []);
+
   const fetchUserPortfolio = useCallback(async () => {
     if (!address) return;
+
+    const reqId = ++portfolioReqIdRef.current;
+    const reqAddress = address;
 
     setPortfolioLoading(true);
     setPortfolioError(null);
 
     try {
       const data = await backendApiClient.getUserPortfolio(address);
+      if (portfolioReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setUserPortfolio(data);
     } catch (error) {
+      if (portfolioReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setPortfolioError(errorMessage);
       setUserPortfolio({
@@ -65,12 +92,22 @@ export function useDataFetching(props: UseDataFetchingProps) {
         additional: { error: errorMessage },
       });
     } finally {
-      setPortfolioLoading(false);
+      if (portfolioReqIdRef.current === reqId && addressRef.current === reqAddress) {
+        setPortfolioLoading(false);
+      }
     }
   }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
 
   const refreshUserPortfolio = useCallback(async (options?: { silent?: boolean }) => {
     if (!address) return;
+
+    const reqId = ++portfolioReqIdRef.current;
+    const reqAddress = address;
+
+    // Cancel any in-flight portfolio refresh
+    portfolioAbortRef.current?.abort();
+    const controller = new AbortController();
+    portfolioAbortRef.current = controller;
 
     const shouldSetLoading = !options?.silent;
     if (shouldSetLoading) {
@@ -83,6 +120,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userAddress: address }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -95,8 +133,11 @@ export function useDataFetching(props: UseDataFetchingProps) {
       }
 
       const data = await response.json();
+      if (portfolioReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setUserPortfolio(data);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (portfolioReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       if (shouldSetLoading) {
         setPortfolioError(errorMessage);
@@ -113,7 +154,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         additional: { error: errorMessage },
       });
     } finally {
-      if (shouldSetLoading) {
+      if (shouldSetLoading && portfolioReqIdRef.current === reqId && addressRef.current === reqAddress) {
         setPortfolioLoading(false);
       }
     }
@@ -121,10 +162,13 @@ export function useDataFetching(props: UseDataFetchingProps) {
 
   const fetchUserGoals = useCallback(async () => {
     if (!address) return;
+    const reqId = ++goalsReqIdRef.current;
+    const reqAddress = address;
     setGoalsLoading(true);
     setGoalsError(null);
     try {
       const goals = await backendApiClient.getGoalsWithProgress(address);
+      if (goalsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setUserGoals(goals);
 
       const completedGoals = goals.filter((goal) => goal.progressPercent >= 100 && goal.metaGoalId);
@@ -146,14 +190,19 @@ export function useDataFetching(props: UseDataFetchingProps) {
         );
       }
     } catch (error) {
+      if (goalsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setGoalsError(error instanceof Error ? error.message : "Failed to load goals");
       setUserGoals([]);
     } finally {
-      setGoalsLoading(false);
+      if (goalsReqIdRef.current === reqId && addressRef.current === reqAddress) {
+        setGoalsLoading(false);
+      }
     }
   }, [address, setUserGoals, setGoalsLoading, setGoalsError]);
 
   const fetchLeaderboard = useCallback(async () => {
+    const reqId = ++leaderboardReqIdRef.current;
+    const reqAddress = address;
     setLeaderboardLoading(true);
     setLeaderboardError(null);
     try {
@@ -161,6 +210,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         backendApiClient.getLeaderboard(0, 10),
         address ? backendApiClient.getUserPortfolio(address) : null,
       ]);
+      if (leaderboardReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setLeaderboard(
         leaderboardData.users.map((entry: any) => ({
           ...entry,
@@ -184,32 +234,43 @@ export function useDataFetching(props: UseDataFetchingProps) {
         });
       }
     } catch (error) {
+      if (leaderboardReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setLeaderboardError(error instanceof Error ? error.message : "Failed to load leaderboard");
       setLeaderboard([]);
     } finally {
-      setLeaderboardLoading(false);
+      if (leaderboardReqIdRef.current === reqId && addressRef.current === reqAddress) {
+        setLeaderboardLoading(false);
+      }
     }
   }, [address, setLeaderboard, setLeaderboardLoading, setLeaderboardError, setUserScore]);
 
   const fetchGroupGoals = useCallback(async () => {
+    const reqId = ++groupGoalsReqIdRef.current;
     setGroupGoalsLoading(true);
     setGroupGoalsError(null);
     try {
       const response = await backendApiClient.getPublicGoals();
+      if (groupGoalsReqIdRef.current !== reqId) return;
       setGroupGoals(response.goals);
     } catch (error) {
+      if (groupGoalsReqIdRef.current !== reqId) return;
       setGroupGoalsError(error instanceof Error ? error.message : "Failed to load group goals");
       setGroupGoals([]);
     } finally {
-      setGroupGoalsLoading(false);
+      if (groupGoalsReqIdRef.current === reqId) {
+        setGroupGoalsLoading(false);
+      }
     }
   }, [setGroupGoals, setGroupGoalsLoading, setGroupGoalsError]);
 
   const fetchMyGroups = useCallback(async () => {
     if (!address) return;
+    const reqId = ++myGroupsReqIdRef.current;
+    const reqAddress = address;
     setMyGroupsLoading(true);
     try {
       const response = await backendApiClient.getMyGroups(address);
+      if (myGroupsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       // Show base group data immediately, then enrich with progress later.
       setMyGroups(response);
       setMyGroupsLoading(false);
@@ -248,7 +309,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
             userBalanceUSD: progress.userBalanceUSD ?? goal.userBalanceUSD,
           };
         });
-
+      if (myGroupsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setMyGroups({
         ...response,
         public: {
@@ -261,12 +322,19 @@ export function useDataFetching(props: UseDataFetchingProps) {
         },
       });
     } catch (error) {
+      if (myGroupsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       reportError("Failed to fetch user's groups", {
         component: "useDataFetching",
         operation: "fetchMyGroups",
         additional: { error },
       });
       setMyGroups(null);
+      if (myGroupsReqIdRef.current === reqId && addressRef.current === reqAddress) {
+        setMyGroupsLoading(false);
+      }
+      return;
+    }
+    if (myGroupsReqIdRef.current === reqId && addressRef.current === reqAddress) {
       setMyGroupsLoading(false);
     }
   }, [address, setMyGroups, setMyGroupsLoading]);

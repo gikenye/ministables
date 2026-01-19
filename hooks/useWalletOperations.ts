@@ -55,7 +55,7 @@ export function useWalletOperations({
    */
   const prepareQuickSaveDepositTransaction = async (
     amount: string,
-    token?: any
+    token?: any,
   ) => {
     const selectedToken = token || defaultToken;
     if (!selectedToken || !account || !chain) {
@@ -117,7 +117,7 @@ export function useWalletOperations({
     onStatus: (status: string) => void,
     onSuccess: (receipt: any, usdAmount: number, token: any) => void,
     onError: (error: Error) => void,
-    options: QuickSaveDepositOptions = {}
+    options: QuickSaveDepositOptions = {},
   ) => {
     if (!account) {
       setPendingDeposit(true);
@@ -148,8 +148,8 @@ export function useWalletOperations({
       if (!bestToken) {
         onError(
           new Error(
-            "You have $0 in your wallet. To deposit, please add funds using Mobile Money or transfer from another wallet."
-          )
+            "You have $0 in your wallet. To deposit, please add funds using Mobile Money or transfer from another wallet.",
+          ),
         );
         return;
       }
@@ -179,7 +179,7 @@ export function useWalletOperations({
 
         if (!exchangeRateResponse.ok) {
           throw new Error(
-            "Failed to get exchange rate for KES to USD conversion"
+            "Failed to get exchange rate for KES to USD conversion",
           );
         }
 
@@ -195,7 +195,7 @@ export function useWalletOperations({
 
         if (!sellingRate || sellingRate <= 0) {
           throw new Error(
-            "Exchange rate data does not contain valid selling rate"
+            "Exchange rate data does not contain valid selling rate",
           );
         }
 
@@ -208,9 +208,9 @@ export function useWalletOperations({
         onError(
           new Error(
             `Amount exceeds available balance of $${walletBalance.toFixed(
-              2
-            )} in ${selectedToken.symbol}`
-          )
+              2,
+            )} in ${selectedToken.symbol}`,
+          ),
         );
         return;
       }
@@ -232,7 +232,7 @@ export function useWalletOperations({
       onStatus("Setting up your deposit...");
       const depositTx = await prepareQuickSaveDepositTransaction(
         usdAmount.toString(),
-        selectedToken
+        selectedToken,
       );
 
       // Get approval if needed
@@ -291,15 +291,25 @@ export function useWalletOperations({
           feeData.maxFeePerGas || feeData.gasPrice || ethers.BigNumber.from(0);
         if (maxFeePerGas.lte(0)) return null;
 
+        console.log(
+          "CELO: maxFeePerGas:",
+          maxFeePerGas.toString(),
+          "gasLimit:",
+          gasLimit,
+        );
+
         const estimatedGasCost = maxFeePerGas.mul(gasLimit);
+
+        console.log(": estimatedGasCost:", estimatedGasCost.toString());
+
         return balance.lt(estimatedGasCost)
           ? estimatedGasCost.sub(balance)
-          : null;
+          : ethers.BigNumber.from(0);
       };
 
       const sponsorGasLimit = approveTx ? 250000 : 180000;
       const gasShortfall = await getGasShortfall(sponsorGasLimit);
-      const shouldSponsor = gasShortfall === null || gasShortfall.gt(0);
+      const shouldSponsor = gasShortfall === null ? true : gasShortfall.gt(0);
 
       let depositReceipt: any;
 
@@ -314,7 +324,7 @@ export function useWalletOperations({
               sponsorGas: true,
               gasLimit: sponsorGasLimit,
               chainId: chain.id,
-            }
+            },
           );
         } catch (error) {
           if (!isSponsorshipError(error)) {
@@ -330,6 +340,12 @@ export function useWalletOperations({
               gasShortfall: gasShortfall ? gasShortfall.toString() : "unknown",
             },
           });
+          if (gasShortfall && gasShortfall.gt(0)) {
+            throw new Error(
+              `Gas sponsorship is unavailable and your wallet is short ~${ethers.utils.formatEther(gasShortfall)} CELO for gas.`,
+            );
+          }
+
           depositReceipt = await executeDepositFlow();
         }
       } else {
@@ -345,13 +361,17 @@ export function useWalletOperations({
   const handleVaultWithdrawal = async (
     tokenSymbol: string,
     depositIds: number[],
-    sponsorGas: boolean = true
+    sponsorGas: boolean = true,
   ) => {
     if (!account?.address) {
-      throw new Error("Wallet not connected. Please connect your wallet to withdraw.");
+      throw new Error(
+        "Wallet not connected. Please connect your wallet to withdraw.",
+      );
     }
     if (!chain?.id) {
-      throw new Error("Network not detected. Please ensure you're connected to a supported network.");
+      throw new Error(
+        "Network not detected. Please ensure you're connected to a supported network.",
+      );
     }
     if (!depositIds || depositIds.length === 0) {
       throw new Error("No deposits selected for withdrawal.");
@@ -360,34 +380,44 @@ export function useWalletOperations({
     const userAddress = account.address;
     const vaultAddress = getVaultAddress(chain.id, tokenSymbol);
     if (!vaultAddress) {
-      throw new Error(`No vault address found for ${tokenSymbol} on chain ${chain.id}`);
+      throw new Error(
+        `No vault address found for ${tokenSymbol} on chain ${chain.id}`,
+      );
     }
 
     try {
       await logGasInfo(userAddress);
 
-        await executeWithGasSponsorship(
-          userAddress,
-          async () => {
+      await executeWithGasSponsorship(
+        userAddress,
+        async () => {
           for (const depositId of depositIds) {
-            const vaultContract = getContract({ client, chain, address: vaultAddress });
+            const vaultContract = getContract({
+              client,
+              chain,
+              address: vaultAddress,
+            });
             const withdrawTx = prepareContractCall({
               contract: vaultContract,
               method: withdrawMethodABI,
               params: [BigInt(depositId)],
             });
             const result = await sendTransaction(withdrawTx);
-            await waitForReceipt({ client, chain, transactionHash: result.transactionHash });
-            
+            await waitForReceipt({
+              client,
+              chain,
+              transactionHash: result.transactionHash,
+            });
+
             // Track withdrawal activity
             activityService.trackWithdrawal(
               0, // Amount will be updated when we get the actual withdrawal amount
               tokenSymbol,
               result.transactionHash,
               undefined,
-              userAddress
+              userAddress,
             );
-            
+
             await fetch(`/api/goals/vault-withdraw`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -402,7 +432,7 @@ export function useWalletOperations({
             });
           }
         },
-        { sponsorGas, chainId: chain.id }
+        { sponsorGas, chainId: chain.id },
       );
     } catch (error) {
       reportError("Vault withdrawal failed", {
@@ -420,19 +450,24 @@ export function useWalletOperations({
     tokenAddress: string,
     amount: string,
     toAddress: string,
-    decimals?: number
+    decimals?: number,
   ): Promise<string> => {
     if (!account?.address) {
-      throw new Error("Wallet not connected. Please connect your wallet to transfer.");
+      throw new Error(
+        "Wallet not connected. Please connect your wallet to transfer.",
+      );
     }
     if (!chain?.id) {
-      throw new Error("Network not detected. Please ensure you're connected to a supported network.");
+      throw new Error(
+        "Network not detected. Please ensure you're connected to a supported network.",
+      );
     }
     if (!tokenAddress || !toAddress) {
       throw new Error("Missing token or destination address.");
     }
 
-    const tokenDecimals = typeof decimals === "number" ? decimals : defaultToken?.decimals || 18;
+    const tokenDecimals =
+      typeof decimals === "number" ? decimals : defaultToken?.decimals || 18;
     const amountWei = parseUnits(amount, tokenDecimals);
 
     try {

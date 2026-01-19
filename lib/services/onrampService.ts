@@ -9,6 +9,7 @@ export interface OnrampRequest {
   address: string;
   callback_url?: string;
   type?: string;
+  target_goal_id?: string;
 }
 
 export interface OnrampResponse {
@@ -192,13 +193,14 @@ class OnrampService {
   async initiateOnramp(
     request: OnrampRequest,
     currencyCode: string = "KES",
-    vaultAddress?: string
+    options?: { vaultAddress?: string; targetGoalId?: string }
   ): Promise<OnrampResponse> {
     try {
       const result = await this.makeRequest<any>("/initiate", "POST", {
         ...request,
         currency_code: currencyCode,
-        vault_address: vaultAddress,
+        vault_address: options?.vaultAddress,
+        target_goal_id: options?.targetGoalId || request.target_goal_id,
       });
 
       return {

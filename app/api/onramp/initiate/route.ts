@@ -57,7 +57,10 @@ export async function POST(request: NextRequest) {
       callback_url,
       currency_code = "KES",
       vault_address,
+      target_goal_id,
+      targetGoalId: targetGoalIdFromBody,
     } = body;
+    const targetGoalId = target_goal_id || targetGoalIdFromBody;
 
     const sanitizedRequestBody = sanitizeOnrampInitiatePayload(body);
 
@@ -188,6 +191,7 @@ export async function POST(request: NextRequest) {
       asset,
       amount: amount.toString(),
       transactionCode,
+      targetGoalId: targetGoalId || undefined,
       phoneNumber: shortcode,
       mobileNetwork: mobile_network,
       countryCode: currency_code,
@@ -209,7 +213,8 @@ export async function POST(request: NextRequest) {
           address,
           vaultAddr,
           asset,
-          chain
+          chain,
+          targetGoalId || undefined
         ),
       5000
     );
@@ -240,7 +245,8 @@ async function pollAndAllocate(
   userAddress: string,
   vaultAddress: string,
   asset: string,
-  chain: string
+  chain: string,
+  targetGoalId?: string
 ) {
   let attempts = 0;
   const maxAttempts = 60;
@@ -345,6 +351,7 @@ async function pollAndAllocate(
           amountInUsd: txData.amount_in_usd,
           txHash: txData.transaction_hash,
           providerPayload: statusData,
+          targetGoalId,
           source: "poller",
         });
         return;

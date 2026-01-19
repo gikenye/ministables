@@ -5,9 +5,9 @@
 
 // Environment variable configuration
 import { logger } from "@/lib/services/logger";
-
-const ALLOCATE_API_URL = process.env.NEXT_PUBLIC_ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
-if (!process.env.NEXT_PUBLIC_ALLOCATE_API_URL && !process.env.ALLOCATE_API_URL) {
+import {CHAINS} from "@/config/chainConfig";
+const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
+if (!process.env.ALLOCATE_API_URL && !process.env.ALLOCATE_API_URL) {
   logger.warn(
     "ALLOCATE_API_URL environment variable not set. Using fallback URL for development.",
     { component: "backendApiService", operation: "config" }
@@ -46,6 +46,8 @@ export interface AllocateRequest {
   providerPayload?: unknown;
   targetGoalId?: string; // Optional target goal ID for goal-specific deposits
   lockTier?: number; // Lock tier in days (default: 30)
+  tokenSymbol?: string; // Optional token symbol for local allocation API
+  chainId?: number; // Optional chain ID for local allocation API
 }
 
 export interface AllocateResponse {
@@ -123,6 +125,7 @@ export interface GroupSavingsGoal {
   isPublic: boolean;
   participantCount: number;
   createdAt: string;
+  onChainGoals?: Record<SupportedAsset, string>;
   // Additional fields used by components
   currentAmountUSD?: number;
   totalContributedUSD?: number;
@@ -164,6 +167,8 @@ export interface JoinGoalWithAllocationRequest {
   amount: string; // Amount in wei
   txHash: string;
   targetGoalId: string;
+  tokenSymbol?: string;
+  chainId?: number;
 }
 
 export interface JoinGoalResponse {
@@ -434,13 +439,9 @@ export class BackendApiClient {
   }
 
   // Join goal with allocation - allocates existing deposit to a group goal
-  async joinGoalWithAllocation(request: {
-    asset: SupportedAsset;
-    userAddress: string;
-    amount: string;
-    txHash: string;
-    targetGoalId: string;
-  }): Promise<AllocateResponse> {
+  async joinGoalWithAllocation(
+    request: JoinGoalWithAllocationRequest
+  ): Promise<AllocateResponse> {
     // Use the same allocateDeposit method for consistency
     return this.allocateDeposit({
       asset: request.asset,
@@ -448,6 +449,8 @@ export class BackendApiClient {
       amount: request.amount,
       txHash: request.txHash,
       targetGoalId: request.targetGoalId,
+      tokenSymbol: request.tokenSymbol,
+      chainId: request.chainId,
     });
   }
 
@@ -636,6 +639,10 @@ export function mapTokenSymbolToAsset(symbol: string): SupportedAsset | null {
   // Handle special case for cUSD token
   if (symbol.toUpperCase() === "CUSD") {
     return "cUSD";
+  }
+  // Handle special case for cKES token
+  if (symbol.toUpperCase() === "CKES") {
+    return "cKES";
   }
 
   const normalizedSymbol = symbol.toUpperCase();

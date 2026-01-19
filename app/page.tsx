@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -11,17 +12,14 @@ import { client } from "@/lib/thirdweb/client";
 import { useChain } from "@/components/ChainProvider";
 import { WelcomeHeader } from "@/components/common/WelcomeHeader";
 
-import {
-  AppContainer,
-  DesktopSidebar,
-  MobileBottomNav,
-  ModalManager,
-} from "@/components/common";
+import { AppContainer } from "@/components/common/AppContainer";
+import { DesktopSidebar } from "@/components/common/DesktopSidebar";
+import { MobileBottomNav } from "@/components/common/MobileBottomNav";
+import { ModalManager } from "@/components/common/ModalManager";
 import { GoalsSection } from "@/components/sections/GoalsSection";
 import { LeaderboardSection } from "@/components/sections/LeaderboardSection";
 import { RecentActivitySection } from "@/components/sections/RecentActivitySection";
 import { ClanTab } from "@/components/clan/ClanTab";
-import { NewProfile } from "@/components/common";
 import { NetworkStatusBar } from "@/components/common/NetworkStatusBar";
 
 import { useExchangeRates } from "@/hooks/useExchangeRates";
@@ -36,12 +34,32 @@ import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useCombinedGoals } from "@/hooks/useCombinedGoals";
 import type { MyGroups } from "@/lib/types/shared";
+import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
+import type { TokenBalance } from "@/lib/services/balanceService";
 
 export default function AppPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const account = useActiveAccount();
   const isConnected = !!account;
+  // Track the currently active address so we can ignore stale async fetch results after disconnect/account switch
+  const activeAddressRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeAddressRef.current = account?.address ?? null;
+  }, [account?.address]);
+
+  const expectedAddress = account?.address ?? null;
+  const guardSetter = useMemo(
+    () =>
+      (fn: (...args: any[]) => void) =>
+      (...args: any[]) => {
+        // Ignore results from requests that started under a different account
+        if (activeAddressRef.current !== expectedAddress) return;
+        fn(...args);
+      },
+    [expectedAddress]
+  );
   const { mutateAsync: sendTransaction } = useSendTransaction({
     payModal: false,
   });
@@ -78,21 +96,21 @@ export default function AppPage() {
 
   const dataFetching = useDataFetching({
     address: account?.address,
-    setUserPortfolio: state.setUserPortfolio,
-    setPortfolioLoading: state.setPortfolioLoading,
-    setPortfolioError: state.setPortfolioError,
-    setUserGoals: state.setUserGoals,
-    setGoalsLoading: state.setGoalsLoading,
-    setGoalsError: state.setGoalsError,
-    setLeaderboard: state.setLeaderboard,
-    setLeaderboardLoading: state.setLeaderboardLoading,
-    setLeaderboardError: state.setLeaderboardError,
-    setUserScore: state.setUserScore,
-    setGroupGoals: state.setGroupGoals,
-    setGroupGoalsLoading: state.setGroupGoalsLoading,
-    setGroupGoalsError: state.setGroupGoalsError,
-    setMyGroups: state.setMyGroups,
-    setMyGroupsLoading: state.setMyGroupsLoading,
+    setUserPortfolio: guardSetter(state.setUserPortfolio),
+    setPortfolioLoading: guardSetter(state.setPortfolioLoading),
+    setPortfolioError: guardSetter(state.setPortfolioError),
+    setUserGoals: guardSetter(state.setUserGoals),
+    setGoalsLoading: guardSetter(state.setGoalsLoading),
+    setGoalsError: guardSetter(state.setGoalsError),
+    setLeaderboard: guardSetter(state.setLeaderboard),
+    setLeaderboardLoading: guardSetter(state.setLeaderboardLoading),
+    setLeaderboardError: guardSetter(state.setLeaderboardError),
+    setUserScore: guardSetter(state.setUserScore),
+    setGroupGoals: guardSetter(state.setGroupGoals),
+    setGroupGoalsLoading: guardSetter(state.setGroupGoalsLoading),
+    setGroupGoalsError: guardSetter(state.setGroupGoalsError),
+    setMyGroups: guardSetter(state.setMyGroups),
+    setMyGroupsLoading: guardSetter(state.setMyGroupsLoading),
   });
 
   const { vaultPositions, vaultPositionsLoading, fetchVaultPositions } =
@@ -123,6 +141,7 @@ export default function AppPage() {
     setSaveActionsModalOpen: state.setSaveActionsModalOpen,
     setWithdrawActionsModalOpen: state.setWithdrawActionsModalOpen,
     setShowOnrampModal: state.setShowOnrampModal,
+    setOnrampTargetGoalId: state.setOnrampTargetGoalId,
     setDepositMethod: state.setDepositMethod,
     setWithdrawalModalOpen: state.setWithdrawalModalOpen,
     setMobileOfframpModalOpen: state.setMobileOfframpModalOpen,
@@ -138,7 +157,6 @@ export default function AppPage() {
   const goalOperations = useGoalOperations({
     address: account?.address,
     chain,
-    client,
     getKESRate,
     setCustomGoalLoading: state.setCustomGoalLoading,
     setCustomGoalModalOpen: state.setCustomGoalModalOpen,
@@ -151,6 +169,7 @@ export default function AppPage() {
     fetchUserGoals: dataFetching.fetchUserGoals,
     fetchGroupGoals: dataFetching.fetchGroupGoals,
     refreshUserPortfolio: dataFetching.refreshUserPortfolio,
+    handleWalletDeposit: walletOperations.handleQuickSaveDeposit,
   });
 
   const { handleKeyDown } = useKeyboardNavigation({
@@ -174,6 +193,19 @@ export default function AppPage() {
       state.setPortfolioError(null);
       state.setGoalsError(null);
       state.setLeaderboardError(null);
+
+      // Clear group state to avoid stale UI after disconnect
+      state.setGroupGoals([]);
+      state.setMyGroups(null);
+      state.setGroupGoalsError(null);
+
+      // Ensure spinners don't remain visible after disconnect
+      state.setPortfolioLoading(false);
+      state.setGoalsLoading(false);
+      state.setLeaderboardLoading(false);
+      state.setGroupGoalsLoading(false);
+      state.setMyGroupsLoading(false);
+
       return;
     }
 
@@ -211,7 +243,15 @@ export default function AppPage() {
     };
   }, [account?.address, state.activeTab]);
 
+  const beginDeposit = () => {
+    transactionHandlers.setIsDepositLoading(true);
+    transactionHandlers.setDepositError(null);
+    transactionHandlers.setTransactionStatus(null);
+    transactionHandlers.setDepositSuccess(null);
+  };
+
   const handleQuickSaveDeposit = async () => {
+    beginDeposit();
     const depositAmount = state.goalConfirmationOpen
       ? state.goalAmount
       : state.quickSaveAmount;
@@ -240,6 +280,52 @@ export default function AppPage() {
       (error) => transactionHandlers.handleDepositError(error),
       {
         depositMethod: state.depositMethod,
+        token: selectedDepositToken,
+      }
+    );
+  };
+
+  const resetDepositState = () => {
+    transactionHandlers.setIsDepositLoading(false);
+    transactionHandlers.setDepositError(null);
+    transactionHandlers.setTransactionStatus(null);
+    transactionHandlers.setDepositSuccess(null);
+  };
+
+  const handleClanDeposit = async (
+    goal: GroupSavingsGoal,
+    amount: string,
+    options?: { depositMethod?: "ONCHAIN" | "MPESA"; token?: TokenBalance }
+  ) => {
+    beginDeposit();
+    const depositMethod = options?.depositMethod ?? "ONCHAIN";
+    const selectedDepositToken =
+      options?.token ||
+      (depositMethod === "ONCHAIN" ? state.selectedDepositToken : null);
+
+    await walletOperations.handleQuickSaveDeposit(
+      amount,
+      (status) => transactionHandlers.setTransactionStatus(status),
+      (receipt, usdAmount, selectedToken) => {
+        transactionHandlers.handleDepositSuccess(
+          receipt,
+          usdAmount.toString(),
+          selectedToken,
+          defaultToken,
+          chain,
+          account,
+          true,
+          goal,
+          () => {
+            dataFetching.refreshUserPortfolio();
+            dataFetching.fetchMyGroups();
+            dataFetching.fetchGroupGoals();
+          }
+        );
+      },
+      (error) => transactionHandlers.handleDepositError(error),
+      {
+        depositMethod,
         token: selectedDepositToken,
       }
     );
@@ -399,14 +485,15 @@ export default function AppPage() {
               onOpenWithdrawActions={() =>
                 state.setWithdrawActionsModalOpen(true)
               }
-              onJoinGroupGoalWithAmount={
-                goalOperations.handleJoinGoalWithAmount
-              }
+              onJoinGroupGoalWithAmount={handleClanDeposit}
               exchangeRate={getKESRate() || undefined}
-              isJoinGoalLoading={state.joinGoalLoading}
-              joinGoalError={state.joinGoalError}
+              isDepositLoading={transactionHandlers.isDepositLoading}
+              depositError={transactionHandlers.depositError}
+              depositSuccess={transactionHandlers.depositSuccess}
+              onResetDepositState={resetDepositState}
               setDepositMethod={state.setDepositMethod}
               setShowOnrampModal={state.setShowOnrampModal}
+              setOnrampTargetGoalId={state.setOnrampTargetGoalId}
               showOnrampModal={state.showOnrampModal}
             />
           )}
@@ -506,8 +593,12 @@ export default function AppPage() {
           onMobileOfframpClose={() => state.setMobileOfframpModalOpen(false)}
           showOnrampModal={state.showOnrampModal}
           selectedTokenForOnramp={state.selectedTokenForOnramp}
+          onrampTargetGoalId={state.onrampTargetGoalId}
           tokenInfos={tokenInfos}
-          onOnrampClose={() => state.setShowOnrampModal(false)}
+          onOnrampClose={() => {
+            state.setShowOnrampModal(false);
+            state.setOnrampTargetGoalId(null);
+          }}
           onOnrampSuccess={transactionHandlers.handleOnrampSuccess}
           isDepositLoading={transactionHandlers.isDepositLoading}
           depositError={transactionHandlers.depositError}
@@ -531,3 +622,9 @@ export default function AppPage() {
     </AppContainer>
   );
 }
+
+const NewProfile = dynamic(
+  () =>
+    import("@/components/common/NewProfile").then((mod) => mod.NewProfile),
+  { ssr: false }
+);

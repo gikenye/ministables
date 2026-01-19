@@ -38,7 +38,7 @@ export { AccountSettingsCard } from "./AccountSettingsCard";
 export { SupportCard } from "./SupportCard";
 
 // New Profile System Components
-export { NewProfile } from "./NewProfile";
+// NOTE: NewProfile pulls in snarkjs/@selfxyz deps; import it directly (or via next/dynamic with ssr:false) instead of re-exporting from this barrel to avoid server bundle leaks.
 export { ProfileHero } from "./ProfileHero";
 export { StatsBar } from "./StatsBar";
 export { SettingsMenu } from "./SettingsMenu";
