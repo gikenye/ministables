@@ -37,6 +37,12 @@ import type { MyGroups } from "@/lib/types/shared";
 import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
 import type { TokenBalance } from "@/lib/services/balanceService";
 
+const NewProfile = dynamic(
+  () =>
+    import("@/components/common/NewProfile").then((mod) => mod.NewProfile),
+  { ssr: false }
+);
+
 export default function AppPage() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -622,9 +628,3 @@ export default function AppPage() {
     </AppContainer>
   );
 }
-
-const NewProfile = dynamic(
-  () =>
-    import("@/components/common/NewProfile").then((mod) => mod.NewProfile),
-  { ssr: false }
-);

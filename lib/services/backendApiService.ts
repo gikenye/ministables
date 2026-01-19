@@ -6,8 +6,14 @@
 // Environment variable configuration
 import { logger } from "@/lib/services/logger";
 import {CHAINS} from "@/config/chainConfig";
-const ALLOCATE_API_URL = process.env.ALLOCATE_API_URL || process.env.ALLOCATE_API_URL || "";
-if (!process.env.ALLOCATE_API_URL && !process.env.ALLOCATE_API_URL) {
+const ALLOCATE_API_URL =
+  process.env.ALLOCATE_API_URL ||
+  process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
+  "";
+if (
+  !process.env.ALLOCATE_API_URL &&
+  !process.env.NEXT_PUBLIC_ALLOCATE_API_URL
+) {
   logger.warn(
     "ALLOCATE_API_URL environment variable not set. Using fallback URL for development.",
     { component: "backendApiService", operation: "config" }
