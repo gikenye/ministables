@@ -154,7 +154,8 @@ export function useDataFetching(props: UseDataFetchingProps) {
         additional: { error: errorMessage },
       });
     } finally {
-      if (shouldSetLoading && portfolioReqIdRef.current === reqId && addressRef.current === reqAddress) {
+      if (portfolioReqIdRef.current === reqId && addressRef.current === reqAddress) {
+        // Always clear loading for the latest request so a silent refresh can't leave it stuck.
         setPortfolioLoading(false);
       }
     }
