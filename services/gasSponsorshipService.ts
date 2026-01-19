@@ -8,15 +8,12 @@ interface GasRequest {
 
 class GasSponsorshipService {
   private requestHistory: Map<string, GasRequest[]> = new Map();
-  private readonly MAX_REQUESTS_PER_HOUR = 5;
-  private readonly MAX_GAS_PER_DAY = ethers.utils.parseEther("0.01");
   private readonly HOUR_MS = 60 * 60 * 1000;
-  private readonly DAY_MS = 24 * this.HOUR_MS;
 
   private cleanOldRequests(userAddress: string) {
     const requests = this.requestHistory.get(userAddress) || [];
     const now = Date.now();
-    const filtered = requests.filter(req => now - req.timestamp < this.DAY_MS);
+    const filtered = requests.filter(req => now - req.timestamp < this.HOUR_MS);
     this.requestHistory.set(userAddress, filtered);
   }
 
@@ -36,20 +33,6 @@ class GasSponsorshipService {
     }
 
     this.cleanOldRequests(userAddress);
-
-    const hourlyRequests = this.getRecentRequests(userAddress, this.HOUR_MS);
-    if (hourlyRequests.length >= this.MAX_REQUESTS_PER_HOUR) {
-      return { valid: false, error: "Hourly request limit exceeded" };
-    }
-
-    const dailyRequests = this.getRecentRequests(userAddress, this.DAY_MS);
-    const dailyTotal = dailyRequests.reduce(
-      (sum, req) => sum.add(ethers.BigNumber.from(req.gasAmount)),
-      ethers.BigNumber.from(0)
-    );
-    if (dailyTotal.add(gasAmount).gt(this.MAX_GAS_PER_DAY)) {
-      return { valid: false, error: "Daily gas limit exceeded" };
-    }
 
     return { valid: true };
   }
@@ -167,16 +150,9 @@ class GasSponsorshipService {
 
   getRemainingQuota(userAddress: string): { hourly: number; daily: string } {
     this.cleanOldRequests(userAddress);
-    const hourlyRequests = this.getRecentRequests(userAddress, this.HOUR_MS);
-    const dailyRequests = this.getRecentRequests(userAddress, this.DAY_MS);
-    const dailyTotal = dailyRequests.reduce(
-      (sum, req) => sum.add(ethers.BigNumber.from(req.gasAmount)),
-      ethers.BigNumber.from(0)
-    );
-    
     return {
-      hourly: this.MAX_REQUESTS_PER_HOUR - hourlyRequests.length,
-      daily: ethers.utils.formatEther(this.MAX_GAS_PER_DAY.sub(dailyTotal)),
+      hourly: 0,
+      daily: "unlimited",
     };
   }
 }
