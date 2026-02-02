@@ -4,7 +4,10 @@ import { Analytics } from "@vercel/analytics/next";
 import ClientLayout from "./ClientLayout";
 
 const APP_NAME = "Minilend";
-const APP_URL = process.env.NEXT_PUBLIC_URL ?? "https://minilend.xyz";
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ??
+  process.env.NEXT_PUBLIC_URL ??
+  "https://app.minilend.xyz";
 const APP_DESCRIPTION = "Save for your goals, borrow for your needs";
 const inter = { className: "" };
 

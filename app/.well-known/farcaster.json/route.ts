@@ -6,7 +6,10 @@ function absoluteUrl(baseUrl: string, path: string) {
 }
 
 export async function GET() {
-  const appUrl = process.env.NEXT_PUBLIC_URL ?? "https://minilend.xyz";
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_URL ??
+    "https://app.minilend.xyz";
   const accountAssociation = {
     header: process.env.FARCASTER_ACCOUNT_ASSOC_HEADER ?? "",
     payload: process.env.FARCASTER_ACCOUNT_ASSOC_PAYLOAD ?? "",
