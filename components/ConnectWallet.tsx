@@ -25,15 +25,37 @@ const wallets = [
   createWallet("walletConnect"),
 ];
 
+const getIsMiniPay = () =>
+  typeof window !== "undefined" && Boolean(window.ethereum?.isMiniPay);
+
 export function ConnectWallet({ className }: { className?: string }) {
   const account = useActiveAccount();
-  const [isMiniPay, setIsMiniPay] = useState(false);
+  const [isMiniPay, setIsMiniPay] = useState(getIsMiniPay);
   const { chain, setChain } = useChain();
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.ethereum?.isMiniPay) {
-      setIsMiniPay(true);
+    if (typeof window === "undefined") {
+      return;
     }
+
+    const handleProviderUpdate = () => {
+      const nextIsMiniPay = getIsMiniPay();
+      setIsMiniPay((current) =>
+        current === nextIsMiniPay ? current : nextIsMiniPay
+      );
+    };
+
+    window.addEventListener("ethereum#initialized", handleProviderUpdate, {
+      once: true,
+    });
+    window.ethereum?.on?.("connect", handleProviderUpdate);
+    window.ethereum?.on?.("disconnect", handleProviderUpdate);
+
+    return () => {
+      window.removeEventListener("ethereum#initialized", handleProviderUpdate);
+      window.ethereum?.removeListener?.("connect", handleProviderUpdate);
+      window.ethereum?.removeListener?.("disconnect", handleProviderUpdate);
+    };
   }, []);
 
   const shouldShowButton = !account || !isMiniPay;
