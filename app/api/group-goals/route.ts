@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { GroupGoalService } from "@/lib/services/groupGoalService";
 import { NewGroupGoal } from "@/lib/models/groupGoal";
 import type { GoalCategory } from "@/lib/models/goal";

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { getUserPositions } from '@/lib/utils/allocateApi';
 import { UserPositions } from '@/lib/models/userPositions';
 import { getCollection } from '@/lib/mongodb';

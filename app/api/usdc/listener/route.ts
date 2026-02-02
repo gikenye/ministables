@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { usdcEventListener } from "@/lib/services/usdcEventListener";
 import { getDatabase } from "@/lib/mongodb";
 import { scroll } from "thirdweb/chains";
