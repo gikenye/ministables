@@ -46,7 +46,7 @@ type MockCursor = {
   limit: () => MockCursor;
   skip: () => MockCursor;
   project: () => MockCursor;
-  toArray: () => Promise<any[]>;
+  toArray: () => Promise<unknown[]>;
 };
 
 const createMockCursor = (): MockCursor => ({
@@ -76,7 +76,6 @@ const createMockCollection = () => ({
 const createMockDb = () => ({
   collection: () => createMockCollection(),
 });
-
 // Helper function to get the database
 export async function getDatabase() {
   if (isBuildTime) {
