@@ -5,10 +5,12 @@ export const CHAINS = [celo, scroll, base];
 // goal management and leaderboard contracts
 export const GOAL_CONTRACTS = {
   [celo.id]: "0x449095A0e1f16D8Bcc2D140b9284F8006b931231",
+  [base.id]: "0xc546C3AA723f011B55D42665Ea6280C3433321AB",
 };
 
 export const LEADERBOARD_CONTRACTS = {
   [celo.id]: "0x184196a6b0719c3A9d8F15c912467D7836baf50D",
+  [base.id]: "0x21CB6cAfB7e10f72D943Cf731d19D11678635807",
 };
 
 // Vault contracts for Aave integration
@@ -19,8 +21,7 @@ export const VAULT_CONTRACTS = {
     CUSD: "0x1077E075c879E8C95E7d0545b106B1448d035F37",
   },
   [base.id]: {
-    USDC: "0xc9E71bf55860E2Fc6DE3Fa856D11eDBa910Ac64b",
-    USDT: "0x6f61982e10cbC3C80AB6FC6fB91eb7a60eB93C6E",
+    USDC: "0x2B946CD7F6Ded65E47ae26A7287a9876057518cb",
   },
 };
 
@@ -93,12 +94,12 @@ export const TOKENS = {
       decimals: 6,
       icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
     },
-    {
-      address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
-      symbol: "USDT",
-      decimals: 6,
-      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/825.png",
-    },
+    // {
+    //   address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+    //   symbol: "USDT",
+    //   decimals: 6,
+    //   icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/825.png",
+    // },
   ],
 };
 
