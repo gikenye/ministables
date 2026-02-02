@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { backendApiClient } from "@/lib/services/backendApiService";
 
 export async function GET(request: NextRequest) {
