@@ -216,6 +216,28 @@ export async function POST(
       );
     }
 
+    const normalizedAmountBigInt = BigInt(normalizedAmount);
+    const transferAmount = ethers.AbiCoder.defaultAbiCoder().decode(
+      ["uint256"],
+      vaultTransfer.data
+    )[0] as bigint;
+    if (transferAmount !== normalizedAmountBigInt) {
+      logger.warn("Transfer amount mismatch", {
+        txHash,
+        userAddress,
+        expected: normalizedAmountBigInt.toString(),
+        actual: transferAmount.toString(),
+      });
+      return NextResponse.json(
+        {
+          error: "Transfer amount does not match requested amount",
+          txHash,
+          userAddress,
+        },
+        { status: 400 }
+      );
+    }
+
     const vault = new ethers.Contract(
       vaultConfig.address,
       VAULT_ABI,
@@ -261,7 +283,7 @@ export async function POST(
     try {
       allocateTx = await vault.allocateOnrampDeposit(
         userAddress,
-        BigInt(normalizedAmount),
+        normalizedAmountBigInt,
         txHash
       );
       allocateReceipt = await allocateTx.wait();

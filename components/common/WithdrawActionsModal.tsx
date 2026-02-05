@@ -29,6 +29,7 @@ const WithdrawActionsModal: FC<WithdrawActionsModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    setNow(Date.now());
     const interval = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(interval);
   }, [isOpen]);
