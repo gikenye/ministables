@@ -6,7 +6,7 @@ settings:
 
 packageExtensionsChecksum: sha256-E2Qr4accBN6aFsQBGleepAE/0m4dQER49ZK+7JdkNCA=
 
-pnpmfileChecksum: sha256-DTNMXJeox/bnHL46Y0DFLWtfa4T0HRadxsbkBzN9T8Q=
+pnpmfileChecksum: sha256-gO9J15WRIkV1Dp5mSbpTr4xlTQL7I8HmRc1o9IvRVE0=
 
 importers:
 
@@ -1154,7 +1154,7 @@ packages:
     resolution: {integrity: sha512-ufciz0tGneK9cgTcTUC0ZHB7Ma5kav4RpbdEoE/qDG/xJp1hSmlmzkSmkyZ2XEUkspfAOU+ZXesWXjvoDzxwvQ==}
     engines: {node: '>=14'}
     peerDependencies:
-      ethers: ^5.7
+      ethers: '>=5.8.0 <7'
     peerDependenciesMeta:
       ethers:
         optional: true
