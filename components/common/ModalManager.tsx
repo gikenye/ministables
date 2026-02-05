@@ -490,6 +490,8 @@ export function ModalManager(props: ModalManagerProps) {
         isOpen={withdrawActionsModalOpen}
         onClose={onWithdrawActionsClose}
         onActionSelect={onWithdrawActionSelect}
+        vaultPositions={vaultPositions}
+        vaultPositionsLoading={vaultPositionsLoading}
       />
 
       <QuickSaveDetailsModal

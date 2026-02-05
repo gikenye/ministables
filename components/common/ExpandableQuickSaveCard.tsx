@@ -60,6 +60,7 @@ const ExpandableQuickSaveCard = ({
   const [currencyMode, setCurrencyMode] = useState<"LOCAL" | "USD">("USD");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const totalSavingsNum = Number.parseFloat(userPositions?.totalValueUSD || "0");
   const quickSaveAmountRaw = Number.parseFloat(goal?.currentAmount || "0");
@@ -108,46 +109,47 @@ const ExpandableQuickSaveCard = ({
 
   const lockSummary = useMemo(() => {
     if (!vaultPositions || vaultPositions.length === 0) return null;
-    const now = Date.now();
-    const locked = vaultPositions.filter(
-      (position) => (position.unlockTime || 0) * 1 > now
-    );
-    const hasWithdrawable = vaultPositions.some(
-      (position) => Number(position.withdrawableAmount || 0) > 0
-    );
-    if (locked.length === 0) {
-      return { status: "unlocked" as const, hasWithdrawable };
-    }
-    const nextUnlock = Math.min(
-      ...locked.map((position) => Number(position.unlockTime || 0))
-    );
-    return {
-      status: "locked" as const,
-      hasWithdrawable,
-      lockedCount: locked.length,
-      nextUnlock,
-    };
-  }, [vaultPositions]);
+    let available = 0;
+    let locked = 0;
+    let nextUnlock: number | null = null;
 
-  const lockMessage = useMemo(() => {
-    if (totalSavingsNum <= 0) return null;
-    if (vaultPositionsLoading) return "Checking lock status...";
-    if (!lockSummary) {
-      return "Deposits are time-locked. Open Withdraw to see unlock dates.";
-    }
-    if (lockSummary.status === "unlocked") {
-      return lockSummary.hasWithdrawable
-        ? "Withdrawals available now."
-        : "No withdrawable deposits yet.";
-    }
-    const unlockDate = new Date(lockSummary.nextUnlock).toLocaleDateString(
-      "en-US",
-      { month: "short", day: "numeric", year: "numeric" }
-    );
-    return lockSummary.hasWithdrawable
-      ? `Some deposits unlock on ${unlockDate}.`
-      : `Withdrawals unlock on ${unlockDate}.`;
-  }, [lockSummary, totalSavingsNum, vaultPositionsLoading]);
+    vaultPositions.forEach((position) => {
+      const withdrawableRaw = Number(position.withdrawableAmount || 0);
+      const amountRaw = Number(position.amount || 0);
+      const unlockTimeRaw = Number(position.unlockTime || 0);
+      const withdrawable = Number.isFinite(withdrawableRaw) ? withdrawableRaw : 0;
+      const amount = Number.isFinite(amountRaw) ? amountRaw : 0;
+      const unlockTime = Number.isFinite(unlockTimeRaw) ? unlockTimeRaw : 0;
+
+      if (withdrawable > 0) {
+        available += withdrawable;
+      } else {
+        locked += amount;
+        if (unlockTime > 0 && unlockTime > now) {
+          nextUnlock = nextUnlock ? Math.min(nextUnlock, unlockTime) : unlockTime;
+        }
+      }
+    });
+
+    return {
+      available,
+      locked,
+      nextUnlock,
+      status: locked > 0 ? "locked" as const : "unlocked" as const,
+    };
+  }, [vaultPositions, now]);
+
+  const countdownLabel = useMemo(() => {
+    if (!lockSummary?.nextUnlock) return null;
+    const diffMs = Math.max(0, lockSummary.nextUnlock - now);
+    const totalMinutes = Math.ceil(diffMs / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }, [lockSummary?.nextUnlock, now]);
 
   useEffect(() => {
     if (totalSavingsNum <= 0) return;
@@ -161,6 +163,11 @@ const ExpandableQuickSaveCard = ({
     vaultPositions,
     vaultPositionsLoading,
   ]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleGoalDrop = async (draggedGoalId: string, targetGoalId: string) => {
     if (draggedGoalId === targetGoalId) return;
@@ -296,14 +303,30 @@ const ExpandableQuickSaveCard = ({
             </div>
         </div>
 
-        {lockMessage && (
-          <div className="mt-3 flex items-center gap-2 text-[11px] text-white/60">
-            {lockSummary?.status === "locked" || !lockSummary ? (
-              <Lock size={12} />
+        {totalSavingsNum > 0 && (
+          <div className="mt-3 flex items-start gap-2 text-[11px] text-white/60">
+            {lockSummary?.status === "locked" || vaultPositionsLoading ? (
+              <Lock size={12} className="mt-0.5" />
             ) : (
-              <Unlock size={12} />
+              <Unlock size={12} className="mt-0.5" />
             )}
-            <span>{lockMessage}</span>
+            <div className="space-y-1">
+              {vaultPositionsLoading || !lockSummary ? (
+                <span>Checking lock status...</span>
+              ) : (
+                <>
+                  <span>
+                    Available {formatCardAmount(lockSummary.available)} • Locked{" "}
+                    {formatCardAmount(lockSummary.locked)}
+                  </span>
+                  {lockSummary.locked > 0 && countdownLabel && (
+                    <span className="text-white/40">
+                      Unlocks in {countdownLabel}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
 

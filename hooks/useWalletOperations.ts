@@ -49,6 +49,7 @@ export function useWalletOperations({
   sendTransaction,
 }: WalletOperationsProps) {
   const [pendingDeposit, setPendingDeposit] = useState(false);
+  const WITHDRAW_GAS_LIMIT = 250000;
 
   /**
    * Prepare a deposit transaction for vault
@@ -385,12 +386,12 @@ export function useWalletOperations({
     }
 
     try {
-      await logGasInfo(userAddress);
+      await logGasInfo(userAddress, WITHDRAW_GAS_LIMIT);
 
-      await executeWithGasSponsorship(
-        userAddress,
-        async () => {
-          for (const depositId of depositIds) {
+      for (const depositId of depositIds) {
+        await executeWithGasSponsorship(
+          userAddress,
+          async () => {
             const vaultContract = getContract({
               client,
               chain,
@@ -429,10 +430,10 @@ export function useWalletOperations({
                 yieldEarned: "0",
               }),
             });
-          }
-        },
-        { sponsorGas, chainId: chain.id },
-      );
+          },
+          { sponsorGas, chainId: chain.id, gasLimit: WITHDRAW_GAS_LIMIT },
+        );
+      }
     } catch (error) {
       reportError("Vault withdrawal failed", {
         component: "useWalletOperations",

@@ -2,9 +2,9 @@ module.exports = {
   hooks: {
     readPackage(pkg) {
       if (pkg.name === "@mento-protocol/mento-sdk") {
-        pkg.dependencies = pkg.dependencies || {};
-        if (!pkg.dependencies.ethers) {
-          pkg.dependencies.ethers = "5.8.0";
+        pkg.peerDependencies = pkg.peerDependencies || {};
+        if (pkg.peerDependencies.ethers) {
+          pkg.peerDependencies.ethers = ">=5.8.0 <7";
         }
       }
       return pkg;

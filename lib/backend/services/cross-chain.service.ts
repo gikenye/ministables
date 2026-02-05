@@ -28,8 +28,10 @@ export class CrossChainService {
           const depositCount = await vault.depositCount(userAddress);
 
           for (let i = 0; i < Number(depositCount); i++) {
-            const [shares, , depositTime, lockEnd] = await vault.deposits(userAddress, i);
-            const amountUSD = parseFloat(ethers.formatUnits(shares, vaultConfig.decimals));
+            const [shares, principal, depositTime, lockEnd] = await vault.deposits(userAddress, i);
+            const amountUSD = parseFloat(
+              ethers.formatUnits(principal, vaultConfig.decimals)
+            );
 
             deposits.push({
               depositId: i.toString(),

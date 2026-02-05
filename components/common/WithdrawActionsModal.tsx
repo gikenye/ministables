@@ -1,24 +1,78 @@
 "use client";
 
-import { FC } from "react";
+import { FC, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Smartphone, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
 import { BottomSheet } from "@/components/ui";
+import type { WithdrawableDeposit } from "@/hooks/useVaultPositions";
 
 interface WithdrawActionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onActionSelect: (actionId: "wallet" | "offramp") => void;
+  vaultPositions?: WithdrawableDeposit[];
+  vaultPositionsLoading?: boolean;
 }
 
 const WithdrawActionsModal: FC<WithdrawActionsModalProps> = ({
   isOpen,
   onClose,
   onActionSelect,
+  vaultPositions = [],
+  vaultPositionsLoading = false,
 }) => {
   const handleClose = () => {
     onClose();
   };
+
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
+  const summary = useMemo(() => {
+    if (!vaultPositions.length) return null;
+    let available = 0;
+    let locked = 0;
+    let nextUnlock: number | null = null;
+
+    vaultPositions.forEach((position) => {
+      const withdrawableRaw = Number(position.withdrawableAmount || 0);
+      const amountRaw = Number(position.amount || 0);
+      const withdrawable = Number.isFinite(withdrawableRaw) ? withdrawableRaw : 0;
+      const amount = Number.isFinite(amountRaw) ? amountRaw : 0;
+      if (withdrawable > 0) {
+        available += withdrawable;
+      } else {
+        locked += amount;
+        const unlockTimeRaw = Number(position.unlockTime || 0);
+        const unlockTime = Number.isFinite(unlockTimeRaw) ? unlockTimeRaw : 0;
+        if (unlockTime > 0 && unlockTime > now) {
+          nextUnlock = nextUnlock ? Math.min(nextUnlock, unlockTime) : unlockTime;
+        }
+      }
+    });
+
+    return { available, locked, nextUnlock };
+  }, [vaultPositions, now]);
+
+  const countdownLabel = useMemo(() => {
+    if (!summary?.nextUnlock) return null;
+    const diffMs = Math.max(0, summary.nextUnlock - now);
+    const totalMinutes = Math.ceil(diffMs / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }, [summary?.nextUnlock, now]);
+
+  const formatUsd = (value: number) =>
+    `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <BottomSheet isOpen={isOpen} onClose={handleClose} maxHeight="max-h-[70vh]">
@@ -39,6 +93,21 @@ const WithdrawActionsModal: FC<WithdrawActionsModalProps> = ({
             <p className="text-white/30 text-[10px] font-bold uppercase tracking-tight mt-1">
               Choose your destination
             </p>
+            {vaultPositionsLoading ? (
+              <p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-white/20">
+                Checking lock status...
+              </p>
+            ) : summary ? (
+              <div className="mt-2 text-[9px] font-bold uppercase tracking-widest text-white/30 space-y-1">
+                <div>
+                  Available {formatUsd(summary.available)} • Locked{" "}
+                  {formatUsd(summary.locked)}
+                </div>
+                {summary.locked > 0 && countdownLabel && (
+                  <div className="text-white/20">Unlocks in {countdownLabel}</div>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-3">

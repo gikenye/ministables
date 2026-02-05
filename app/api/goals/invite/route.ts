@@ -102,6 +102,8 @@ export async function POST(
       signature,
       issuedAt,
       nonce,
+      chainId,
+      chain,
     } = await request.json();
 
     if (
@@ -210,10 +212,7 @@ export async function POST(
       return NextResponse.json({ success: true });
     }
 
-    const chainParams = {
-      chainId: (body as { chainId?: string | number }).chainId,
-      chain: (body as { chain?: string }).chain,
-    };
+    const chainParams = { chainId, chain };
     const provider = createProvider(chainParams);
     const backendWallet = createBackendWallet(provider);
     const contracts = getContractsForChain(chainParams);

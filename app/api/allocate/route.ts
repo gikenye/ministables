@@ -125,9 +125,9 @@ export async function POST(
 
     // Validate and normalize amount
     const normalizedAmount = amount.trim();
-    if (!/^[+-]?\d+$/.test(normalizedAmount)) {
+    if (!/^\d+$/.test(normalizedAmount)) {
       return NextResponse.json(
-        { error: "Invalid amount. Must be a raw integer string (e.g., '1000000'), no decimals or formatting allowed" },
+        { error: "Invalid amount. Must be a non-negative raw integer string (e.g., '1000000'), no decimals or signs allowed" },
         { status: 400 }
       );
     }
