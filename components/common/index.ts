@@ -12,6 +12,7 @@ export { CustomGoalModal } from "./CustomGoalModal";
 export { GoalDetailsModal } from "./GoalDetailsModal";
 export { DepositConfirmationModal } from "./DepositConfirmationModal";
 export { default as ExpandableQuickSaveCard } from "./ExpandableQuickSaveCard";
+export { ActivityFeed } from "./ActivityFeed";
 
 // Layout Components
 export { DesktopSidebar } from "./DesktopSidebar";

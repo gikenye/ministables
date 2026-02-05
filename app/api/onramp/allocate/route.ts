@@ -19,16 +19,19 @@ export async function POST(request: NextRequest) {
     }
 
     const baseUrl =
-      process.env.ALLOCATE_API_URL || process.env.NEXT_PUBLIC_ALLOCATE_API_URL;
-    if (!baseUrl) {
-      logger.error('ALLOCATE_API_URL not configured', {
+      process.env.ALLOCATE_API_URL ||
+      process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      new URL(request.url).origin;
+    if (
+      !process.env.ALLOCATE_API_URL &&
+      !process.env.NEXT_PUBLIC_ALLOCATE_API_URL &&
+      !process.env.NEXT_PUBLIC_APP_URL
+    ) {
+      logger.warn('ALLOCATE_API_URL not configured; using request origin', {
         component: 'onramp.allocate',
         operation: 'config',
       });
-      return NextResponse.json(
-        { error: 'Allocation service not configured' },
-        { status: 500 }
-      );
     }
 
     const normalizedAsset = SUPPORTED_ASSETS.find(

@@ -4,6 +4,7 @@ import { reportError, reportWarning } from "@/lib/services/errorReportingService
 
 interface UseDataFetchingProps {
   address?: string;
+  chainId?: number;
   setUserPortfolio: (data: any) => void;
   setPortfolioLoading: (loading: boolean) => void;
   setPortfolioError: (error: string | null) => void;
@@ -24,6 +25,7 @@ interface UseDataFetchingProps {
 export function useDataFetching(props: UseDataFetchingProps) {
   const {
     address,
+    chainId,
     setUserPortfolio,
     setPortfolioLoading,
     setPortfolioError,
@@ -73,7 +75,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
     setPortfolioError(null);
 
     try {
-      const data = await backendApiClient.getUserPortfolio(address);
+      const data = await backendApiClient.getUserPortfolio(address, chainId);
       if (portfolioReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setUserPortfolio(data);
     } catch (error) {
@@ -96,7 +98,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         setPortfolioLoading(false);
       }
     }
-  }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
+  }, [address, chainId, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
 
   const refreshUserPortfolio = useCallback(async (options?: { silent?: boolean }) => {
     if (!address) return;
@@ -116,12 +118,14 @@ export function useDataFetching(props: UseDataFetchingProps) {
     }
 
     try {
-      const response = await fetch("/api/user-balances", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userAddress: address }),
-        signal: controller.signal,
-      });
+      const params = new URLSearchParams({ userAddress: address });
+      if (chainId) params.set("chainId", String(chainId));
+      const response = await fetch(`/api/user-positions?${params}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          cache: "no-store",
+        });
 
       if (!response.ok) {
         const errorData = await response
@@ -159,7 +163,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         setPortfolioLoading(false);
       }
     }
-  }, [address, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
+  }, [address, chainId, setUserPortfolio, setPortfolioLoading, setPortfolioError]);
 
   const fetchUserGoals = useCallback(async () => {
     if (!address) return;
@@ -168,7 +172,10 @@ export function useDataFetching(props: UseDataFetchingProps) {
     setGoalsLoading(true);
     setGoalsError(null);
     try {
-      const goals = await backendApiClient.getGoalsWithProgress(address);
+      const goals = await backendApiClient.getGoalsWithProgress(
+        address,
+        chainId
+      );
       if (goalsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setUserGoals(goals);
 
@@ -199,7 +206,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         setGoalsLoading(false);
       }
     }
-  }, [address, setUserGoals, setGoalsLoading, setGoalsError]);
+  }, [address, chainId, setUserGoals, setGoalsLoading, setGoalsError]);
 
   const fetchLeaderboard = useCallback(async () => {
     const reqId = ++leaderboardReqIdRef.current;
@@ -208,8 +215,8 @@ export function useDataFetching(props: UseDataFetchingProps) {
     setLeaderboardError(null);
     try {
       const [leaderboardData, userPortfolioData] = await Promise.all([
-        backendApiClient.getLeaderboard(0, 10),
-        address ? backendApiClient.getUserPortfolio(address) : null,
+        backendApiClient.getLeaderboard(0, 10, chainId),
+        address ? backendApiClient.getUserPortfolio(address, chainId) : null,
       ]);
       if (leaderboardReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       setLeaderboard(
@@ -243,14 +250,14 @@ export function useDataFetching(props: UseDataFetchingProps) {
         setLeaderboardLoading(false);
       }
     }
-  }, [address, setLeaderboard, setLeaderboardLoading, setLeaderboardError, setUserScore]);
+  }, [address, chainId, setLeaderboard, setLeaderboardLoading, setLeaderboardError, setUserScore]);
 
   const fetchGroupGoals = useCallback(async () => {
     const reqId = ++groupGoalsReqIdRef.current;
     setGroupGoalsLoading(true);
     setGroupGoalsError(null);
     try {
-      const response = await backendApiClient.getPublicGoals();
+      const response = await backendApiClient.getPublicGoals(chainId);
       if (groupGoalsReqIdRef.current !== reqId) return;
       setGroupGoals(response.goals);
     } catch (error) {
@@ -262,7 +269,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
         setGroupGoalsLoading(false);
       }
     }
-  }, [setGroupGoals, setGroupGoalsLoading, setGroupGoalsError]);
+  }, [chainId, setGroupGoals, setGroupGoalsLoading, setGroupGoalsError]);
 
   const fetchMyGroups = useCallback(async () => {
     if (!address) return;
@@ -270,14 +277,17 @@ export function useDataFetching(props: UseDataFetchingProps) {
     const reqAddress = address;
     setMyGroupsLoading(true);
     try {
-      const response = await backendApiClient.getMyGroups(address);
+      const response = await backendApiClient.getMyGroups(address, chainId);
       if (myGroupsReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
       // Show base group data immediately, then enrich with progress later.
       setMyGroups(response);
       setMyGroupsLoading(false);
       let goalsWithProgress: any[] = [];
       try {
-        goalsWithProgress = await backendApiClient.getGoalsWithProgress(address);
+        goalsWithProgress = await backendApiClient.getGoalsWithProgress(
+          address,
+          chainId
+        );
       } catch (error) {
         reportWarning("Failed to fetch group goal progress details", {
           component: "useDataFetching",
@@ -338,7 +348,7 @@ export function useDataFetching(props: UseDataFetchingProps) {
     if (myGroupsReqIdRef.current === reqId && addressRef.current === reqAddress) {
       setMyGroupsLoading(false);
     }
-  }, [address, setMyGroups, setMyGroupsLoading]);
+  }, [address, chainId, setMyGroups, setMyGroupsLoading]);
 
   const forceRefresh = useCallback(() => {
     refreshUserPortfolio();

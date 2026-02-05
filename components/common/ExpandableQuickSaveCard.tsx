@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -8,8 +8,11 @@ import {
   ChevronDown,
   EyeOff,
   Eye,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { theme } from "@/lib/theme";
+import { CardActionButton } from "@/components/ui";
 
 interface ExpandableQuickSaveCardProps {
   goal: any;
@@ -26,13 +29,19 @@ interface ExpandableQuickSaveCardProps {
   onGoalsRefetch?: () => void;
   onCreateGoal?: () => void;
   onGoalClick?: (goal: any) => void;
+  onQuickSaveClick?: () => void;
+  vaultPositions?: Array<{
+    withdrawableAmount?: string;
+    unlockTime?: number;
+  }>;
+  vaultPositionsLoading?: boolean;
+  onRequestVaultPositions?: () => void;
 }
 
 const ExpandableQuickSaveCard = ({
   goal,
   goals,
   userPositions,
-  account,
   isLoading = false,
   showBalance = true,
   onToggleBalance,
@@ -42,6 +51,10 @@ const ExpandableQuickSaveCard = ({
   onGoalsRefetch,
   onCreateGoal,
   onGoalClick,
+  onQuickSaveClick,
+  vaultPositions,
+  vaultPositionsLoading = false,
+  onRequestVaultPositions,
 }: ExpandableQuickSaveCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currencyMode, setCurrencyMode] = useState<"LOCAL" | "USD">("USD");
@@ -49,7 +62,11 @@ const ExpandableQuickSaveCard = ({
   const [isTransferring, setIsTransferring] = useState(false);
 
   const totalSavingsNum = Number.parseFloat(userPositions?.totalValueUSD || "0");
-  const quickSaveAmountNum = Number.parseFloat(goal?.currentAmount || "0");
+  const quickSaveAmountRaw = Number.parseFloat(goal?.currentAmount || "0");
+  const quickSaveAmountNum =
+    Number.isFinite(quickSaveAmountRaw) && quickSaveAmountRaw > 0
+      ? quickSaveAmountRaw
+      : totalSavingsNum;
 
   const getGoalAmountUsd = (goalItem: any) => {
     const directAmount = Number(goalItem?.currentAmount);
@@ -72,9 +89,78 @@ const ExpandableQuickSaveCard = ({
   const hasValidExchangeRate = exchangeRate && exchangeRate > 0;
   const totalLocalAmount = hasValidExchangeRate ? totalSavingsNum * exchangeRate : 0;
 
+  const formatCardAmount = (amountUsd: number) => {
+    if (!showBalance) return "••••";
+    if (currencyMode === "LOCAL" && hasValidExchangeRate) {
+      return `Ksh${(amountUsd * exchangeRate!).toLocaleString("en-US", {
+        maximumFractionDigits: 0,
+      })}`;
+    }
+    return `$${amountUsd.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
   const primaryAmount = currencyMode === "LOCAL" && hasValidExchangeRate
       ? `Ksh${totalLocalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
       : `$${totalSavingsNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const lockSummary = useMemo(() => {
+    if (!vaultPositions || vaultPositions.length === 0) return null;
+    const now = Date.now();
+    const locked = vaultPositions.filter(
+      (position) => (position.unlockTime || 0) * 1 > now
+    );
+    const hasWithdrawable = vaultPositions.some(
+      (position) => Number(position.withdrawableAmount || 0) > 0
+    );
+    if (locked.length === 0) {
+      return { status: "unlocked" as const, hasWithdrawable };
+    }
+    const nextUnlock = Math.min(
+      ...locked.map((position) => Number(position.unlockTime || 0))
+    );
+    return {
+      status: "locked" as const,
+      hasWithdrawable,
+      lockedCount: locked.length,
+      nextUnlock,
+    };
+  }, [vaultPositions]);
+
+  const lockMessage = useMemo(() => {
+    if (totalSavingsNum <= 0) return null;
+    if (vaultPositionsLoading) return "Checking lock status...";
+    if (!lockSummary) {
+      return "Deposits are time-locked. Open Withdraw to see unlock dates.";
+    }
+    if (lockSummary.status === "unlocked") {
+      return lockSummary.hasWithdrawable
+        ? "Withdrawals available now."
+        : "No withdrawable deposits yet.";
+    }
+    const unlockDate = new Date(lockSummary.nextUnlock).toLocaleDateString(
+      "en-US",
+      { month: "short", day: "numeric", year: "numeric" }
+    );
+    return lockSummary.hasWithdrawable
+      ? `Some deposits unlock on ${unlockDate}.`
+      : `Withdrawals unlock on ${unlockDate}.`;
+  }, [lockSummary, totalSavingsNum, vaultPositionsLoading]);
+
+  useEffect(() => {
+    if (totalSavingsNum <= 0) return;
+    if (!onRequestVaultPositions) return;
+    if (vaultPositionsLoading) return;
+    if (vaultPositions && vaultPositions.length > 0) return;
+    onRequestVaultPositions();
+  }, [
+    totalSavingsNum,
+    onRequestVaultPositions,
+    vaultPositions,
+    vaultPositionsLoading,
+  ]);
 
   const handleGoalDrop = async (draggedGoalId: string, targetGoalId: string) => {
     if (draggedGoalId === targetGoalId) return;
@@ -124,20 +210,14 @@ const ExpandableQuickSaveCard = ({
           </button>
         </div>
 
-        {/* Main Action Buttons - Reduced height/size */}
+        {/* Main Action Buttons */}
         <div className="flex gap-3">
-          <button 
-            onClick={onDeposit} 
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white text-black rounded-xl text-sm font-bold transition active:scale-95 shadow-lg"
-          >
+          <CardActionButton onClick={onDeposit} className="flex-1">
             <ArrowDown size={18} /> Deposit
-          </button>
-          <button 
-            onClick={onWithdraw} 
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/10 border border-white/10 rounded-xl text-sm font-bold transition active:scale-95"
-          >
+          </CardActionButton>
+          <CardActionButton variant="secondary" onClick={onWithdraw} className="flex-1">
             <ArrowUp size={18} /> Withdraw
-          </button>
+          </CardActionButton>
         </div>
 
         {/* Collapsible Goals Grid */}
@@ -159,12 +239,30 @@ const ExpandableQuickSaveCard = ({
                   e.preventDefault();
                   if (draggedId && draggedId !== goal?.id) handleGoalDrop(draggedId, goal?.id);
                 }}
-                className={`p-3 rounded-2xl flex flex-col items-center text-center transition-all border ${
-                  draggedId && draggedId !== goal?.id ? "border-green-400/50 bg-green-400/10 scale-105" : "bg-white/5 border-white/5"
+                role="button"
+                tabIndex={0}
+                aria-label="Open Quick Save details"
+                onClick={() => {
+                  if (draggedId) return;
+                  if (onQuickSaveClick) return onQuickSaveClick();
+                  onGoalClick?.(goal);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (draggedId) return;
+                    if (onQuickSaveClick) return onQuickSaveClick();
+                    onGoalClick?.(goal);
+                  }
+                }}
+                className={`p-3 rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all border ${
+                  draggedId && draggedId !== goal?.id ? "border-green-400/50 bg-green-400/10 scale-105" : "bg-white/5 border-white/5 active:scale-95"
                 }`}
               >
-                 <span className="text-xs font-bold text-[#4ade80]">${quickSaveAmountNum.toFixed(2)}</span>
-                 <span className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-tighter">Quick Save</span>
+                 <span className="text-xs font-bold text-white">{formatCardAmount(quickSaveAmountNum)}</span>
+                 <span className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-tighter truncate w-full">
+                   Quick Save
+                 </span>
               </div>
               
               {/* Other Goals (Draggable & Drop Zone) */}
@@ -186,7 +284,7 @@ const ExpandableQuickSaveCard = ({
                   }`}
                 >
                    <span className="text-xs font-bold text-white">
-                    ${goalAmountUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatCardAmount(goalAmountUsd)}
                    </span>
                    <span className="text-[10px] opacity-50 mt-1 uppercase font-bold tracking-tighter truncate w-full">{g.title}</span>
                 </div>
@@ -197,6 +295,17 @@ const ExpandableQuickSaveCard = ({
               </button>
             </div>
         </div>
+
+        {lockMessage && (
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-white/60">
+            {lockSummary?.status === "locked" || !lockSummary ? (
+              <Lock size={12} />
+            ) : (
+              <Unlock size={12} />
+            )}
+            <span>{lockMessage}</span>
+          </div>
+        )}
 
         {/* Bottom Controls */}
         <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/5">

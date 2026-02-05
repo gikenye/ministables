@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { ethers } from "ethers";
 import { base, celo, scroll } from "thirdweb/chains";
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!ethers.utils.isAddress(userAddress)) {
+    if (!ethers.isAddress(userAddress)) {
       return NextResponse.json(
         { error: "Invalid userAddress format" },
         { status: 400 },
@@ -94,29 +95,23 @@ export async function POST(request: NextRequest) {
     const normalizedGasLimit = normalizeGasLimit(gasLimit);
 
     const network = RPC_NETWORKS[chainId];
-    // Next.js (Node/undici) + ethers web fetcher can throw: Referrer "client" is not a valid URL.
-    // Passing a ConnectionInfo with skipFetchSetup avoids ethers' fetch setup (including setting referrer).
-    const provider = new ethers.providers.StaticJsonRpcProvider(
-      { url: rpcUrl, skipFetchSetup: true },
-      network,
-    );
+    const provider = new ethers.JsonRpcProvider(rpcUrl, network);
     const sponsorWallet = new ethers.Wallet(
       GAS_SPONSORSHIP_CONFIG.SPONSOR_PK,
       provider,
     );
 
     const feeData = await provider.getFeeData();
-    const maxFeePerGas =
-      feeData.maxFeePerGas || feeData.gasPrice || ethers.BigNumber.from(0);
+    const maxFeePerGas = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
 
-    if (maxFeePerGas.lte(0)) {
+    if (maxFeePerGas <= 0n) {
       return NextResponse.json(
         { error: "Unable to estimate gas fee" },
         { status: 503 },
       );
     }
 
-    const estimatedGas = maxFeePerGas.mul(normalizedGasLimit);
+    const estimatedGas = maxFeePerGas * BigInt(normalizedGasLimit);
 
     const sponsorResult = await gasSponsorshipService.sponsorGas(
       userAddress,

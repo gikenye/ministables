@@ -6,6 +6,7 @@ import {
   LeaderboardResponse,
 } from "@/lib/services/backendApiService";
 import { reportError, reportInfo } from "@/lib/services/errorReportingService";
+import { useChain } from "@/components/ChainProvider";
 
 export interface LeaderboardEntry {
   rank: number;
@@ -57,6 +58,7 @@ export function useBackendLeaderboard(
 ): UseLeaderboardResult {
   const { initialLimit = 10, autoFetch = true } = options;
   const account = useActiveAccount();
+  const { chain } = useChain();
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [userScore, setUserScore] = useState<UserScore | null>(null);
@@ -105,6 +107,7 @@ export function useBackendLeaderboard(
         });
 
         const params = new URLSearchParams({ userAddress: address });
+        if (chain?.id) params.set("chainId", String(chain.id));
         const response = await fetch(`/api/leaderboard?${params}`);
 
         if (!response.ok) {
@@ -134,7 +137,7 @@ export function useBackendLeaderboard(
         });
       }
     },
-    [account?.address, formatScore]
+    [account?.address, chain?.id, formatScore]
   );
 
   // Fetch leaderboard data
@@ -151,6 +154,7 @@ export function useBackendLeaderboard(
           start: start.toString(),
           limit: limit.toString(),
         });
+        if (chain?.id) params.set("chainId", String(chain.id));
         const response = await fetch(`/api/leaderboard?${params}`);
 
         if (!response.ok) {
@@ -220,7 +224,7 @@ export function useBackendLeaderboard(
         throw err;
       }
     },
-    [account?.address, formatScore, initialLimit]
+    [account?.address, chain?.id, formatScore, initialLimit]
   );
 
   // Main refetch function
@@ -324,6 +328,7 @@ export function useLeaderboard(): LegacyUseLeaderboardResult {
 // Helper hook for just getting user score
 export function useUserScore(userAddress?: string) {
   const account = useActiveAccount();
+  const { chain } = useChain();
   const [userScore, setUserScore] = useState<UserScore | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -362,7 +367,7 @@ export function useUserScore(userAddress?: string) {
     setError(null);
 
     try {
-      const response = await backendApiClient.getUserScore(address);
+      const response = await backendApiClient.getUserScore(address, chain?.id);
 
       setUserScore({
         userAddress: response.userAddress,
@@ -388,7 +393,7 @@ export function useUserScore(userAddress?: string) {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, chain?.id, formatScore]);
 
   useEffect(() => {
     if (address) {

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createProvider } from "@/lib/backend/utils";
+import { getContractsForChain, getVaultsForChain } from "@/lib/backend/constants";
+import { getUserXPCollection, connectToDatabase } from "@/lib/backend/database";
+import { XPService } from "@/lib/backend/services/xp.service";
+import type { SelfVerification } from "@/lib/backend/types";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-import { backendApiClient } from "@/lib/services/backendApiService";
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,53 +13,83 @@ export async function GET(request: NextRequest) {
     const userAddress = searchParams.get("userAddress");
     const action = searchParams.get("action");
 
+    if (action === "leaderboard") {
+      const limit = parseInt(searchParams.get("limit") || "100");
+      const collection = await getUserXPCollection();
+      const leaderboard = await collection.find({}).sort({ totalXP: -1 }).limit(limit).toArray();
+      return NextResponse.json({ leaderboard });
+    }
+
     if (!userAddress) {
-      return NextResponse.json(
-        { error: "userAddress is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "userAddress required" }, { status: 400 });
     }
 
-    if (action === "history") {
-      const xpHistory = await backendApiClient.getUserXpHistory(userAddress);
-      return NextResponse.json(xpHistory);
-    }
+    const collection = await getUserXPCollection();
+    const userXP = await collection.findOne({ userAddress: userAddress.toLowerCase() });
 
-    const xpData = await backendApiClient.getUserXp(userAddress);
-    return NextResponse.json(xpData);
+    return NextResponse.json(userXP || { userAddress: userAddress.toLowerCase(), totalXP: 0, xpHistory: [] });
   } catch (error) {
-    console.error("[API] Failed to get XP data:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to get XP data",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { attestationId, walletAddress } = body;
+    const { metaGoalId, attestationId, walletAddress, chainId, chain } = body;
+    const chainParams = { chainId, chain };
 
-    if (!attestationId || !walletAddress) {
-      return NextResponse.json(
-        { error: "attestationId and walletAddress are required" },
-        { status: 400 }
+    if (attestationId && walletAddress) {
+      const db = await connectToDatabase();
+      
+      const collections = await db.listCollections().toArray();
+      const collectionNames = collections.map(c => c.name);
+      
+      const collectionName = collectionNames.find(name => 
+        name.toLowerCase() === "selfverifications"
+      ) || "SelfVerifications";
+      
+      const verification = await db.collection<SelfVerification>(collectionName).findOne({ 
+        attestationId,
+        walletAddress
+      });
+      
+      if (!verification) {
+        return NextResponse.json({ 
+          error: "Verification not found",
+          debug: { attestationId, walletAddress, availableCollections: collectionNames }
+        }, { status: 404 });
+      }
+
+      const provider = createProvider(chainParams);
+      const xpService = new XPService(
+        provider,
+        getContractsForChain(chainParams),
+        getVaultsForChain(chainParams)
       );
+      const result = await xpService.awardSelfVerificationXP(walletAddress);
+
+      return NextResponse.json({ 
+        success: true, 
+        awarded: result.awarded, 
+        totalXP: result.totalXP 
+      });
     }
 
-    const result = await backendApiClient.awardVerificationXP(attestationId, walletAddress);
+    if (!metaGoalId) {
+      return NextResponse.json({ error: "metaGoalId or attestationId/walletAddress required" }, { status: 400 });
+    }
+
+    const provider = createProvider(chainParams);
+    const xpService = new XPService(
+      provider,
+      getContractsForChain(chainParams),
+      getVaultsForChain(chainParams)
+    );
+    const result = await xpService.checkAndAwardXP(metaGoalId);
+
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[API] Failed to award XP:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to award XP",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 });
   }
 }

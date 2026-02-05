@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useSession } from "next-auth/react";
 import { NewGoal, Goal } from "@/lib/models/goal";
+import { useChain } from "@/components/ChainProvider";
 
 interface UseCreateGoalResult {
   createGoal: (goalData: Omit<NewGoal, "userId">) => Promise<Goal | null>;
@@ -15,6 +16,7 @@ interface UseCreateGoalResult {
 export function useCreateGoal(): UseCreateGoalResult {
   const { data: session } = useSession();
   const account = useActiveAccount();
+  const { chain } = useChain();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +33,7 @@ export function useCreateGoal(): UseCreateGoalResult {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`/api/user-balances?action=create-goal`, {
+        const response = await fetch(`/api/user-positions?action=create-goal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -40,6 +42,7 @@ export function useCreateGoal(): UseCreateGoalResult {
             targetAmountUSD: parseFloat(goalData.targetAmount) || 0,
             targetDate: goalData.targetDate ? goalData.targetDate.toISOString().split('T')[0] : "2025-12-31",
             vaults: "all",
+            chainId: chain?.id,
           }),
         });
 
@@ -88,7 +91,7 @@ export function useCreateGoal(): UseCreateGoalResult {
         setLoading(false);
       }
     },
-    [userId]
+    [userId, chain?.id]
   );
 
   return {

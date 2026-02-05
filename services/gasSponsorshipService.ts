@@ -1,3 +1,4 @@
+
 import { ethers } from "ethers";
 
 interface GasRequest {
@@ -13,22 +14,22 @@ class GasSponsorshipService {
   private cleanOldRequests(userAddress: string) {
     const requests = this.requestHistory.get(userAddress) || [];
     const now = Date.now();
-    const filtered = requests.filter(req => now - req.timestamp < this.HOUR_MS);
+    const filtered = requests.filter((req) => now - req.timestamp < this.HOUR_MS);
     this.requestHistory.set(userAddress, filtered);
   }
 
   private getRecentRequests(userAddress: string, timeWindow: number): GasRequest[] {
     const requests = this.requestHistory.get(userAddress) || [];
     const now = Date.now();
-    return requests.filter(req => now - req.timestamp < timeWindow);
+    return requests.filter((req) => now - req.timestamp < timeWindow);
   }
 
-  private validateRequest(userAddress: string, gasAmount: ethers.BigNumber): { valid: boolean; error?: string } {
-    if (!ethers.utils.isAddress(userAddress)) {
+  private validateRequest(userAddress: string, gasAmount: bigint): { valid: boolean; error?: string } {
+    if (!ethers.isAddress(userAddress)) {
       return { valid: false, error: "Invalid user address" };
     }
 
-    if (gasAmount.lte(0)) {
+    if (gasAmount <= 0n) {
       return { valid: false, error: "Invalid gas amount" };
     }
 
@@ -37,7 +38,7 @@ class GasSponsorshipService {
     return { valid: true };
   }
 
-  private recordRequest(userAddress: string, gasAmount: ethers.BigNumber) {
+  private recordRequest(userAddress: string, gasAmount: bigint) {
     const requests = this.requestHistory.get(userAddress) || [];
     requests.push({
       userAddress,
@@ -49,13 +50,13 @@ class GasSponsorshipService {
 
   async sponsorGas(
     userAddress: string,
-    estimatedGas: ethers.BigNumber,
-    provider: ethers.providers.Provider,
+    estimatedGas: bigint,
+    provider: ethers.Provider,
     sponsorWallet: ethers.Wallet
   ): Promise<{ success: boolean; txHash?: string; error?: string }> {
     console.log("[Gas Sponsorship Service] sponsorGas - Step 1: Starting", {
       userAddress,
-      estimatedGas: ethers.utils.formatEther(estimatedGas),
+      estimatedGas: ethers.formatEther(estimatedGas),
       sponsorWalletAddress: sponsorWallet.address,
     });
 
@@ -63,16 +64,22 @@ class GasSponsorshipService {
       console.log("[Gas Sponsorship Service] sponsorGas - Step 2: Validating request");
       const validation = this.validateRequest(userAddress, estimatedGas);
       if (!validation.valid) {
-        console.error("[Gas Sponsorship Service] sponsorGas - Validation failed:", validation.error);
+        console.error(
+          "[Gas Sponsorship Service] sponsorGas - Validation failed:",
+          validation.error
+        );
         return { success: false, error: validation.error };
       }
       console.log("[Gas Sponsorship Service] sponsorGas - Step 3: Validation passed");
 
       console.log("[Gas Sponsorship Service] sponsorGas - Step 4: Checking sponsor balance");
       const balance = await provider.getBalance(sponsorWallet.address);
-      console.log("[Gas Sponsorship Service] sponsorGas - Sponsor wallet balance:", ethers.utils.formatEther(balance));
-      
-      if (balance.lt(estimatedGas)) {
+      console.log(
+        "[Gas Sponsorship Service] sponsorGas - Sponsor wallet balance:",
+        ethers.formatEther(balance)
+      );
+
+      if (balance < estimatedGas) {
         console.error("[Gas Sponsorship Service] sponsorGas - Insufficient sponsor balance");
         return { success: false, error: "Insufficient sponsor balance" };
       }
@@ -87,7 +94,7 @@ class GasSponsorshipService {
       console.log("[Gas Sponsorship Service] sponsorGas - Step 7: Waiting for confirmation");
       await tx.wait();
       console.log("[Gas Sponsorship Service] sponsorGas - Step 8: Transaction confirmed");
-      
+
       this.recordRequest(userAddress, estimatedGas);
       console.log("[Gas Sponsorship Service] sponsorGas - Step 9: Request recorded");
 
@@ -100,7 +107,7 @@ class GasSponsorshipService {
 
   async sponsorTransaction<T>(
     userAddress: string,
-    provider: ethers.providers.Provider,
+    provider: ethers.Provider,
     sponsorWallet: ethers.Wallet,
     transactionCallback: () => Promise<T>,
     gasLimit: number = 100000
@@ -110,16 +117,16 @@ class GasSponsorshipService {
     try {
       console.log("[Gas Sponsorship Service] Step 2: Getting fee data");
       const feeData = await provider.getFeeData();
-      const maxFeePerGas = feeData.maxFeePerGas || feeData.gasPrice || ethers.BigNumber.from(0);
-      const estimatedGas = maxFeePerGas.mul(gasLimit);
+      const maxFeePerGas = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+      const estimatedGas = maxFeePerGas * BigInt(gasLimit);
 
       console.log("[Gas Sponsorship Service] Step 3: Estimated gas:", {
-        maxFeePerGas: ethers.utils.formatUnits(maxFeePerGas, "gwei") + " gwei",
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas 
-          ? ethers.utils.formatUnits(feeData.maxPriorityFeePerGas, "gwei") + " gwei"
+        maxFeePerGas: ethers.formatUnits(maxFeePerGas, "gwei") + " gwei",
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas
+          ? ethers.formatUnits(feeData.maxPriorityFeePerGas, "gwei") + " gwei"
           : "N/A",
         gasLimit: gasLimit.toString(),
-        total: ethers.utils.formatEther(estimatedGas),
+        total: ethers.formatEther(estimatedGas),
       });
 
       console.log("[Gas Sponsorship Service] Step 4: Calling sponsorGas");
@@ -137,9 +144,9 @@ class GasSponsorshipService {
 
       console.log("[Gas Sponsorship Service] Step 6: Gas sponsored successfully, txHash:", sponsorResult.txHash);
       console.log("[Gas Sponsorship Service] Step 7: Executing transaction callback");
-      
+
       const result = await transactionCallback();
-      
+
       console.log("[Gas Sponsorship Service] Step 8: Transaction executed successfully");
       return { success: true, result };
     } catch (error: any) {

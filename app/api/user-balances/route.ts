@@ -2,17 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getUserPositions } from '@/lib/utils/allocateApi';
 import { UserPositions } from '@/lib/models/userPositions';
 import { getCollection } from '@/lib/mongodb';
 
-// Helper function to fetch and update user positions
-async function updateUserPositions(address: string, targetGoalId?: string | null) {
+function resolveAllocateBaseUrl(request: NextRequest) {
+  const rawBaseUrl =
+    process.env.ALLOCATE_API_URL ||
+    process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    new URL(request.url).origin;
+
+  let backendOrigin: string;
   try {
-    const url = targetGoalId 
-      ? `${process.env.ALLOCATE_API_URL}/api/user-positions?userAddress=${address}&targetGoalId=${targetGoalId}`
-      : `${process.env.ALLOCATE_API_URL}/api/user-positions?userAddress=${address}`;
-    
+    backendOrigin = new URL(rawBaseUrl).origin;
+  } catch {
+    return {
+      ok: false as const,
+      errorResponse: NextResponse.json(
+        { error: 'ALLOCATE_API_URL must be a valid absolute URL' },
+        { status: 500 }
+      ),
+    };
+  }
+
+  return { ok: true as const, baseUrl: backendOrigin };
+}
+
+// Helper function to fetch and update user positions
+async function updateUserPositions(
+  baseUrl: string,
+  address: string,
+  targetGoalId?: string | null,
+  chainId?: string | number | null
+) {
+  const params = new URLSearchParams({ userAddress: address });
+  if (targetGoalId) params.set("targetGoalId", targetGoalId);
+  if (chainId) params.set("chainId", String(chainId));
+  const url = `${baseUrl}/api/user-positions?${params}`;
+  try {
     console.log('[user-balances] Calling:', url);
     
     const controller = new AbortController();
@@ -57,15 +84,26 @@ async function updateUserPositions(address: string, targetGoalId?: string | null
 
 export async function POST(request: NextRequest) {
   try {
+    const resolved = resolveAllocateBaseUrl(request);
+    if (!resolved.ok) return resolved.errorResponse;
+    const { baseUrl } = resolved;
+
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
+    const chainId = searchParams.get('chainId');
     
     if (action === 'allocate') {
       const body = await request.json();
+      if (chainId && body && typeof body === "object" && !("chainId" in body)) {
+        const parsedChainId = Number(chainId);
+        if (Number.isFinite(parsedChainId)) {
+          body.chainId = parsedChainId;
+        }
+      }
       console.log('[user-balances POST] Allocate request:', body);
       
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=allocate`, {
+        const response = await fetch(`${baseUrl}/api/user-positions?action=allocate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -88,10 +126,16 @@ export async function POST(request: NextRequest) {
     
     if (action === 'create-goal' || action === 'create-group-goal') {
       const body = await request.json();
+      if (chainId && body && typeof body === "object" && !("chainId" in body)) {
+        const parsedChainId = Number(chainId);
+        if (Number.isFinite(parsedChainId)) {
+          body.chainId = parsedChainId;
+        }
+      }
       console.log(`[user-balances POST] Creating ${action}:`, body);
       
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=${action}`, {
+        const response = await fetch(`${baseUrl}/api/user-positions?action=${action}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -114,10 +158,16 @@ export async function POST(request: NextRequest) {
 
     if (action === 'group-goal-members' || action === 'group-goal-details') {
       const body = await request.json();
+      if (chainId && body && typeof body === "object" && !("chainId" in body)) {
+        const parsedChainId = Number(chainId);
+        if (Number.isFinite(parsedChainId)) {
+          body.chainId = parsedChainId;
+        }
+      }
       console.log(`[user-balances POST] ${action} request:`, body);
 
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=${action}`, {
+        const response = await fetch(`${baseUrl}/api/user-positions?action=${action}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -138,15 +188,32 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    const body = await request.json();
-    const { userAddress } = body;
+    let body: { userAddress?: string } = {};
+    try {
+      const bodyText = await request.text();
+      body = bodyText ? JSON.parse(bodyText) : {};
+    } catch (parseError) {
+      return NextResponse.json(
+        { error: 'Request body must be valid JSON' },
+        { status: 400 }
+      );
+    }
+    const userAddress = body.userAddress || searchParams.get('userAddress');
+    const bodyChainId =
+      typeof (body as { chainId?: unknown }).chainId === "number"
+        ? (body as { chainId?: number }).chainId
+        : undefined;
+    const resolvedChainId =
+      chainId || (bodyChainId !== undefined ? String(bodyChainId) : undefined);
     console.log('[user-balances POST] Request received for:', userAddress);
     
     if (!userAddress) {
       return NextResponse.json({ error: 'userAddress required' }, { status: 400 });
     }
     
-    const url = `${process.env.ALLOCATE_API_URL}/api/user-positions?userAddress=${userAddress}`;
+    const params = new URLSearchParams({ userAddress });
+    if (resolvedChainId) params.set("chainId", resolvedChainId);
+    const url = `${baseUrl}/api/user-positions?${params}`;
     console.log('[user-balances POST] Calling:', url);
     
     // Add timeout to prevent long waits
@@ -184,15 +251,22 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const resolved = resolveAllocateBaseUrl(request);
+    if (!resolved.ok) return resolved.errorResponse;
+    const { baseUrl } = resolved;
+
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('userAddress');
     const targetGoalId = searchParams.get('targetGoalId');
     const action = searchParams.get('action');
+    const chainId = searchParams.get('chainId');
     
     // Handle Group Goals actions
     if (action === 'public-goals') {
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=public-goals`);
+        const params = new URLSearchParams({ action: "public-goals" });
+        if (chainId) params.set("chainId", chainId);
+        const response = await fetch(`${baseUrl}/api/user-positions?${params}`);
         if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
         const data = await response.json();
         return NextResponse.json(data);
@@ -203,7 +277,9 @@ export async function GET(request: NextRequest) {
     
     if (action === 'my-groups' && address) {
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=my-groups&userAddress=${address}`);
+        const params = new URLSearchParams({ action: "my-groups", userAddress: address });
+        if (chainId) params.set("chainId", chainId);
+        const response = await fetch(`${baseUrl}/api/user-positions?${params}`);
         if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
         const data = await response.json();
         return NextResponse.json(data);
@@ -216,7 +292,9 @@ export async function GET(request: NextRequest) {
       const start = searchParams.get('start') || '0';
       const limit = searchParams.get('limit') || '10';
       try {
-        const response = await fetch(`${process.env.ALLOCATE_API_URL}/api/user-positions?action=leaderboard&start=${start}&limit=${limit}`);
+        const params = new URLSearchParams({ action: "leaderboard", start, limit });
+        if (chainId) params.set("chainId", chainId);
+        const response = await fetch(`${baseUrl}/api/user-positions?${params}`);
         if (!response.ok) throw new Error(`API responded with status: ${response.status}`);
         const data = await response.json();
         return NextResponse.json(data);
@@ -245,7 +323,7 @@ export async function GET(request: NextRequest) {
       // If stale, update in background
       if (isStale) {
         // Don't await - update in background
-        updateUserPositions(address, targetGoalId).catch(err => 
+        updateUserPositions(baseUrl, address, targetGoalId).catch(err => 
           console.warn('[user-balances] Background update failed:', err)
         );
       }
@@ -254,7 +332,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Fetch fresh data
-    const positions = await updateUserPositions(address, targetGoalId);
+    const positions = await updateUserPositions(baseUrl, address, targetGoalId, chainId);
     return NextResponse.json(positions);
   } catch (error) {
     console.error('[user-balances GET] Error:', error);

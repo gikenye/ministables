@@ -119,7 +119,9 @@ export function useBackendGoals(
           additional: { goalId },
         });
 
-        const response = await fetch(`/api/user-balances?goalId=${goalId}`);
+        const params = new URLSearchParams({ goalId });
+        if (chain?.id) params.set("chainId", String(chain.id));
+        const response = await fetch(`/api/user-positions?${params}`);
         if (!response.ok) {
           const errorData = await response
             .json()
@@ -141,7 +143,7 @@ export function useBackendGoals(
         return null;
       }
     },
-    [convertBackendGoal]
+    [convertBackendGoal, chain?.id]
   );
 
   // Get quicksave goal ID for user
@@ -177,7 +179,8 @@ export function useBackendGoals(
           userAddress: address,
           vaultAddress: getVaultAddress(chainId, symbol),
         });
-        const response = await fetch(`/api/user-balances?${params}`);
+        params.set("chainId", String(chainId));
+        const response = await fetch(`/api/user-positions?${params}`);
 
         if (!response.ok) {
           const errorData = await response

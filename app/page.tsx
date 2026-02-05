@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -102,6 +102,7 @@ export default function AppPage() {
 
   const dataFetching = useDataFetching({
     address: account?.address,
+    chainId: chain?.id,
     setUserPortfolio: guardSetter(state.setUserPortfolio),
     setPortfolioLoading: guardSetter(state.setPortfolioLoading),
     setPortfolioError: guardSetter(state.setPortfolioError),
@@ -405,6 +406,12 @@ export default function AppPage() {
     }
   };
 
+  const requestVaultPositions = useCallback(() => {
+    if (!account?.address || !chain || !tokens?.length) return;
+    const tokenSymbols = tokens.map((token) => token.symbol);
+    fetchVaultPositions(chain, account.address, tokenSymbols);
+  }, [account?.address, chain, tokens, fetchVaultPositions]);
+
   const chainConfigValid = useMemo(() => {
     return chain && tokens && tokens.length > 0 && tokenInfos;
   }, [chain, tokens, tokenInfos]);
@@ -471,8 +478,12 @@ export default function AppPage() {
               chain={chain}
               tokenInfos={tokenInfos}
               exchangeRate={getKESRate() || undefined}
+              vaultPositions={vaultPositions}
+              vaultPositionsLoading={vaultPositionsLoading}
+              onRequestVaultPositions={requestVaultPositions}
               handleCreateFirstGoal={handleCreateFirstGoal}
               handleGoalCardClick={modalHandlers.handleGoalCardClick}
+              onQuickSaveClick={() => state.setQuickSaveDetailsOpen(true)}
               fetchUserPortfolio={dataFetching.refreshUserPortfolio}
               fetchUserGoals={dataFetching.fetchUserGoals}
               toggleBalanceVisibility={state.toggleBalanceVisibility}
@@ -548,6 +559,8 @@ export default function AppPage() {
             modalHandlers.handleQuickSaveAmountContinue
           }
           onQuickSaveDeposit={handleQuickSaveDeposit}
+          onQuickSaveWithdraw={() => state.setWithdrawActionsModalOpen(true)}
+          quickSaveBalanceUsd={Number(state.userPortfolio?.totalValueUSD || 0)}
           goalDetailsOpen={state.goalDetailsOpen}
           goalAmountOpen={state.goalAmountOpen}
           goalConfirmationOpen={state.goalConfirmationOpen}

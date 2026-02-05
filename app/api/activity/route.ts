@@ -1,35 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
+import { RequestValidator } from "@/lib/backend/validators/request.validator";
+import { ActivityIndexer } from "@/lib/backend/services/activity-indexer.service";
+import type { ActivityResponse, ErrorResponse } from "@/lib/backend/types";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+export async function GET(
+  request: NextRequest
+): Promise<NextResponse<ActivityResponse | ErrorResponse>> {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const userAddress = searchParams.get("userAddress");
 
-    if (!userId) {
+    const validation = RequestValidator.validateUserAddress(userAddress);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error! }, { status: 400 });
+    }
+
+    const limitParam = searchParams.get("limit");
+    const limit = Number.parseInt(limitParam || String(DEFAULT_LIMIT), 10);
+    if (Number.isNaN(limit) || limit < 1 || limit > MAX_LIMIT) {
       return NextResponse.json(
-        { error: "User ID is required" },
+        { error: `Invalid limit parameter. Must be between 1 and ${MAX_LIMIT}.` },
         { status: 400 }
       );
     }
 
-    // TODO: Implement actual database query to fetch user activities
-    // For now, return empty array to let the service use localStorage fallback
-    const activities = [];
+    const normalizedAddress = userAddress!.toLowerCase();
+    const activities = await ActivityIndexer.getActivities(normalizedAddress, limit);
 
-    return NextResponse.json({
-      success: true,
+    const response: ActivityResponse = {
+      userAddress: normalizedAddress,
+      startBlock: 0,
+      endBlock: 0,
+      limit,
       activities,
-      count: activities.length,
-    });
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
-    console.error("Error fetching user activity:", error);
+    console.error("Activity API error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch user activity" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }
 }
+
+

@@ -41,6 +41,8 @@ interface ModalManagerProps {
   onQuickSaveSaveNow: () => void;
   onQuickSaveAmountContinue: (amount: string) => void;
   onQuickSaveDeposit: () => void;
+  onQuickSaveWithdraw?: () => void;
+  quickSaveBalanceUsd?: number;
 
   // Goal Modals
   goalDetailsOpen: boolean;
@@ -144,6 +146,8 @@ export function ModalManager(props: ModalManagerProps) {
     onQuickSaveSaveNow,
     onQuickSaveAmountContinue,
     onQuickSaveDeposit,
+    onQuickSaveWithdraw,
+    quickSaveBalanceUsd = 0,
     goalDetailsOpen,
     goalAmountOpen,
     goalConfirmationOpen,
@@ -492,6 +496,10 @@ export function ModalManager(props: ModalManagerProps) {
         isOpen={quickSaveDetailsOpen}
         onClose={onQuickSaveClose}
         onSaveNow={onQuickSaveSaveNow}
+        onWithdraw={onQuickSaveWithdraw}
+        balanceUSD={quickSaveBalanceUsd}
+        exchangeRate={exchangeRate}
+        showBalance={showBalances}
       />
 
       <AmountInputModal

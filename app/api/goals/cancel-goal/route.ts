@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { metaGoalId, userAddress } = await request.json();
+    const body = await request.json();
+    const { metaGoalId, userAddress, chainId } = body;
 
     if (!metaGoalId || !userAddress) {
       return NextResponse.json(
@@ -11,7 +12,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const url = `${process.env.ALLOCATE_API_URL}/api/user-positions?action=cancel-goal`;
+    const baseUrl =
+      process.env.ALLOCATE_API_URL ||
+      process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      new URL(request.url).origin;
+    const url = `${baseUrl}/api/user-positions?action=cancel-goal`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 35000);
@@ -20,7 +26,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ metaGoalId, userAddress }),
+      body: JSON.stringify({ metaGoalId, userAddress, chainId }),
     });
 
     clearTimeout(timeoutId);

@@ -5,25 +5,48 @@
 
 // Environment variable configuration
 import { logger } from "@/lib/services/logger";
-import {CHAINS} from "@/config/chainConfig";
-const ALLOCATE_API_URL =
+import { CHAINS } from "@/config/chainConfig";
+
+const SERVER_ALLOCATE_API_URL =
   process.env.ALLOCATE_API_URL ||
   process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
   "";
-if (
-  !process.env.ALLOCATE_API_URL &&
-  !process.env.NEXT_PUBLIC_ALLOCATE_API_URL
-) {
+
+const CLIENT_ALLOCATE_API_URL = process.env.NEXT_PUBLIC_ALLOCATE_API_URL || "";
+
+if (!SERVER_ALLOCATE_API_URL) {
   logger.warn(
-    "ALLOCATE_API_URL environment variable not set. Using fallback URL for development.",
+    "ALLOCATE_API_URL not set. Falling back to relative requests when possible.",
     { component: "backendApiService", operation: "config" }
   );
+}
+
+function resolveDefaultBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    return CLIENT_ALLOCATE_API_URL;
+  }
+  return SERVER_ALLOCATE_API_URL;
+}
+
+function appendChainParams(
+  params: URLSearchParams,
+  chainId?: number,
+  chain?: string
+) {
+  if (typeof chainId === "number" && Number.isFinite(chainId)) {
+    params.set("chainId", String(chainId));
+  }
+  if (chain) {
+    params.set("chain", chain);
+  }
+  return params;
 }
 
 // API endpoint configuration
 export const API_ENDPOINTS = {
   ALLOCATE: "/api/allocate",
-  USER_POSITIONS: "/api/user-balances",
+  USER_POSITIONS: "/api/user-positions",
   LEADERBOARD: "/api/leaderboard",
   GOALS: "/api/goals",
   XP: "/api/xp",
@@ -75,6 +98,8 @@ export interface CreateGoalRequest {
   creatorAddress: string;
   vaults: SupportedAsset[] | "all";
   isPublic?: boolean;
+  chainId?: number;
+  chain?: string;
 }
 
 export interface CreateGoalResponse {
@@ -165,6 +190,8 @@ export interface JoinGoalRequest {
   userAddress: string;
   depositTxHash: string;
   asset: SupportedAsset;
+  chainId?: number;
+  chain?: string;
 }
 
 export interface JoinGoalWithAllocationRequest {
@@ -317,10 +344,10 @@ export class BackendApiClient {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || ALLOCATE_API_URL;
+    this.baseUrl = baseUrl ?? resolveDefaultBaseUrl();
     if (!this.baseUrl) {
-      logger.error(
-        "BackendApiClient: No API base URL set. API calls will fail.",
+      logger.warn(
+        "BackendApiClient: No API base URL set. Using relative requests where supported.",
         { component: "backendApiService", operation: "init" }
       );
     }
@@ -330,7 +357,7 @@ export class BackendApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
+    const url = this.baseUrl ? `${this.baseUrl}${endpoint}` : endpoint;
     const config: RequestInit = {
       headers: {
         "Content-Type": "application/json",
@@ -395,8 +422,14 @@ export class BackendApiClient {
   }
 
   // User Portfolio API methods
-  async getUserPortfolio(userAddress: string): Promise<UserPortfolioResponse> {
-    const params = new URLSearchParams({ userAddress });
+  async getUserPortfolio(
+    userAddress: string,
+    chainId?: number
+  ): Promise<UserPortfolioResponse> {
+    const params = appendChainParams(
+      new URLSearchParams({ userAddress }),
+      chainId
+    );
     return this.request<UserPortfolioResponse>(
       `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );
@@ -416,21 +449,33 @@ export class BackendApiClient {
   }
 
   // Group savings API methods
-  async getAllGroupSavings(): Promise<GroupSavingsResponse> {
+  async getAllGroupSavings(chainId?: number): Promise<GroupSavingsResponse> {
+    const params = appendChainParams(
+      new URLSearchParams({ action: "all-group-savings" }),
+      chainId
+    );
     return this.request<GroupSavingsResponse>(
-      `${API_ENDPOINTS.USER_POSITIONS}?action=all-group-savings`
+      `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );
   }
 
-  async getPublicGoals(): Promise<GroupSavingsResponse> {
+  async getPublicGoals(chainId?: number): Promise<GroupSavingsResponse> {
+    const params = appendChainParams(
+      new URLSearchParams({ action: "public-goals" }),
+      chainId
+    );
     return this.request<GroupSavingsResponse>(
-      `${API_ENDPOINTS.USER_POSITIONS}?action=public-goals`
+      `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );
   }
 
-  async getPrivateGoals(): Promise<GroupSavingsResponse> {
+  async getPrivateGoals(chainId?: number): Promise<GroupSavingsResponse> {
+    const params = appendChainParams(
+      new URLSearchParams({ action: "private-goals" }),
+      chainId
+    );
     return this.request<GroupSavingsResponse>(
-      `${API_ENDPOINTS.USER_POSITIONS}?action=private-goals`
+      `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );
   }
 
@@ -499,15 +544,21 @@ export class BackendApiClient {
   }
 
   // My Groups API - Get user's group memberships
-  async getMyGroups(userAddress: string): Promise<{
+  async getMyGroups(
+    userAddress: string,
+    chainId?: number
+  ): Promise<{
     total: number;
     public: { total: number; goals: GroupSavingsGoal[] };
     private: { total: number; goals: GroupSavingsGoal[] };
   }> {
-    const params = new URLSearchParams({
-      action: "my-groups",
-      userAddress,
-    });
+    const params = appendChainParams(
+      new URLSearchParams({
+        action: "my-groups",
+        userAddress,
+      }),
+      chainId
+    );
     return this.request<{
       total: number;
       public: { total: number; goals: GroupSavingsGoal[] };
@@ -517,9 +568,13 @@ export class BackendApiClient {
 
   // Multi-vault Goals API methods
   async getUserGoalsByCreator(
-    creatorAddress: string
+    creatorAddress: string,
+    chainId?: number
   ): Promise<GoalDetailsResponse[]> {
-    const params = new URLSearchParams({ creatorAddress });
+    const params = appendChainParams(
+      new URLSearchParams({ creatorAddress }),
+      chainId
+    );
     return this.request<GoalDetailsResponse[]>(
       `${API_ENDPOINTS.GOALS}?${params}`
     );
@@ -527,15 +582,19 @@ export class BackendApiClient {
 
   // Get goals with progress data
   async getGoalsWithProgress(
-    creatorAddress: string
+    creatorAddress: string,
+    chainId?: number
   ): Promise<GoalDetailsResponse[]> {
-    const params = new URLSearchParams({ creatorAddress });
+    const params = appendChainParams(
+      new URLSearchParams({ creatorAddress }),
+      chainId
+    );
     return this.request<GoalDetailsResponse[]>(
       `${API_ENDPOINTS.GOALS}?${params}`
     );
   }
 
-  //invite user to group goal
+  // Invite user to group goal
   async inviteUserToGroupGoal(
     metaGoalId: string,
     invitedAddress: string,
@@ -573,17 +632,26 @@ export class BackendApiClient {
   }
 
   // Get single goal by metaGoalId
-  async getGoalByMetaId(metaGoalId: string): Promise<GoalDetailsResponse> {
+  async getGoalByMetaId(
+    metaGoalId: string,
+    chainId?: number
+  ): Promise<GoalDetailsResponse> {
+    const params = appendChainParams(new URLSearchParams(), chainId);
+    const suffix = params.toString() ? `?${params}` : "";
     return this.request<GoalDetailsResponse>(
-      `${API_ENDPOINTS.GOALS}/${metaGoalId}`
+      `${API_ENDPOINTS.GOALS}/${metaGoalId}${suffix}`
     );
   }
 
-
-
   // Leaderboard API methods
-  async getUserScore(userAddress: string): Promise<UserScoreResponse> {
-    const params = new URLSearchParams({ userAddress });
+  async getUserScore(
+    userAddress: string,
+    chainId?: number
+  ): Promise<UserScoreResponse> {
+    const params = appendChainParams(
+      new URLSearchParams({ userAddress }),
+      chainId
+    );
     return this.request<UserScoreResponse>(
       `${API_ENDPOINTS.LEADERBOARD}?${params}`
     );
@@ -591,13 +659,17 @@ export class BackendApiClient {
 
   async getLeaderboard(
     start: number = 0,
-    limit: number = 10
+    limit: number = 10,
+    chainId?: number
   ): Promise<LeaderboardResponse> {
-    const params = new URLSearchParams({
-      action: "leaderboard",
-      start: start.toString(),
-      limit: limit.toString(),
-    });
+    const params = appendChainParams(
+      new URLSearchParams({
+        action: "leaderboard",
+        start: start.toString(),
+        limit: limit.toString(),
+      }),
+      chainId
+    );
     return this.request<LeaderboardResponse>(
       `${API_ENDPOINTS.USER_POSITIONS}?${params}`
     );

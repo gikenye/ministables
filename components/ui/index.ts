@@ -2,6 +2,7 @@
 export { ModalHeader } from "./ModalHeader";
 export { InfoCard } from "./InfoCard";
 export { ActionButton } from "./ActionButton";
+export { CardActionButton } from "./CardActionButton";
 export { BottomSheet } from "./BottomSheet";
 export { NumberKeypad } from "./NumberKeypad";
 export { AmountDisplay } from "./AmountDisplay";

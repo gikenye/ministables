@@ -21,9 +21,12 @@ export async function POST(request: NextRequest) {
       transactionStore.set(body.transaction_code, { ...body, updated_at: new Date().toISOString() });
       
       const onrampCollection = await getCollection('onramp_deposits');
+      const hasTxHash = Boolean(body.transaction_hash || body.tx_hash);
       const normalizedStatus =
         body.status === 'COMPLETE' || body.status === 'SUCCESS'
-          ? 'COMPLETED'
+          ? hasTxHash
+            ? 'COMPLETED'
+            : 'AWAITING_TX_HASH'
           : body.status === 'FAILED' || body.status === 'CANCELLED'
             ? 'FAILED'
             : 'PENDING';

@@ -70,15 +70,27 @@ export async function POST(request: NextRequest) {
 
     try {
       const onrampCollection = await getCollection('onramp_deposits');
+      const txHash = data?.data?.transaction_hash;
+      const status = data?.data?.status;
+      const amountInUsd = data?.data?.amount_in_usd;
+      const receiptNumber = data?.data?.receipt_number;
+      
+      const updateFields: Record<string, any> = {
+        'provider.name': 'pretium',
+        'provider.lastStatusPayload': data,
+        'provider.lastStatusAt': new Date(),
+        updatedAt: new Date(),
+      };
+      
+      if (txHash) updateFields.txHash = txHash;
+      if (status) updateFields.status = status;
+      if (amountInUsd) updateFields.amountInUsd = amountInUsd;
+      if (receiptNumber) updateFields.receiptNumber = receiptNumber;
+      
       await onrampCollection.updateOne(
         { transactionCode: transaction_code },
         {
-          $set: {
-            'provider.name': 'pretium',
-            'provider.lastStatusPayload': data,
-            'provider.lastStatusAt': new Date(),
-            updatedAt: new Date(),
-          },
+          $set: updateFields,
           $setOnInsert: {
             transactionCode: transaction_code,
             createdAt: new Date(),

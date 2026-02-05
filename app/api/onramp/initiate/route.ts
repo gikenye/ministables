@@ -284,6 +284,13 @@ async function pollAndAllocate(
         }
       );
 
+      const scheduleNextPoll = () => {
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        }
+      };
+
       if (txData?.status === "COMPLETE") {
         logger.info("Transaction complete detected", {
           component: "onramp.poller",
@@ -306,6 +313,31 @@ async function pollAndAllocate(
               },
             }
           );
+          scheduleNextPoll();
+          return;
+        }
+        if (!txData.transaction_hash) {
+          logger.warn("transaction_hash missing from status response", {
+            component: "onramp.poller",
+            operation: "status",
+            additional: {
+              transactionCode,
+              isReleased: txData.is_released,
+            },
+          });
+          await onrampCollection.updateOne(
+            { transactionCode },
+            {
+              $set: {
+                status: "AWAITING_TX_HASH",
+                receiptNumber: txData.receipt_number,
+                amountInUsd: txData.amount_in_usd,
+                lastRetryAttemptAt: new Date(),
+                updatedAt: new Date(),
+              },
+            }
+          );
+          scheduleNextPoll();
           return;
         }
         const decimals = ASSET_DECIMALS[asset.toUpperCase()] || 18;
@@ -317,7 +349,7 @@ async function pollAndAllocate(
           operation: "db.update",
           additional: {
             status: "COMPLETED",
-            txHash: txData.transaction_hash || "missing",
+            txHash: txData.transaction_hash,
             receiptNumber: txData.receipt_number,
             amountInUsd: txData.amount_in_usd,
             amountInWei,
@@ -385,10 +417,7 @@ async function pollAndAllocate(
         return;
       }
 
-      attempts++;
-      if (attempts < maxAttempts) {
-        setTimeout(poll, 5000);
-      }
+      scheduleNextPoll();
     } catch (error) {
       logger.error(error as Error, {
         component: "onramp.poller",
