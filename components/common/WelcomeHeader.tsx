@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useActiveAccount } from "thirdweb/react";
+import {
+  BASENAME_RESOLVER_ADDRESS,
+  resolveL2Name,
+} from "thirdweb/extensions/ens";
+import { base } from "thirdweb/chains";
 import { getProfiles, getUserEmail, type Profile } from "thirdweb/wallets";
 import { client } from "@/lib/thirdweb/client";
 
@@ -11,8 +17,11 @@ type LinkedAccountDetails = Profile["details"] & {
 };
 
 export function WelcomeHeader() {
+  const account = useActiveAccount();
   const [greeting, setGreeting] = useState("good morning");
-  const [userName, setUserName] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [emailNickname, setEmailNickname] = useState("");
+  const [basename, setBasename] = useState<string | null>(null);
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -22,6 +31,10 @@ export function WelcomeHeader() {
     if (hour < 12) setGreeting("good morning");
     else if (hour < 18) setGreeting("good afternoon");
     else setGreeting("good evening");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
 
     const extractProfileDetails = (profiles: Profile[]) => {
       const getDetails = (profile: Profile) =>
@@ -46,37 +59,87 @@ export function WelcomeHeader() {
     };
 
     const fetchUser = async () => {
+      setLoading(true);
+
       try {
         const profiles = await getProfiles({ client });
         const details = extractProfileDetails(profiles);
         const givenName = details?.givenName?.trim();
         const name = details?.name?.trim();
-        const email = details?.email;
+        const email = details?.email?.trim();
         const picture = details?.picture?.trim();
-        const resolvedName =
-          givenName || name || (email ? email.split("@")[0] : "");
+        const nextProfileName = givenName || name || "";
+        const nextEmailNickname = email ? email.split("@")[0] : "";
+        let fallbackNickname = "";
 
-        if (resolvedName) {
-          setUserName(resolvedName);
-        } else {
+        if (!nextProfileName && !nextEmailNickname) {
           const fallbackEmail = await getUserEmail({ client });
-          if (fallbackEmail) {
-            setUserName(fallbackEmail.split("@")[0]);
-          }
+          fallbackNickname = fallbackEmail ? fallbackEmail.split("@")[0] : "";
         }
 
-        if (picture) {
-          setUserAvatarUrl(picture);
-          setAvatarError(false);
+        if (!cancelled) {
+          setProfileName(nextProfileName);
+          setEmailNickname(nextEmailNickname || fallbackNickname);
+
+          if (picture) {
+            setUserAvatarUrl(picture);
+            setAvatarError(false);
+          }
         }
       } catch (error) {
         console.error("Error fetching user profile:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     fetchUser();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const address = account?.address;
+
+    if (!address) {
+      setBasename(null);
+      return;
+    }
+
+    setBasename(null);
+
+    const resolveBasename = async () => {
+      try {
+        const name = await resolveL2Name({
+          client,
+          address,
+          resolverAddress: BASENAME_RESOLVER_ADDRESS,
+          resolverChain: base,
+        });
+
+        if (!cancelled) {
+          setBasename(name ?? null);
+        }
+      } catch (error) {
+        console.error("Error resolving basename:", error);
+        if (!cancelled) {
+          setBasename(null);
+        }
+      }
+    };
+
+    resolveBasename();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address]);
+
+  const displayName = profileName || basename || emailNickname;
 
   return (
     <div className="flex items-center w-full mb-3 animate-in fade-in slide-in-from-top-1 duration-500">
@@ -86,13 +149,13 @@ export function WelcomeHeader() {
           {userAvatarUrl && !avatarError ? (
             <img
               src={userAvatarUrl}
-              alt={userName ? `${userName} avatar` : "User avatar"}
+              alt={displayName ? `${displayName} avatar` : "User avatar"}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
               onError={() => setAvatarError(true)}
             />
           ) : (
-            userName?.charAt(0).toUpperCase() || "U"
+            displayName?.charAt(0).toUpperCase() || "U"
           )}
         </div>
         
@@ -101,7 +164,7 @@ export function WelcomeHeader() {
           <p className="text-white text-xs font-medium truncate">
             {greeting} 
             <span className="text-[#4ade80] ml-1">
-               {loading ? "..." : (userName || "user")}!
+               {loading ? "..." : (displayName || "user")}!
             </span>
             <span className="ml-1">👋</span>
           </p>

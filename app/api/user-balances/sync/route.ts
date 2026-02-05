@@ -8,10 +8,10 @@ import { getCollection } from '@/lib/mongodb';
 
 export async function POST(request: NextRequest) {
   try {
-    const { address } = await request.json();
+    const { address, chainId } = await request.json();
     const collection = await getCollection('userBalances');
     
-    const positions = await getUserPositions(address);
+    const positions = await getUserPositions(address, chainId);
     
     await collection.findOneAndUpdate(
       { userAddress: address },
@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('address');
+    const chainIdParam = searchParams.get('chainId');
+    const chainId = chainIdParam ? Number(chainIdParam) : undefined;
     
     if (!address) {
       return NextResponse.json({ error: 'Address required' }, { status: 400 });
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(cached.data);
     }
     
-    const positions = await getUserPositions(address);
+    const positions = await getUserPositions(address, chainId);
     
     await collection.findOneAndUpdate(
       { userAddress: address },

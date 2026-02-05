@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { BottomSheet } from "@/components/ui";
+import { BottomSheet, CardActionButton } from "@/components/ui";
 import { Plus, Minus, Share2, Trash2, ArrowRightLeft, Loader2 } from "lucide-react";
 
 export const GoalDetailsModal = ({
@@ -43,20 +43,21 @@ export const GoalDetailsModal = ({
 
         {/* Deposit/Withdraw Actions */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <button 
-            onClick={() => onSaveNow('deposit')}
+          <CardActionButton
+            onClick={() => onSaveNow("deposit")}
             disabled={isDeleteLoading}
-            className="flex-1 flex items-center justify-center gap-2 py-4 bg-white text-black rounded-2xl text-sm font-bold active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1"
           >
             <Plus size={18} /> Deposit
-          </button>
-          <button 
-            onClick={() => onSaveNow('withdraw')}
+          </CardActionButton>
+          <CardActionButton
+            variant="secondary"
+            onClick={() => onSaveNow("withdraw")}
             disabled={isDeleteLoading}
-            className="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 border border-white/10 text-white rounded-2xl text-sm font-bold active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1"
           >
             <Minus size={18} /> Withdraw
-          </button>
+          </CardActionButton>
         </div>
 
         {/* Management Grid */}

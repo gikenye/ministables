@@ -1,6 +1,6 @@
+
 import { NextRequest, NextResponse } from 'next/server';
-import { Contract, Wallet, providers, utils, constants, BigNumber } from 'ethers';
-import { Mento } from '@mento-protocol/mento-sdk';
+import { ethers } from 'ethers';
 import { TOKENS, CHAINS } from '@/config/chainConfig';
 
 export const runtime = 'nodejs';
@@ -22,7 +22,35 @@ const SORTED_ORACLES_ABI = [
 ];
 
 type TokenConfig = { address: string };
+
 type MentoToken = { address: string; symbol?: string };
+
+type BigintLike = bigint | string | number | { toString: () => string };
+
+const toBigInt = (value: BigintLike): bigint => {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') return BigInt(Math.trunc(value));
+  if (typeof value === 'string') return BigInt(value);
+  if (value && typeof value.toString === 'function') {
+    return BigInt(value.toString());
+  }
+  throw new Error('Unsupported bigint value');
+};
+
+async function loadMento(provider: ethers.Provider) {
+  const mentoModule = await import(
+    "@mento-protocol/mento-sdk/dist/cjs/index.js"
+  );
+  const Mento =
+    (mentoModule as { Mento?: typeof import("@mento-protocol/mento-sdk").Mento })
+      .Mento ||
+    (mentoModule as { default?: { Mento?: typeof import("@mento-protocol/mento-sdk").Mento } })
+      .default?.Mento;
+  if (!Mento) {
+    throw new Error("Failed to load Mento SDK");
+  }
+  return Mento.create(provider as any);
+}
 
 // Map token symbol to USD rate feed IDs from Mento docs (relayed:XYZUSD feeds)
 const USD_FEED_BY_SYMBOL: Record<string, string> = {
@@ -37,6 +65,8 @@ const USD_FEED_BY_SYMBOL: Record<string, string> = {
   cCHF: '0x0f61BA9c30ef7CaEE7E5CC1F96BFFCb0f52ccD64',
   cJPY: '0xFDE35B45cBd2504FB5dC514F007bC2DE27034274',
 };
+
+const STABLE_SYMBOLS = new Set(["USDC", "USDT", "CUSD"]);
 
 function isValidAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
@@ -72,9 +102,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
     }
 
-    const provider = new providers.JsonRpcProvider(rpcUrl);
-    const signer = new Wallet(privateKey, provider);
-    const mento = await Mento.create(provider);
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const signer = new ethers.Wallet(privateKey, provider);
+    let mento: Awaited<ReturnType<typeof loadMento>> | null = null;
+    let celoToken: MentoToken | null = null;
+    let usdPerCelo1e18: bigint | null = null;
+    try {
+      mento = await loadMento(provider);
+      const pairs = await mento.getTradablePairs();
+      const flat = pairs.flat() as MentoToken[];
+      const celo = flat.find((t) => t.symbol === "CELO") || null;
+      const cUSD = flat.find((t) => (t.symbol || "").toUpperCase() === "CUSD") || null;
+      if (celo && cUSD) {
+        const pairCELOcUSD = await mento.findPairForTokens(
+          celo.address,
+          cUSD.address
+        );
+        const oneCelo = ethers.parseUnits("1", 18);
+        const outCUSD = await mento.getAmountOut(
+          celo.address,
+          cUSD.address,
+          oneCelo,
+          pairCELOcUSD
+        );
+        usdPerCelo1e18 = toBigInt(outCUSD);
+        celoToken = celo;
+      } else {
+        console.warn("[CRON] Mento: failed to resolve CELO/cUSD pair");
+      }
+    } catch (err) {
+      console.warn(
+        "[CRON] Mento SDK unavailable; falling back to stable peg / SortedOracles",
+        err instanceof Error ? err.message : "Unknown error"
+      );
+    }
 
     // Resolve token list from env or default to TOKENS for the default chain
     let tokenAddresses: string[] = parseAddressesFromEnv('TOKEN_ADDRESSES');
@@ -92,62 +153,59 @@ export async function GET(request: NextRequest) {
       console.error('[CRON] Invalid SortedOracles address');
       return NextResponse.json({ error: 'Configuration error' }, { status: 500 });
     }
-    const sortedOracles = new Contract(sortedOraclesAddress, SORTED_ORACLES_ABI, provider);
+    const sortedOracles = new ethers.Contract(sortedOraclesAddress, SORTED_ORACLES_ABI, provider);
 
-    // Discover CELO and cUSD via Mento and derive USD per CELO
-    const pairs = await mento.getTradablePairs();
-    const flat = pairs.flat() as MentoToken[];
-    const celo = flat.find((t) => t.symbol === 'CELO');
-    const cUSD = flat.find((t) => (t.symbol || '').toUpperCase() === 'CUSD');
-    if (!celo || !cUSD) {
-      return NextResponse.json({ error: 'Failed to resolve CELO/cUSD in Mento pairs' }, { status: 500 });
-    }
-    const pairCELOcUSD = await mento.findPairForTokens(celo.address, cUSD.address);
-    const oneCelo = utils.parseUnits('1', 18);
-    const outCUSD = await mento.getAmountOut(celo.address, cUSD.address, oneCelo, pairCELOcUSD);
-    const usdPerCelo1e18 = outCUSD; // 1e18 scale
-
-    const oracle = new Contract(oracleAddress, ORACLE_ABI, signer);
+    const oracle = new ethers.Contract(oracleAddress, ORACLE_ABI, signer);
 
     const tokens: string[] = [];
     const prices: string[] = [];
-    const prepared: Array<{ address: string; symbol: string; priceUSDPretty: string; route: string }>
-      = [];
+    const prepared: Array<{ address: string; symbol: string; priceUSDPretty: string; route: string }> = [];
 
     const pricePromises = tokenAddresses.map(async (tokenAddr) => {
       if (!isValidAddress(tokenAddr)) return null;
 
       try {
-        const erc20 = new Contract(tokenAddr, ERC20_ABI, provider);
-        const [tokenDecimals, tokenSymbol] = await Promise.all([
+        const erc20 = new ethers.Contract(tokenAddr, ERC20_ABI, provider);
+        const [tokenDecimalsRaw, tokenSymbol] = await Promise.all([
           erc20.decimals().catch(() => 18),
           erc20.symbol().catch(() => '?')
         ]);
 
-        let price1e18: BigNumber = constants.Zero;
+        const tokenDecimals = Number(tokenDecimalsRaw);
+
+        let price1e18: bigint = 0n;
         let route: string = '';
 
-        // Try CELO -> TOKEN
-        try {
-          const pairFwd = await mento.findPairForTokens(celo.address, tokenAddr);
-          const outTokens: BigNumber = await mento.getAmountOut(celo.address, tokenAddr, oneCelo, pairFwd);
-          if (outTokens.gt(0)) {
-            const scale = utils.parseUnits('1', tokenDecimals);
-            price1e18 = usdPerCelo1e18.mul(scale).div(outTokens);
-            route = 'CELO->TOKEN';
-          }
-        } catch (err) {
-          console.warn(`[CRON] CELO->TOKEN failed for ${tokenAddr}:`, err instanceof Error ? err.message : 'Unknown error');
+        const normalizedSymbol = tokenSymbol?.toUpperCase?.() ?? '';
+        if (STABLE_SYMBOLS.has(normalizedSymbol)) {
+          price1e18 = ethers.parseUnits('1', 18);
+          route = 'stable-peg';
         }
 
-        // Try TOKEN -> CELO
-        if (price1e18.isZero()) {
+        // Try CELO -> TOKEN via Mento
+        if (price1e18 == 0n && mento && usdPerCelo1e18 && celoToken) {
+          const oneCelo = ethers.parseUnits('1', 18);
           try {
-            const pairBack = await mento.findPairForTokens(tokenAddr, celo.address);
-            const oneToken = utils.parseUnits('1', tokenDecimals);
-            const outCelo: BigNumber = await mento.getAmountOut(tokenAddr, celo.address, oneToken, pairBack);
-            if (outCelo.gt(0)) {
-              price1e18 = usdPerCelo1e18.mul(outCelo).div(utils.parseUnits('1', 18));
+            const pairFwd = await mento.findPairForTokens(celoToken.address, tokenAddr);
+            const outTokens = toBigInt(await mento.getAmountOut(celoToken.address, tokenAddr, oneCelo, pairFwd));
+            if (outTokens > 0n) {
+              const scale = ethers.parseUnits('1', tokenDecimals);
+              price1e18 = (usdPerCelo1e18 * scale) / outTokens;
+              route = 'CELO->TOKEN';
+            }
+          } catch (err) {
+            console.warn(`[CRON] CELO->TOKEN failed for ${tokenAddr}:`, err instanceof Error ? err.message : 'Unknown error');
+          }
+        }
+
+        // Try TOKEN -> CELO via Mento
+        if (price1e18 == 0n && mento && usdPerCelo1e18 && celoToken) {
+          try {
+            const pairBack = await mento.findPairForTokens(tokenAddr, celoToken.address);
+            const oneToken = ethers.parseUnits('1', tokenDecimals);
+            const outCelo = toBigInt(await mento.getAmountOut(tokenAddr, celoToken.address, oneToken, pairBack));
+            if (outCelo > 0n) {
+              price1e18 = (usdPerCelo1e18 * outCelo) / ethers.parseUnits('1', 18);
               route = 'TOKEN->CELO';
             }
           } catch (err) {
@@ -156,13 +214,13 @@ export async function GET(request: NextRequest) {
         }
 
         // Fallback to SortedOracles direct USD feed
-        if (price1e18.isZero()) {
+        if (price1e18 == 0n) {
           const feed = USD_FEED_BY_SYMBOL[tokenSymbol as keyof typeof USD_FEED_BY_SYMBOL];
           if (feed && isValidAddress(feed)) {
             try {
-              const { numerator, denominator } = (await sortedOracles.medianRate(feed)) as { numerator: BigNumber; denominator: BigNumber };
-              if (!denominator.isZero()) {
-                price1e18 = numerator.mul(utils.parseUnits('1', 18)).div(denominator);
+              const [numerator, denominator] = await sortedOracles.medianRate(feed);
+              if (denominator != 0n) {
+                price1e18 = (numerator * ethers.parseUnits('1', 18)) / denominator;
                 route = 'SortedOracles';
               }
             } catch (err) {
@@ -171,7 +229,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        if (price1e18.isZero()) {
+        if (price1e18 == 0n) {
           console.warn(`[CRON] No price found for ${tokenSymbol} (${tokenAddr})`);
           return null;
         }
@@ -180,7 +238,7 @@ export async function GET(request: NextRequest) {
           address: tokenAddr,
           symbol: tokenSymbol,
           price: price1e18.toString(),
-          priceUSDPretty: utils.formatUnits(price1e18, 18),
+          priceUSDPretty: ethers.formatUnits(price1e18, 18),
           route: route || 'unknown',
         };
       } catch (err) {
@@ -204,26 +262,20 @@ export async function GET(request: NextRequest) {
     }
 
     if (tokens.length === 0) {
-      console.warn('[CRON] No prices to push');
-      return NextResponse.json({ success: true, pushed: 0, message: 'No prices to push' }, { status: 200 });
+      return NextResponse.json({ error: 'No valid prices to submit' }, { status: 500 });
     }
 
-    console.log(`[CRON] Pushing ${tokens.length} prices to oracle`);
     const tx = await oracle.setRatesBatch(tokens, prices);
     const receipt = await tx.wait();
 
-    console.log(`[CRON] Successfully pushed prices. TxHash: ${receipt.transactionHash}`);
     return NextResponse.json({
-      success: true,
-      pushed: tokens.length,
-      txHash: receipt.transactionHash,
-      entries: prepared,
+      ok: true,
+      txHash: receipt?.hash || tx.hash,
+      count: tokens.length,
+      tokens: prepared,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const stack = error instanceof Error ? error.stack : undefined;
-    console.error('[CRON] Fatal error:', message, stack);
+    console.error('[CRON] Error pushing prices', error);
     return NextResponse.json({ error: 'Failed to push prices' }, { status: 500 });
   }
 }
-

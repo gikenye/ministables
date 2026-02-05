@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { getVaultAddress, VAULT_CONTRACTS } from "@/config/chainConfig";
-import { celo } from "thirdweb/chains";
+import { useChain } from "@/components/ChainProvider";
 
 export interface FrontendGoal {
   id: string;
@@ -48,6 +47,7 @@ interface UseGoalsResult {
 
 export function useGoals(category?: string): UseGoalsResult {
   const account = useActiveAccount();
+  const { chain } = useChain();
   const [goals, setGoals] = useState<FrontendGoal[]>([]);
   const [stats, setStats] = useState<GoalStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +74,9 @@ export function useGoals(category?: string): UseGoalsResult {
       setError(null);
 
       // Fetch user positions directly from consolidated API
-      const response = await fetch(`/api/user-balances?userAddress=${userAddress}`);
+      const params = new URLSearchParams({ userAddress });
+      if (chain?.id) params.set("chainId", String(chain.id));
+      const response = await fetch(`/api/user-positions?${params}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch user positions');
@@ -163,7 +165,7 @@ export function useGoals(category?: string): UseGoalsResult {
 
   useEffect(() => {
     fetchGoals();
-  }, [userAddress, category]);
+  }, [userAddress, category, chain?.id]);
 
   const refetch = async () => {
     await fetchGoals();

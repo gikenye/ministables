@@ -1,3 +1,4 @@
+
 import { ethers } from "ethers";
 
 const GAS_SPONSORSHIP_ENABLED =
@@ -89,22 +90,22 @@ export async function executeWithGasSponsorship<T>(
 export async function logGasInfo(userAddress: string, gasLimit: number = 150000) {
   if (typeof window === "undefined" || !window.ethereum) return;
 
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const provider = new ethers.BrowserProvider(window.ethereum);
   const userBalance = await provider.getBalance(userAddress);
   const feeData = await provider.getFeeData();
 
-  const maxFeePerGas = feeData.maxFeePerGas || feeData.gasPrice;
-  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || ethers.BigNumber.from(0);
-  const estimatedGasCost = maxFeePerGas ? maxFeePerGas.mul(gasLimit) : ethers.BigNumber.from(0);
+  const maxFeePerGas = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? 0n;
+  const estimatedGasCost = maxFeePerGas * BigInt(gasLimit);
 
   console.log("[Gas Info]", {
-    userBalance: ethers.utils.formatEther(userBalance),
-    maxFeePerGas: maxFeePerGas ? ethers.utils.formatUnits(maxFeePerGas, "gwei") + " gwei" : "N/A",
-    maxPriorityFeePerGas: ethers.utils.formatUnits(maxPriorityFeePerGas, "gwei") + " gwei",
+    userBalance: ethers.formatEther(userBalance),
+    maxFeePerGas: maxFeePerGas ? ethers.formatUnits(maxFeePerGas, "gwei") + " gwei" : "N/A",
+    maxPriorityFeePerGas: ethers.formatUnits(maxPriorityFeePerGas, "gwei") + " gwei",
     gasLimit,
-    estimatedGasCost: ethers.utils.formatEther(estimatedGasCost),
-    shortfall: userBalance.lt(estimatedGasCost)
-      ? ethers.utils.formatEther(estimatedGasCost.sub(userBalance))
+    estimatedGasCost: ethers.formatEther(estimatedGasCost),
+    shortfall: userBalance < estimatedGasCost
+      ? ethers.formatEther(estimatedGasCost - userBalance)
       : "0",
   });
 }

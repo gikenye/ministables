@@ -7,11 +7,14 @@ export interface OnrampDeposit {
   asset: string;
   amount: string;
   transactionCode: string;
+  targetGoalId?: string;
   txHash?: string;
   phoneNumber: string;
   mobileNetwork: string;
   countryCode: string;
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'AWAITING_AMOUNT' | 'AWAITING_TX_HASH';
+  lastRetryAttemptAt?: Date;
+  failureReason?: string;
   receiptNumber?: string;
   amountInUsd?: string;
   provider?: {
@@ -27,6 +30,7 @@ export interface OnrampDeposit {
   allocation?: {
     success: boolean;
     status?: 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
+    startedAt?: Date;
     depositId?: string;
     shares?: string;
     allocationTxHash?: string;

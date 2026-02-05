@@ -40,6 +40,7 @@ export const WithdrawModal = ({
   const [withdrawAmount, setWithdrawAmount] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   
   useEffect(() => {
     if (isOpen) {
@@ -49,31 +50,82 @@ export const WithdrawModal = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
   const tokenBalances = useMemo(() => {
-    const balancesBySymbol: Record<string, { symbol: string; total: number; positions: WithdrawableDeposit[] }> = {};
-    vaultPositions
-      .filter((p) => parseFloat(p.withdrawableAmount || "0") > 0)
-      .forEach((position) => {
-        const symbol = position.tokenSymbol;
-        if (!balancesBySymbol[symbol]) {
-          balancesBySymbol[symbol] = { symbol, total: 0, positions: [] };
+    const balancesBySymbol: Record<string, { symbol: string; available: number; locked: number; nextUnlock?: number; positions: WithdrawableDeposit[] }> = {};
+    vaultPositions.forEach((position) => {
+      const symbol = position.tokenSymbol;
+      if (!balancesBySymbol[symbol]) {
+        balancesBySymbol[symbol] = { symbol, available: 0, locked: 0, positions: [] };
+      }
+      const withdrawableRaw = parseFloat(position.withdrawableAmount || "0");
+      const amountRaw = parseFloat(position.amount || "0");
+      const withdrawable = Number.isFinite(withdrawableRaw) ? withdrawableRaw : 0;
+      const amount = Number.isFinite(amountRaw) ? amountRaw : 0;
+      if (withdrawable > 0) {
+        balancesBySymbol[symbol].available += withdrawable;
+      } else {
+        balancesBySymbol[symbol].locked += amount;
+        const unlockTimeRaw = Number(position.unlockTime || 0);
+        const unlockTime = Number.isFinite(unlockTimeRaw) ? unlockTimeRaw : 0;
+        if (unlockTime > 0 && unlockTime > now) {
+          balancesBySymbol[symbol].nextUnlock = balancesBySymbol[symbol].nextUnlock
+            ? Math.min(balancesBySymbol[symbol].nextUnlock as number, unlockTime)
+            : unlockTime;
         }
-        balancesBySymbol[symbol].total += parseFloat(position.withdrawableAmount);
-        balancesBySymbol[symbol].positions.push(position);
-      });
-    
-    const result = Object.values(balancesBySymbol);
-    if (result.length > 0 && !selectedToken) setSelectedToken(result[0].symbol);
-    return result;
-  }, [vaultPositions, selectedToken]);
+      }
+      balancesBySymbol[symbol].positions.push(position);
+    });
+
+    return Object.values(balancesBySymbol).filter(
+      (token) => token.available > 0 || token.locked > 0
+    );
+  }, [vaultPositions, now]);
+
+  useEffect(() => {
+    if (!selectedToken && tokenBalances.length > 0) {
+      setSelectedToken(tokenBalances[0].symbol);
+      return;
+    }
+    if (
+      selectedToken &&
+      tokenBalances.length > 0 &&
+      !tokenBalances.some((token) => token.symbol === selectedToken)
+    ) {
+      setSelectedToken(tokenBalances[0].symbol);
+    }
+  }, [selectedToken, tokenBalances]);
 
   const currentTokenData = tokenBalances.find((t) => t.symbol === selectedToken);
+  const availableAmount = currentTokenData?.available || 0;
+  const lockedAmount = currentTokenData?.locked || 0;
+  const countdownLabel = useMemo(() => {
+    if (!currentTokenData?.nextUnlock) return null;
+    const diffMs = Math.max(0, currentTokenData.nextUnlock - now);
+    const totalMinutes = Math.ceil(diffMs / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }, [currentTokenData?.nextUnlock, now]);
+  const formatTokenAmount = (value: number) =>
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   const handleWithdraw = async () => {
     if (stage === "INPUT") {
       const amount = parseFloat(withdrawAmount);
       if (!amount || amount <= 0) return setError("Enter a valid amount");
-      if (amount > (currentTokenData?.total || 0)) return setError("Insufficient balance");
+      if (amount > availableAmount) return setError("Insufficient balance");
       setStage("CONFIRMING");
       return;
     }
@@ -96,7 +148,10 @@ export const WithdrawModal = ({
 
   const selectPositionsForAmount = (amount: number, tokenSymbol: string): number[] => {
     if (!currentTokenData) return [];
-    const sorted = [...currentTokenData.positions].sort((a, b) => parseFloat(b.withdrawableAmount) - parseFloat(a.withdrawableAmount));
+    const sorted = [...currentTokenData.positions].sort(
+      (a, b) =>
+        parseFloat(b.withdrawableAmount) - parseFloat(a.withdrawableAmount)
+    );
     const selectedIds: number[] = [];
     let remaining = amount;
     for (const pos of sorted) {
@@ -149,9 +204,26 @@ export const WithdrawModal = ({
                 {/* Compact Asset Selector */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center px-1">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-white/20">Asset</span>
-                    <span className="text-[9px] font-bold text-teal-400/80">{currentTokenData?.total.toFixed(2) || "0.00"} {selectedToken}</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/20">
+                      Available
+                    </span>
+                    <span className="text-[9px] font-bold text-teal-400/80">
+                      {formatTokenAmount(availableAmount)} {selectedToken || ""}
+                    </span>
                   </div>
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/20">
+                      Locked
+                    </span>
+                    <span className="text-[9px] font-bold text-white/40">
+                      {formatTokenAmount(lockedAmount)} {selectedToken || ""}
+                    </span>
+                  </div>
+                  {lockedAmount > 0 && countdownLabel && (
+                    <div className="px-1 text-[9px] font-bold uppercase tracking-widest text-white/30">
+                      Unlocks in {countdownLabel}
+                    </div>
+                  )}
                   <div className="flex gap-1.5 p-1 bg-black/20 rounded-xl border border-white/5">
                     {tokenBalances.map((token) => (
                       <button

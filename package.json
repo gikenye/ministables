@@ -78,7 +78,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
     "embla-carousel-react": "8.5.1",
-    "ethers": "^5.8.0",
+    "ethers": "^6.16.0",
     "framer-motion": "^12.26.2",
     "geist": "^1.3.1",
     "input-otp": "1.4.1",
@@ -103,7 +103,8 @@
     "vaul": "^0.9.6",
     "viem": "latest",
     "wagmi": "^2.16.5",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/node": "^22",
@@ -117,7 +118,22 @@
     "typescript": "^5"
   },
   "overrides": {
-    "error-ex": "1.3.2"
+    "error-ex": "1.3.2",
+    "@mento-protocol/mento-sdk>ethers": "5.8.0"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "@mento-protocol/mento-sdk@*": {
+        "dependencies": {
+          "ethers": "5.8.0"
+        },
+        "peerDependenciesMeta": {
+          "ethers": {
+            "optional": true
+          }
+        }
+      }
+    }
   },
   "engines": {
     "node": ">=20 <23"

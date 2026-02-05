@@ -1,13 +1,14 @@
 "use client";
-import { useConnect, useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useConnect } from "thirdweb/react";
 import { ConnectButton, darkTheme } from "thirdweb/react";
-import { createWallet, inAppWallet } from "thirdweb/wallets";
+import { EIP1193, createWallet, inAppWallet } from "thirdweb/wallets";
 import { useChain } from "@/components/ChainProvider";
 import { client } from "@/lib/thirdweb/client";
 import { theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CHAINS } from "@/config/chainConfig";
+import { sdk } from "@farcaster/miniapp-sdk";
 
 const wallets = [
   inAppWallet({
@@ -30,7 +31,10 @@ const getIsMiniPay = () =>
 
 export function ConnectWallet({ className }: { className?: string }) {
   const account = useActiveAccount();
+  const { connect } = useConnect();
   const [isMiniPay, setIsMiniPay] = useState(getIsMiniPay);
+  const [isMiniApp, setIsMiniApp] = useState<boolean | null>(null);
+  const autoConnectAttempted = useRef(false);
   const { chain, setChain } = useChain();
 
   useEffect(() => {
@@ -58,21 +62,85 @@ export function ConnectWallet({ className }: { className?: string }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const detectMiniApp = async () => {
+      try {
+        const result = await sdk.isInMiniApp();
+        if (!cancelled) {
+          setIsMiniApp(result);
+        }
+      } catch (error) {
+        console.error("Failed to detect miniapp environment:", error);
+        if (!cancelled) {
+          setIsMiniApp(false);
+        }
+      }
+    };
+
+    detectMiniApp();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMiniApp !== true || account?.address || autoConnectAttempted.current) {
+      return;
+    }
+
+    autoConnectAttempted.current = true;
+    let cancelled = false;
+
+    const autoConnectMiniApp = async () => {
+      try {
+        const provider = await sdk.wallet.getEthereumProvider();
+        const wallet = EIP1193.fromProvider({ provider });
+        await wallet.autoConnect({ client, chain });
+
+        if (!cancelled) {
+          await connect(wallet);
+        }
+      } catch (error) {
+        console.warn("Miniapp wallet auto-connect skipped:", error);
+      }
+    };
+
+    void autoConnectMiniApp();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address, chain, connect, isMiniApp]);
+
   const shouldShowButton = !account || !isMiniPay;
-  const buttonClassName = cn(
-    "rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 border border-emerald-400/40 bg-emerald-500/20 text-white backdrop-blur-sm hover:bg-emerald-500/35",
-    className
-  );
+
+  if (isMiniApp === null || isMiniApp) {
+    return null;
+  }
 
   return (
-    <ConnectButton
-      client={client}
-      chains={CHAINS}
-      wallets={wallets}
-      connectButton={{
-        label: "Sign in",
-        className: buttonClassName,
-      }}
+    <div className={cn(
+      "rounded-full shadow-lg transition-all duration-200 border border-emerald-400/40 bg-emerald-500/20 backdrop-blur-sm hover:bg-emerald-500/35",
+      className
+    )}>
+      <ConnectButton
+        client={client}
+        chains={CHAINS}
+        wallets={wallets}
+        connectButton={{
+          label: "Sign in",
+          style: {
+            background: "transparent",
+            border: "none",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "0.875rem",
+            padding: "0.75rem 1.25rem",
+          },
+        }}
       connectModal={{
         showThirdwebBranding: false,
         size: "compact",
@@ -88,6 +156,7 @@ export function ConnectWallet({ className }: { className?: string }) {
           primaryButtonText: theme.colors.text,
         },
       })}
-    />
+      />
+    </div>
   );
 }

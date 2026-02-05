@@ -49,6 +49,7 @@ export function useWalletOperations({
   sendTransaction,
 }: WalletOperationsProps) {
   const [pendingDeposit, setPendingDeposit] = useState(false);
+  const WITHDRAW_GAS_LIMIT = 250000;
 
   /**
    * Prepare a deposit transaction for vault
@@ -282,14 +283,13 @@ export function useWalletOperations({
       const getGasShortfall = async (gasLimit: number) => {
         if (typeof window === "undefined" || !window.ethereum) return null;
 
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const provider = new ethers.BrowserProvider(window.ethereum);
         const [balance, feeData] = await Promise.all([
           provider.getBalance(account.address),
           provider.getFeeData(),
         ]);
-        const maxFeePerGas =
-          feeData.maxFeePerGas || feeData.gasPrice || ethers.BigNumber.from(0);
-        if (maxFeePerGas.lte(0)) return null;
+        const maxFeePerGas = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+        if (maxFeePerGas <= 0n) return null;
 
         console.log(
           "CELO: maxFeePerGas:",
@@ -298,18 +298,18 @@ export function useWalletOperations({
           gasLimit,
         );
 
-        const estimatedGasCost = maxFeePerGas.mul(gasLimit);
+        const estimatedGasCost = maxFeePerGas * BigInt(gasLimit);
 
         console.log(": estimatedGasCost:", estimatedGasCost.toString());
 
-        return balance.lt(estimatedGasCost)
-          ? estimatedGasCost.sub(balance)
-          : ethers.BigNumber.from(0);
+        return balance < estimatedGasCost
+          ? estimatedGasCost - balance
+          : 0n;
       };
 
       const sponsorGasLimit = approveTx ? 250000 : 180000;
       const gasShortfall = await getGasShortfall(sponsorGasLimit);
-      const shouldSponsor = gasShortfall === null ? true : gasShortfall.gt(0);
+      const shouldSponsor = gasShortfall === null ? true : gasShortfall > 0n;
 
       let depositReceipt: any;
 
@@ -337,12 +337,12 @@ export function useWalletOperations({
             userId: account?.address,
             additional: {
               gasLimit: sponsorGasLimit,
-              gasShortfall: gasShortfall ? gasShortfall.toString() : "unknown",
+              gasShortfall: gasShortfall !== null ? gasShortfall.toString() : "unknown",
             },
           });
-          if (gasShortfall && gasShortfall.gt(0)) {
+          if (gasShortfall !== null && gasShortfall > 0n) {
             throw new Error(
-              `Gas sponsorship is unavailable and your wallet is short ~${ethers.utils.formatEther(gasShortfall)} CELO for gas.`,
+              `Gas sponsorship is unavailable and your wallet is short ~${ethers.formatEther(gasShortfall)} CELO for gas.`,
             );
           }
 
@@ -386,12 +386,12 @@ export function useWalletOperations({
     }
 
     try {
-      await logGasInfo(userAddress);
+      await logGasInfo(userAddress, WITHDRAW_GAS_LIMIT);
 
-      await executeWithGasSponsorship(
-        userAddress,
-        async () => {
-          for (const depositId of depositIds) {
+      for (const depositId of depositIds) {
+        await executeWithGasSponsorship(
+          userAddress,
+          async () => {
             const vaultContract = getContract({
               client,
               chain,
@@ -430,10 +430,10 @@ export function useWalletOperations({
                 yieldEarned: "0",
               }),
             });
-          }
-        },
-        { sponsorGas, chainId: chain.id },
-      );
+          },
+          { sponsorGas, chainId: chain.id, gasLimit: WITHDRAW_GAS_LIMIT },
+        );
+      }
     } catch (error) {
       reportError("Vault withdrawal failed", {
         component: "useWalletOperations",

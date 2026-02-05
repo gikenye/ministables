@@ -10,7 +10,7 @@ import crypto from "crypto";
 import { ethers } from "ethers";
 
 // Set up Scroll mainnet provider
-const provider = new ethers.providers.JsonRpcProvider("https://rpc.scroll.io");
+const provider = new ethers.JsonRpcProvider("https://rpc.scroll.io");
 
 // Get USDC address from chain config
 const scrollTokens = getTokensBySymbol(scroll.id);
@@ -115,7 +115,7 @@ async function verifyUsdcTransfer(txHash: string): Promise<{
       };
     }
 
-    const TRANSFER_TOPIC0 = ethers.utils.id(
+    const TRANSFER_TOPIC0 = ethers.id(
       "Transfer(address,address,uint256)"
     );
 
@@ -133,8 +133,8 @@ async function verifyUsdcTransfer(txHash: string): Promise<{
           details: {
             from: "0x" + log.topics[1].slice(-40),
             to: "0x" + log.topics[2].slice(-40),
-            value: ethers.BigNumber.from(log.data).toString(),
-            valueFormatted: ethers.utils.formatUnits(
+            value: ethers.toBigInt(log.data).toString(),
+            valueFormatted: ethers.formatUnits(
               log.data,
               usdcToken?.decimals || 6
             ),

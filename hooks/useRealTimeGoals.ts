@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useActiveAccount } from 'thirdweb/react';
+import { useChain } from "@/components/ChainProvider";
 
 interface UseRealTimeGoalsProps {
   onGoalsUpdate: () => void;
@@ -15,16 +16,20 @@ export function useRealTimeGoals({
   intervalMs = 5000 // 5 seconds default
 }: UseRealTimeGoalsProps) {
   const account = useActiveAccount();
+  const { chain } = useChain();
 
   const forceRefresh = useCallback(async () => {
     if (!account?.address) return;
     
     try {
-      // Force fresh fetch from remote API
-      await fetch('/api/user-balances', {
-        method: 'POST',
+      const params = new URLSearchParams({ userAddress: account.address });
+      if (chain?.id) params.set("chainId", String(chain.id));
+      const url = `/api/user-positions?${params}`;
+      // Force fresh fetch from API
+      await fetch(url, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userAddress: account.address })
+        cache: 'no-store',
       });
       
       // Trigger UI update
@@ -32,7 +37,7 @@ export function useRealTimeGoals({
     } catch (error) {
       console.warn('Failed to refresh goals:', error);
     }
-  }, [account?.address, onGoalsUpdate]);
+  }, [account?.address, chain?.id, onGoalsUpdate]);
 
   // Set up periodic refresh
   useEffect(() => {

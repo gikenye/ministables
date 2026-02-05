@@ -16,6 +16,9 @@ const ASSET_DECIMALS: Record<string, number> = {
   cKES: 6,
   CKES: 6,
 };
+const ALLOCATION_TIMEOUT_MS = Number(
+  process.env.ONRAMP_ALLOCATION_TIMEOUT_MS || 15000
+);
 
 type AllocationSource = "poller" | "webhook" | "retry";
 
@@ -39,11 +42,46 @@ interface AllocateOnrampInput {
   providerPayload?: unknown;
   targetGoalId?: string;
   source: AllocationSource;
+  force?: boolean;
 }
 
 function resolveAmountInWei(asset: string, amountValue: string): string {
   const decimals = ASSET_DECIMALS[asset.toUpperCase()] || 18;
   return parseUnits(amountValue, decimals).toString();
+}
+
+function ensureTransactionCodeInPayload(
+  payload: unknown,
+  transactionCode: string
+): unknown {
+  if (!transactionCode) return payload;
+  if (!payload || typeof payload !== "object") {
+    return { transaction_code: transactionCode };
+  }
+
+  const record = payload as Record<string, unknown>;
+  const existingTopLevel = record.transaction_code;
+  const dataRecord =
+    record.data && typeof record.data === "object"
+      ? (record.data as Record<string, unknown>)
+      : null;
+  const existingData = dataRecord?.transaction_code;
+
+  if (
+    (typeof existingTopLevel === "string" && existingTopLevel.length > 0) ||
+    (typeof existingData === "string" && existingData.length > 0)
+  ) {
+    return payload;
+  }
+
+  return {
+    ...record,
+    transaction_code: transactionCode,
+    data: {
+      ...(dataRecord || {}),
+      transaction_code: transactionCode,
+    },
+  };
 }
 
 function normalizeAsset(asset: string): SupportedAsset | null {
@@ -96,25 +134,22 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
     return { success: false, error: "Missing transaction hash", skipped: false };
   }
 
-  const claim = await onrampCollection.findOneAndUpdate(
-    {
-      transactionCode: input.transactionCode,
-      $or: [
-        { "allocation.status": { $exists: false } },
-        { "allocation.status": { $nin: ["IN_PROGRESS", "SUCCESS"] } },
-      ],
-    },
-    {
-      $set: {
-        "allocation.status": "IN_PROGRESS",
-        "allocation.startedAt": new Date(),
-        updatedAt: new Date(),
-      },
-    },
-    { returnDocument: "after" }
-  );
+  let depositRecord:
+    | {
+        amount?: string;
+        amountInUsd?: string;
+        asset?: string;
+        targetGoalId?: string;
+        allocation?: { status?: string };
+        provider?: {
+          lastWebhookPayload?: unknown;
+          lastStatusPayload?: unknown;
+          initiateResponse?: unknown;
+        };
+      }
+    | null = null;
 
-  if (!claim || !claim.value) {
+  if (input.force) {
     const existing = await onrampCollection.findOne({
       transactionCode: input.transactionCode,
     });
@@ -126,14 +161,68 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
         error: "Transaction not found",
       };
     }
-    return {
-      success: true,
-      skipped: true,
-      reason: "Allocation already in progress or completed",
-    };
+    const existingAllocationStatus =
+      (existing as { allocation?: { status?: string } }).allocation?.status ||
+      "";
+    if (existingAllocationStatus === "SUCCESS") {
+      return {
+        success: true,
+        skipped: true,
+        reason: "Allocation already completed",
+      };
+    }
+    await onrampCollection.updateOne(
+      { transactionCode: input.transactionCode },
+      {
+        $set: {
+          "allocation.status": "IN_PROGRESS",
+          "allocation.startedAt": new Date(),
+          updatedAt: new Date(),
+        },
+      }
+    );
+    depositRecord = existing as typeof depositRecord;
+  } else {
+    const claim = await onrampCollection.findOneAndUpdate(
+      {
+        transactionCode: input.transactionCode,
+        $or: [
+          { "allocation.status": { $exists: false } },
+          { "allocation.status": { $nin: ["IN_PROGRESS", "SUCCESS"] } },
+        ],
+      },
+      {
+        $set: {
+          "allocation.status": "IN_PROGRESS",
+          "allocation.startedAt": new Date(),
+          updatedAt: new Date(),
+        },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (!claim || !claim.value) {
+      const existing = await onrampCollection.findOne({
+        transactionCode: input.transactionCode,
+      });
+      if (!existing) {
+        return {
+          success: false,
+          skipped: false,
+          reason: "Transaction not found",
+          error: "Transaction not found",
+        };
+      }
+      return {
+        success: true,
+        skipped: true,
+        reason: "Allocation already in progress or completed",
+      };
+    }
+    depositRecord = claim.value as typeof depositRecord;
   }
 
-  const deposit = claim.value as {
+  const deposit = (depositRecord || {}) as {
     amount?: string;
     amountInUsd?: string;
     asset?: string;
@@ -198,6 +287,10 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
     deposit?.provider?.lastStatusPayload ||
     deposit?.provider?.initiateResponse ||
     { data: { transaction_code: input.transactionCode } };
+  const normalizedProviderPayload = ensureTransactionCodeInPayload(
+    providerPayload,
+    input.transactionCode
+  );
 
   const allocationRequest: AllocateRequest = {
     asset: normalizedAsset,
@@ -205,36 +298,35 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
     amount: amountInWei,
     txHash: input.txHash,
     targetGoalId: input.targetGoalId || deposit.targetGoalId,
-    ...(providerPayload ? { providerPayload } : {}),
+    ...(normalizedProviderPayload
+      ? { providerPayload: normalizedProviderPayload }
+      : {}),
   };
 
   const baseUrl =
-    process.env.ALLOCATE_API_URL || process.env.NEXT_PUBLIC_ALLOCATE_API_URL || "";
-  if (!baseUrl) {
-    await onrampCollection.updateOne(
-      { transactionCode: input.transactionCode },
-      {
-        $set: {
-          allocation: {
-            success: false,
-            status: "FAILED",
-            error: "ALLOCATE_API_URL not configured",
-            request: allocationRequest,
-            lastAttemptAt: new Date(),
-            retryable: false,
-          },
-          updatedAt: new Date(),
-        },
-      }
-    );
-    return { success: false, skipped: false, error: "ALLOCATE_API_URL not configured" };
-  }
+    process.env.ALLOCATE_API_URL ||
+    process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:3000";
   const client = new BackendApiClient(baseUrl);
 
   const attemptedAt = new Date();
 
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
-    const response = await client.allocateDeposit(allocationRequest);
+    const response = await Promise.race([
+      client.allocateDeposit(allocationRequest),
+      new Promise<AllocateResponse>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error(
+            `Allocation timed out after ${ALLOCATION_TIMEOUT_MS}ms`
+          ) as Error & { status?: number };
+          error.status = 504;
+          reject(error);
+        }, ALLOCATION_TIMEOUT_MS);
+      }),
+    ]);
+    if (timeoutId) clearTimeout(timeoutId);
     const attempt: AllocationAttempt = {
       status: "SUCCESS",
       source: input.source,
@@ -247,13 +339,11 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       { transactionCode: input.transactionCode },
       {
         $set: {
-          allocation: {
-            success: true,
-            status: "SUCCESS",
-            response,
-            request: allocationRequest,
-            lastAttemptAt: attemptedAt,
-          },
+          "allocation.success": true,
+          "allocation.status": "SUCCESS",
+          "allocation.response": response,
+          "allocation.request": allocationRequest,
+          "allocation.lastAttemptAt": attemptedAt,
           updatedAt: new Date(),
         },
         $push: {
@@ -267,6 +357,7 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
 
     return { success: true, skipped: false, response };
   } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId);
     const message =
       error instanceof Error ? error.message : "Allocation failed";
     const status = (error as { status?: number }).status;
@@ -285,16 +376,14 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       { transactionCode: input.transactionCode },
       {
         $set: {
-          allocation: {
-            success: false,
-            status: "FAILED",
-            error: message,
-            response: data,
-            responseStatus: status,
-            request: allocationRequest,
-            lastAttemptAt: attemptedAt,
-            retryable: true,
-          },
+          "allocation.success": false,
+          "allocation.status": "FAILED",
+          "allocation.error": message,
+          "allocation.response": data,
+          "allocation.responseStatus": status,
+          "allocation.request": allocationRequest,
+          "allocation.lastAttemptAt": attemptedAt,
+          "allocation.retryable": true,
           updatedAt: new Date(),
         },
         $push: {

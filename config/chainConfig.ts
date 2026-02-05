@@ -1,6 +1,6 @@
 import { base, celo, scroll } from "thirdweb/chains";
 
-export const CHAINS = [celo, scroll, base];
+export const CHAINS = [celo, base];
 
 // goal management and leaderboard contracts
 export const GOAL_CONTRACTS = {
@@ -42,8 +42,8 @@ export const AAVE_CONTRACTS = {
 
 export const EXPLORERS = {
   [celo.id]: "https://celoscan.io",
-  [scroll.id]: "https://scrollscan.com",
   [base.id]: "https://basescan.org",
+  [scroll.id]: "https://scrollscan.com",
 };
 
 export const TOKENS = {
@@ -67,6 +67,14 @@ export const TOKENS = {
       icon: "https://cdn.prod.website-files.com/6807f97b456d6dff3e784225/6807f9a4185658fa6e759a27_Tokens.avif",
     },
   ],
+  [base.id]: [
+    {
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      symbol: "USDC",
+      decimals: 6,
+      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
+    },
+  ],
   [scroll.id]: [
     {
       address: "0xd62fBDd984241BcFdEe96915b43101912a9fcE69",
@@ -86,20 +94,6 @@ export const TOKENS = {
       decimals: 18,
       icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
     },
-  ],
-  [base.id]: [
-    {
-      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      symbol: "USDC",
-      decimals: 6,
-      icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png",
-    },
-    // {
-    //   address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
-    //   symbol: "USDT",
-    //   decimals: 6,
-    //   icon: "https://s2.coinmarketcap.com/static/img/coins/64x64/825.png",
-    // },
   ],
 };
 

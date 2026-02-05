@@ -99,6 +99,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         creatorAddress: address,
         vaults: "all",
         isPublic: false,
+        chainId: chain?.id,
       };
 
       setCustomGoalLoading(true);
@@ -187,11 +188,12 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         creatorAddress: address,
         vaults: "all",
         isPublic: groupGoalForm.isPublic,
+        chainId: chain?.id,
       };
 
       setCreateGroupGoalLoading(true);
       try {
-        const response = await fetch("/api/user-balances?action=create-group-goal", {
+        const response = await fetch("/api/user-positions?action=create-group-goal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(createRequest),

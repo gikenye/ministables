@@ -26,8 +26,15 @@ interface GoalsSectionProps {
   chain: any;
   tokenInfos: any;
   exchangeRate: number | undefined;
+  vaultPositions?: Array<{
+    withdrawableAmount?: string;
+    unlockTime?: number;
+  }>;
+  vaultPositionsLoading?: boolean;
+  onRequestVaultPositions?: () => void;
   handleCreateFirstGoal: () => void;
   handleGoalCardClick: (goal: any) => void;
+  onQuickSaveClick: () => void;
   fetchUserPortfolio: () => void;
   fetchUserGoals: () => void;
   toggleBalanceVisibility: () => void;
@@ -51,8 +58,12 @@ export function GoalsSection({
   chain,
   tokenInfos,
   exchangeRate,
+  vaultPositions,
+  vaultPositionsLoading,
+  onRequestVaultPositions,
   handleCreateFirstGoal,
   handleGoalCardClick,
+  onQuickSaveClick,
   fetchUserPortfolio,
   fetchUserGoals,
   toggleBalanceVisibility,
@@ -121,6 +132,10 @@ export function GoalsSection({
                 sendTransaction={sendTransaction}
                 onCreateGoal={handleCreateFirstGoal}
                 onGoalClick={handleGoalCardClick}
+                onQuickSaveClick={onQuickSaveClick}
+                vaultPositions={vaultPositions}
+                vaultPositionsLoading={vaultPositionsLoading}
+                onRequestVaultPositions={onRequestVaultPositions}
               />
             )}
           </div>
