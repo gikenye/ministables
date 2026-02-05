@@ -73,7 +73,7 @@ const ExpandableQuickSaveCard = ({
     const directAmount = Number(goalItem?.currentAmount);
     if (Number.isFinite(directAmount) && directAmount > 0) return directAmount;
 
-    const targetAmount = Number(goalItem?.targetAmount ?? goalItem?.targetAmountUSD);
+    const targetAmount = Number(goalItem?.targetAmount ?? goalItem?.targetAmountToken);
     const progressPercent = Number(goalItem?.progress ?? goalItem?.progressPercent);
     if (
       Number.isFinite(targetAmount) &&

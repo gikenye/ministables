@@ -29,7 +29,7 @@ export const JoinGoalModal: React.FC<JoinGoalModalProps> = ({
   if (!goal) return null;
 
   const current = goal.totalProgressUSD ?? 0;
-  const target = goal.targetAmountUSD ?? 1;
+  const target = goal.targetAmountToken ?? 1;
   const progress = (current / target) * 100;
   
   const newProgress = Math.min(((current + (isNaN(depositUsd) ? 0 : depositUsd)) / target) * 100, 100);

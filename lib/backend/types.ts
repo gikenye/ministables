@@ -124,7 +124,7 @@ export interface UserGoal {
   vault: string;
   asset: string;
   targetAmountWei: string;
-  targetAmountUSD: string;
+  targetAmountToken: string;
   targetDate: string;
   totalValueWei: string;
   totalValueUSD: string;
@@ -194,7 +194,7 @@ export interface GoalCreatedActivity extends ActivityItemBase {
   vault: string;
   asset: VaultAsset | string | null;
   targetAmountWei: string;
-  targetAmountUSD: string;
+  targetAmountToken: string;
   targetDate: string;
   metadataURI: string;
 }
@@ -245,7 +245,7 @@ export type VaultAsset = "USDC" | "cUSD" | "USDT" | "cKES";
 export interface MetaGoal {
   metaGoalId: string;
   name: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   targetDate: string;
   creatorAddress: string;
   onChainGoals: Partial<Record<VaultAsset, string>>; // asset -> goalId mapping
@@ -289,7 +289,7 @@ export interface MetaGoalWithProgress extends MetaGoal {
 
 export interface CreateMultiVaultGoalRequest {
   name: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   targetDate?: string;
   creatorAddress: string;
   vaults: VaultAsset[] | "all";

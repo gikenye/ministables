@@ -39,7 +39,7 @@ export function useCreateGoal(): UseCreateGoalResult {
           body: JSON.stringify({
             creatorAddress: userId,
             name: goalData.title,
-            targetAmountUSD: parseFloat(goalData.targetAmount) || 0,
+            targetAmountToken: parseFloat(goalData.targetAmount) || 0,
             targetDate: goalData.targetDate ? goalData.targetDate.toISOString().split('T')[0] : "2025-12-31",
             vaults: "all",
             chainId: chain?.id,

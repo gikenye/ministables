@@ -15,6 +15,7 @@ import {
   findEventInLogs,
   isValidAddress,
   formatAmountForDisplay,
+  resolveTargetAmountToken,
 } from "@/lib/backend/utils";
 import type {
   AllocateRequest,
@@ -29,6 +30,14 @@ import { logger } from "@/lib/backend/logger";
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<AllocateResponse | ErrorResponse>> {
+  let body:
+    | (AllocateRequest & {
+        metaGoalId?: string;
+        tokenSymbol?: string;
+        chainId?: string | number;
+        chain?: string;
+      })
+    | undefined;
   try {
     logger.info("💰 Allocate API called");
     logger.info("🌐 Request details", {
@@ -37,13 +46,16 @@ export async function POST(
       contentType: request.headers.get('content-type'),
       timestamp: new Date().toISOString()
     });
-    const body: AllocateRequest & {
-      metaGoalId?: string;
-      tokenSymbol?: string;
-      chainId?: string | number;
-      chain?: string;
-    } = await request.json();
+    body = await request.json();
     logger.debug("📊 RAW Allocate request body", { body });
+    const parsedBody =
+      body ??
+      ({} as AllocateRequest & {
+        metaGoalId?: string;
+        tokenSymbol?: string;
+        chainId?: string | number;
+        chain?: string;
+      });
     const {
       asset,
       tokenSymbol,
@@ -55,7 +67,7 @@ export async function POST(
       providerPayload,
       chainId,
       chain,
-    } = body;
+    } = parsedBody;
     // Handle both asset and tokenSymbol for backward compatibility
     const finalAsset = asset || tokenSymbol;
     const providerTxCode = (() => {
@@ -421,7 +433,11 @@ export async function POST(
             const expandableGoal = userMetaGoals.find((mg: { onChainGoals: Record<string, string> }) => !mg.onChainGoals[finalAsset as VaultAsset]);
             if (expandableGoal) {
               // Auto-expand the goal to include this asset
-              const targetAmountWei = ethers.parseUnits(expandableGoal.targetAmountUSD.toString(), vaultConfig.decimals);
+              const targetAmountToken = resolveTargetAmountToken(expandableGoal);
+              const targetAmountWei = ethers.parseUnits(
+                targetAmountToken.toString(),
+                vaultConfig.decimals
+              );
               const parsedTargetDate = getContractCompliantTargetDate();
               
               const createTx = await goalManagerWrite.createGoalFor(
@@ -587,7 +603,11 @@ export async function POST(
             totalProgressUSD += parseFloat(formatAmountForDisplay(totalValue.toString(), vaultCfg.decimals));
           }
           
-          const progressPercent = metaGoal.targetAmountUSD > 0 ? (totalProgressUSD / metaGoal.targetAmountUSD) * 100 : 0;
+          const targetAmountToken = resolveTargetAmountToken(metaGoal);
+          const progressPercent =
+            targetAmountToken > 0
+              ? (totalProgressUSD / targetAmountToken) * 100
+              : 0;
           goalCompleted = progressPercent >= 100;
         }
       } catch (error) {
@@ -604,7 +624,7 @@ export async function POST(
       goalId: attachedGoalId.toString(),
       shares,
       formattedShares: formatAmountForDisplay(shares, vaultConfig.decimals, 4),
-      allocationTxHash: txHash,
+      allocationTxHash: allocateTx.hash,
       goalCompleted,
       metaGoalId: responseMetaGoalId,
     };
@@ -615,7 +635,7 @@ export async function POST(
     logger.error("❌ Allocation error", {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      requestBody: request.body,
+      requestBody: body,
     });
     return NextResponse.json(
       {

@@ -31,12 +31,12 @@ export const GoalInviteView = ({ goal, isAuthenticated, inviterAddress }: GoalIn
           </div>
 
           <div className="p-6 space-y-5">
-            {goal.targetAmountUSD && (
+            {goal.targetAmountToken && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-muted/50 backdrop-blur-sm border border-border rounded-xl p-5">
                     <div className="text-muted-foreground text-sm mb-2">Target</div>
-                    <div className="text-foreground text-2xl font-bold">${goal.targetAmountUSD.toLocaleString()}</div>
+                    <div className="text-foreground text-2xl font-bold">${goal.targetAmountToken.toLocaleString()}</div>
                   </div>
                   <div className="bg-muted/50 backdrop-blur-sm border border-border rounded-xl p-5">
                     <div className="text-muted-foreground text-sm mb-2">Progress</div>

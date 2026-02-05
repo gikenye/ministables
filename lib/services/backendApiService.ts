@@ -93,7 +93,7 @@ export interface AllocateResponse {
 // Multi-vault goal types
 export interface CreateGoalRequest {
   name: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   targetDate: string; // use '0'
   creatorAddress: string;
   vaults: SupportedAsset[] | "all";
@@ -114,7 +114,7 @@ export interface GoalDetailsResponse {
   _id: string;
   metaGoalId: string;
   name: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   targetDate: string;
   creatorAddress: string;
   onChainGoals: Record<SupportedAsset, string>;
@@ -150,7 +150,7 @@ export interface GoalDetailsResponse {
 export interface GroupSavingsGoal {
   metaGoalId: string;
   name: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   targetDate: string;
   creatorAddress: string;
   isPublic: boolean;
@@ -216,7 +216,7 @@ export interface JoinGoalResponse {
 export interface GroupGoalMembersResponse {
   metaGoalId: string;
   goalName: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   totalContributedUSD: number;
   progressPercent: number;
   memberCount: number;
@@ -244,7 +244,7 @@ export interface GroupGoalInviteResponse {
 export interface GroupGoalDetailsResponse {
   metaGoalId: string;
   goalName: string;
-  targetAmountUSD: number;
+  targetAmountToken: number;
   balances: Record<
     SupportedAsset,
     {

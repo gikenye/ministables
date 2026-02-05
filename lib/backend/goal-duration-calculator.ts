@@ -13,7 +13,7 @@ export interface GoalDurationConfig {
 }
 
 export function calculateOptimalDuration(
-  targetAmountUSD: number,
+  targetAmountToken: number,
   userHabit?: UserHabit,
   avgDepositAmount?: number
 ): GoalDurationConfig {
@@ -30,7 +30,7 @@ export function calculateOptimalDuration(
   }
 
   // Calculate based on user habits
-  const estimatedDepositsNeeded = Math.ceil(targetAmountUSD / avgDepositAmount);
+  const estimatedDepositsNeeded = Math.ceil(targetAmountToken / avgDepositAmount);
   const estimatedTimeToComplete = estimatedDepositsNeeded * userHabit.avgDepositFrequency;
 
   // Risk tolerance multipliers

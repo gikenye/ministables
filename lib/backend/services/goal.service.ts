@@ -1,5 +1,6 @@
 import { BlockchainService } from "./blockchain.service";
 import { getMetaGoalsCollection } from "../database";
+import { resolveTargetAmountToken } from "../utils";
 import type { Goal, GoalAttachment, MetaGoalWithProgress, VaultAsset } from "../types";
 
 const MAX_ATTACHMENTS_TO_FETCH = 100;
@@ -65,6 +66,7 @@ export class GoalService {
     const goalsWithProgress: MetaGoalWithProgress[] = [];
 
     for (const metaGoal of metaGoals) {
+      const targetAmountToken = resolveTargetAmountToken(metaGoal);
       const vaultProgress: Record<VaultAsset, {
         goalId: string;
         progressUSD: number;
@@ -84,7 +86,7 @@ export class GoalService {
           try {
             const goalId = BigInt(goalIdStr as string);
             const [, percentBps] = await goalManager.getGoalProgressFull(goalId);
-            const progressUSD = (Number(percentBps) / 10000) * metaGoal.targetAmountUSD;
+            const progressUSD = (Number(percentBps) / 10000) * targetAmountToken;
             const progressPercent = Number(percentBps) / 100;
             const attachmentCount = Number(await goalManager.attachmentCount(goalId));
 
@@ -110,12 +112,15 @@ export class GoalService {
       });
 
       const progressPercent =
-        metaGoal.targetAmountUSD > 0
-          ? (totalProgressUSD / metaGoal.targetAmountUSD) * 100
+        targetAmountToken > 0
+          ? (totalProgressUSD / targetAmountToken) * 100
           : 0;
 
+      const { targetAmountUSD: _legacyTargetAmount, ...metaGoalBase } =
+        metaGoal as typeof metaGoal & { targetAmountUSD?: number };
       goalsWithProgress.push({
-        ...metaGoal,
+        ...metaGoalBase,
+        targetAmountToken,
         totalProgressUSD,
         progressPercent,
         vaultProgress,

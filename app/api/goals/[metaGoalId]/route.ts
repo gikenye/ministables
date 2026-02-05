@@ -7,7 +7,12 @@ import {
   getContractsForChain,
   getVaultsForChain,
 } from "@/lib/backend/constants";
-import { createProvider, formatAmountForDisplay, isValidAddress } from "@/lib/backend/utils";
+import {
+  createProvider,
+  formatAmountForDisplay,
+  isValidAddress,
+  resolveTargetAmountToken,
+} from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
 import type { ErrorResponse, VaultAsset, MetaGoalWithProgress } from "@/lib/backend/types";
@@ -135,19 +140,25 @@ export async function GET(
       }
     );
 
+    const targetAmountToken = resolveTargetAmountToken(metaGoal);
     const results = await Promise.all(progressPromises);
     results.forEach(({ asset, goalId, progressUSD, attachmentCount }) => {
       totalProgressUSD += progressUSD;
       vaultProgress[asset as VaultAsset] = {
         goalId,
         progressUSD,
-        progressPercent: metaGoal.targetAmountUSD > 0 ? (progressUSD / metaGoal.targetAmountUSD) * 100 : 0,
+        progressPercent:
+          targetAmountToken > 0
+            ? (progressUSD / targetAmountToken) * 100
+            : 0,
         attachmentCount,
       };
     });
 
-    const overallProgressPercent = metaGoal.targetAmountUSD > 0 ? 
-      (totalProgressUSD / metaGoal.targetAmountUSD) * 100 : 0;
+    const overallProgressPercent =
+      targetAmountToken > 0
+        ? (totalProgressUSD / targetAmountToken) * 100
+        : 0;
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const inviteLink = `${baseUrl}/goals/${metaGoalId}`;
@@ -155,7 +166,7 @@ export async function GET(
     return NextResponse.json({
       metaGoalId,
       name: metaGoal.name,
-      targetAmountUSD: metaGoal.targetAmountUSD,
+      targetAmountToken,
       targetDate: metaGoal.targetDate,
       creatorAddress: metaGoal.creatorAddress,
       totalProgressUSD,

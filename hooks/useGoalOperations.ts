@@ -94,7 +94,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
 
       const createRequest: CreateGoalRequest = {
         name: customGoalForm.name,
-        targetAmountUSD: usdAmount,
+        targetAmountToken: usdAmount,
         targetDate: "0",
         creatorAddress: address,
         vaults: "all",
@@ -183,7 +183,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
 
       const createRequest: CreateGoalRequest = {
         name: groupGoalForm.name,
-        targetAmountUSD: usdAmount,
+        targetAmountToken: usdAmount,
         targetDate: "0",
         creatorAddress: address,
         vaults: "all",

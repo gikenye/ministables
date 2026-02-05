@@ -18,6 +18,7 @@ import {
   isValidAddress,
   waitForTransactionReceipt,
   findEventInLogs,
+  resolveTargetAmountToken,
 } from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { BlockchainService } from "@/lib/backend/services/blockchain.service";
@@ -248,12 +249,15 @@ export async function POST(
 
 async function handleCreateGoal(request: NextRequest) {
   const body = await request.json();
-  const { name, targetAmountUSD, targetDate, creatorAddress, vaults, chainId, chain } = body;
+  const { name, targetDate, creatorAddress, vaults, chainId, chain } = body as typeof body & {
+    targetAmountUSD?: number;
+  };
+  const targetAmountToken = resolveTargetAmountToken(body);
 
-  if (!name || !targetAmountUSD || !creatorAddress) {
+  if (!name || !targetAmountToken || !creatorAddress) {
     return NextResponse.json(
       {
-        error: "Missing required fields: name, targetAmountUSD, creatorAddress",
+        error: "Missing required fields: name, targetAmountToken, creatorAddress",
       },
       { status: 400 }
     );
@@ -299,7 +303,7 @@ async function handleCreateGoal(request: NextRequest) {
   const nonce = await backendWallet.getNonce();
   const txPromises = targetVaults.map(async (asset, index) => {
     const vaultConfig = chainVaults[asset];
-    const normalizedAmount = parseFloat(targetAmountUSD.toString()).toFixed(
+    const normalizedAmount = parseFloat(targetAmountToken.toString()).toFixed(
       vaultConfig.decimals
     );
     const targetAmountWei = ethers.parseUnits(
@@ -334,7 +338,7 @@ async function handleCreateGoal(request: NextRequest) {
   const metaGoal: MetaGoal & { participants?: string[] } = {
     metaGoalId,
     name,
-    targetAmountUSD,
+    targetAmountToken,
     targetDate: targetDate || "",
     creatorAddress: creatorAddress.toLowerCase(),
     onChainGoals,
@@ -362,19 +366,19 @@ async function handleCreateGroupGoal(request: NextRequest) {
   const body = await request.json();
   const {
     name,
-    targetAmountUSD,
     targetDate,
     creatorAddress,
     vaults,
     isPublic,
     chainId,
     chain,
-  } = body;
+  } = body as typeof body & { targetAmountUSD?: number };
+  const targetAmountToken = resolveTargetAmountToken(body);
 
-  if (!name || !targetAmountUSD || !creatorAddress) {
+  if (!name || !targetAmountToken || !creatorAddress) {
     return NextResponse.json(
       {
-        error: "Missing required fields: name, targetAmountUSD, creatorAddress",
+        error: "Missing required fields: name, targetAmountToken, creatorAddress",
       },
       { status: 400 }
     );
@@ -420,7 +424,7 @@ async function handleCreateGroupGoal(request: NextRequest) {
   const nonce = await backendWallet.getNonce();
   const txPromises = targetVaults.map(async (asset, index) => {
     const vaultConfig = chainVaults[asset];
-    const normalizedAmount = parseFloat(targetAmountUSD.toString()).toFixed(
+    const normalizedAmount = parseFloat(targetAmountToken.toString()).toFixed(
       vaultConfig.decimals
     );
     const targetAmountWei = ethers.parseUnits(
@@ -455,7 +459,7 @@ async function handleCreateGroupGoal(request: NextRequest) {
   const metaGoal: MetaGoal = {
     metaGoalId,
     name,
-    targetAmountUSD,
+    targetAmountToken,
     targetDate: targetDate || "",
     creatorAddress: creatorAddress.toLowerCase(),
     onChainGoals,
@@ -889,6 +893,7 @@ async function handleGetGroupGoalMembers(request: NextRequest) {
     );
   }
 
+  const targetAmountToken = resolveTargetAmountToken(metaGoal);
   const CACHE_TTL_MS = 5 * 60 * 1000;
   const isCacheValid =
     metaGoal.lastSync &&
@@ -915,7 +920,7 @@ async function handleGetGroupGoalMembers(request: NextRequest) {
   return NextResponse.json({
     metaGoalId,
     goalName: metaGoal.name,
-    targetAmountUSD: metaGoal.targetAmountUSD,
+    targetAmountToken,
     ...mergedMemberData,
   });
 }
@@ -1060,9 +1065,13 @@ async function fetchGroupGoalMembers(metaGoal: MetaGoal, chainParams: ChainParam
     (a, b) => b.totalContributionUSD - a.totalContributionUSD
   );
 
+  const targetAmountToken = resolveTargetAmountToken(metaGoal);
   return {
     totalContributedUSD: totalGoalValue,
-    progressPercent: (totalGoalValue / metaGoal.targetAmountUSD) * 100,
+    progressPercent:
+      targetAmountToken > 0
+        ? (totalGoalValue / targetAmountToken) * 100
+        : 0,
     memberCount: members.length,
     members,
   };
@@ -1320,12 +1329,13 @@ async function handleGetGroupGoalDetails(request: NextRequest) {
       new Date(b.attachedAt).getTime() - new Date(a.attachedAt).getTime()
   );
 
+  const targetAmountToken = resolveTargetAmountToken(metaGoal);
   return NextResponse.json({
     _id: metaGoal._id,
     groupId: metaGoalId,
     metaGoalId,
     goalName: metaGoal.name,
-    targetAmountUSD: metaGoal.targetAmountUSD,
+    targetAmountToken,
     goalIds: metaGoal.onChainGoals,
     balances,
     transactions,
@@ -1404,7 +1414,7 @@ async function handleGetAllGroupSavings() {
     (goal: MetaGoal & { isPublic?: boolean; participants?: string[] }) => ({
       metaGoalId: goal.metaGoalId,
       name: goal.name,
-      targetAmountUSD: goal.targetAmountUSD,
+      targetAmountToken: resolveTargetAmountToken(goal),
       targetDate: goal.targetDate,
       creatorAddress: goal.creatorAddress,
       isPublic: goal.isPublic ?? true,
@@ -1426,7 +1436,7 @@ async function handleGetPrivateGoals() {
     (goal: MetaGoal & { isPublic?: boolean; participants?: string[] }) => ({
       metaGoalId: goal.metaGoalId,
       name: goal.name,
-      targetAmountUSD: goal.targetAmountUSD,
+      targetAmountToken: resolveTargetAmountToken(goal),
       targetDate: goal.targetDate,
       creatorAddress: goal.creatorAddress,
       participantCount: goal.participants?.length || 0,
@@ -1450,7 +1460,7 @@ async function handleGetPublicGoals() {
     (goal: MetaGoal & { isPublic?: boolean; participants?: string[] }) => ({
       metaGoalId: goal.metaGoalId,
       name: goal.name,
-      targetAmountUSD: goal.targetAmountUSD,
+      targetAmountToken: resolveTargetAmountToken(goal),
       targetDate: goal.targetDate,
       creatorAddress: goal.creatorAddress,
       participantCount: goal.participants?.length || 0,
@@ -1548,7 +1558,7 @@ async function handleGetMyGroups(userAddress: string) {
   const goals = userGroups.map((goal: MetaGoal) => ({
     metaGoalId: goal.metaGoalId,
     name: goal.name,
-    targetAmountUSD: goal.targetAmountUSD,
+    targetAmountToken: resolveTargetAmountToken(goal),
     targetDate: goal.targetDate,
     creatorAddress: goal.creatorAddress,
     isPublic: goal.isPublic ?? true,

@@ -7,7 +7,13 @@ import {
   getContractsForChain,
   getVaultsForChain,
 } from "@/lib/backend/constants";
-import { createProvider, createBackendWallet, findEventInLogs, getContractCompliantTargetDate } from "@/lib/backend/utils";
+import {
+  createProvider,
+  createBackendWallet,
+  findEventInLogs,
+  getContractCompliantTargetDate,
+  resolveTargetAmountToken,
+} from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import type { ErrorResponse, VaultAsset } from "@/lib/backend/types";
 
@@ -51,7 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
       metaGoal = {
         metaGoalId: `expanded-${goalId}-${Date.now()}`,
         name: onChainGoal.metadataURI || `Goal ${goalId}`,
-        targetAmountUSD: 1000,
+        targetAmountToken: 1000,
         targetDate: new Date(Number(onChainGoal.targetDate) * 1000).toISOString(),
         creatorAddress: userAddress,
         onChainGoals: { [existingVault!]: goalId } as Record<VaultAsset, string>,
@@ -66,7 +72,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
       if (metaGoal!.onChainGoals[asset]) continue;
 
       const vaultConfig = vaults[asset];
-      const targetAmountWei = ethers.parseUnits(metaGoal!.targetAmountUSD.toString(), vaultConfig.decimals);
+      const targetAmountToken = resolveTargetAmountToken(metaGoal!);
+      const targetAmountWei = ethers.parseUnits(
+        targetAmountToken.toString(),
+        vaultConfig.decimals
+      );
       const parsedTargetDate = getContractCompliantTargetDate();
 
       const tx = await goalManager.createGoalFor(

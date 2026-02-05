@@ -15,6 +15,7 @@ import {
   isValidAddress,
   getContractCompliantTargetDate,
   mapLimit,
+  resolveTargetAmountToken,
 } from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
@@ -97,7 +98,7 @@ function resolveChainContext(params: ChainParams) {
 
 //     const existing = await collection.findOne({
 //       creatorAddress: userAddress,
-//       targetAmountUSD: 0,
+//       targetAmountToken: 0,
 //       name: "quicksave"
 //     });
 
@@ -106,7 +107,7 @@ function resolveChainContext(params: ChainParams) {
 //       const metaGoal: MetaGoal & { participants?: string[] } = {
 //         metaGoalId,
 //         name: "quicksave",
-//         targetAmountUSD: 0,
+//         targetAmountToken: 0,
 //         targetDate: "",
 //         creatorAddress: userAddress,
 //         onChainGoals,
@@ -202,6 +203,7 @@ export async function GET(
 
     const goalsWithProgress: (MetaGoalWithProgress | null)[] =
       await mapLimit(filteredMetaGoals, RPC_CONCURRENCY, async (metaGoal) => {
+          const targetAmountToken = resolveTargetAmountToken(metaGoal);
           const vaultProgress: Record<
             VaultAsset,
             {
@@ -282,8 +284,8 @@ export async function GET(
                   ethers.formatUnits(totalBalance, vaultConfig.decimals)
                 );
                 const progressPercent =
-                  metaGoal.targetAmountUSD > 0
-                    ? (progressUSD / metaGoal.targetAmountUSD) * 100
+                  targetAmountToken > 0
+                    ? (progressUSD / targetAmountToken) * 100
                     : 0;
 
                 return {
@@ -370,8 +372,8 @@ export async function GET(
           }
 
           const progressPercent =
-            metaGoal.targetAmountUSD > 0
-              ? (totalProgressUSD / metaGoal.targetAmountUSD) * 100
+            targetAmountToken > 0
+              ? (totalProgressUSD / targetAmountToken) * 100
               : 0;
 
           if (Object.keys(activeGoals).length === 0) {
@@ -447,8 +449,11 @@ export async function GET(
           const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
           const inviteLink = `${baseUrl}/goals/${metaGoal.metaGoalId}`;
 
+          const { targetAmountUSD: _legacyTargetAmount, ...metaGoalBase } =
+            metaGoal as typeof metaGoal & { targetAmountUSD?: number };
           return {
-            ...metaGoal,
+            ...metaGoalBase,
+            targetAmountToken,
             onChainGoals: activeGoals,
             totalProgressUSD,
             progressPercent,
@@ -478,10 +483,21 @@ export async function POST(
 ): Promise<NextResponse<CreateMultiVaultGoalResponse | ErrorResponse>> {
   try {
     const body: CreateMultiVaultGoalRequest = await request.json();
-    const { name, targetAmountUSD, targetDate, creatorAddress, vaults, chainId, chain } =
-      body as CreateMultiVaultGoalRequest & { chainId?: string | number; chain?: string };
+    const {
+      name,
+      targetDate,
+      creatorAddress,
+      vaults,
+      chainId,
+      chain,
+    } = body as CreateMultiVaultGoalRequest & {
+      chainId?: string | number;
+      chain?: string;
+      targetAmountUSD?: number;
+    };
+    const targetAmountToken = resolveTargetAmountToken(body);
 
-    if (!name || !targetAmountUSD || !creatorAddress) {
+    if (!name || !targetAmountToken || !creatorAddress) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -521,7 +537,7 @@ export async function POST(
     for (const asset of targetVaults) {
       const vaultConfig = chainVaults[asset];
       const targetAmountWei = ethers.parseUnits(
-        targetAmountUSD.toString(),
+        targetAmountToken.toString(),
         vaultConfig.decimals
       );
 
@@ -563,7 +579,7 @@ export async function POST(
     const metaGoal: MetaGoal & { participants?: string[] } = {
       metaGoalId,
       name,
-      targetAmountUSD,
+      targetAmountToken,
       targetDate: targetDate || "",
       creatorAddress: creatorAddress.toLowerCase(),
       onChainGoals,
