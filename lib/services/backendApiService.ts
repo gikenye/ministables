@@ -112,6 +112,20 @@ export interface CreateGoalResponse {
   shareLink?: string;
 }
 
+export interface InviteLinkResponse {
+  success: boolean;
+  inviteToken?: string;
+  shareLink?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+}
+
+export interface AcceptInviteResponse {
+  success: boolean;
+  metaGoalId?: string;
+  invitedAddress?: string;
+}
+
 export interface GoalDetailsResponse {
   _id: string;
   metaGoalId: string;
@@ -336,6 +350,23 @@ export interface UserXpResponse {
 export interface awardXPResponse {
   awarded: boolean;
   recipients: Record<string, number>;
+}
+
+export interface ActivityXPResponse {
+  success: boolean;
+  awarded: boolean;
+  earned: number;
+  totalXP: number;
+}
+
+export interface XpLeaderboardEntry {
+  userAddress: string;
+  totalXP: number;
+  updatedAt: string;
+}
+
+export interface XpLeaderboardResponse {
+  leaderboard: XpLeaderboardEntry[];
 }
 
 
@@ -635,6 +666,39 @@ export class BackendApiClient {
     });
   }
 
+  async createGroupGoalInviteLink(
+    metaGoalId: string,
+    inviterAddress: string
+  ): Promise<InviteLinkResponse> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite-link`, {
+      method: "POST",
+      body: JSON.stringify({ metaGoalId, inviterAddress }),
+    });
+  }
+
+  async rotateGroupGoalInviteLink(
+    metaGoalId: string,
+    inviterAddress: string
+  ): Promise<InviteLinkResponse> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite-link/revoke`, {
+      method: "POST",
+      body: JSON.stringify({ metaGoalId, inviterAddress }),
+    });
+  }
+
+  async acceptGroupGoalInvite(request: {
+    metaGoalId: string;
+    inviteToken: string;
+    invitedAddress: string;
+    chainId?: number;
+    chain?: string;
+  }): Promise<AcceptInviteResponse> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite/accept`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
   // Get single goal by metaGoalId
   async getGoalByMetaId(
     metaGoalId: string,
@@ -699,6 +763,19 @@ export class BackendApiClient {
         method: "POST",
         body: JSON.stringify({ metaGoalId }),
       }
+    );
+  }
+
+  async awardActivityXP(userAddress: string): Promise<ActivityXPResponse> {
+    return this.request<ActivityXPResponse>(`${API_ENDPOINTS.XP}`, {
+      method: "POST",
+      body: JSON.stringify({ action: "activity", userAddress }),
+    });
+  }
+
+  async getXpLeaderboard(limit: number = 10): Promise<XpLeaderboardResponse> {
+    return this.request<XpLeaderboardResponse>(
+      `${API_ENDPOINTS.XP}?action=leaderboard&limit=${limit}`
     );
   }
 

@@ -214,19 +214,34 @@ export function useDataFetching(props: UseDataFetchingProps) {
     setLeaderboardLoading(true);
     setLeaderboardError(null);
     try {
-      const [leaderboardData, userPortfolioData] = await Promise.all([
-        backendApiClient.getLeaderboard(0, 10, chainId),
-        address ? backendApiClient.getUserPortfolio(address, chainId) : null,
+      const [leaderboardData, userXpData] = await Promise.all([
+        backendApiClient.getXpLeaderboard(10),
+        address ? backendApiClient.getUserXp(address) : null,
       ]);
       if (leaderboardReqIdRef.current !== reqId || addressRef.current !== reqAddress) return;
-      setLeaderboard(
-        leaderboardData.users.map((entry: any) => ({
-          ...entry,
+      const dedupedMap = new Map<string, any>();
+      for (const entry of leaderboardData.leaderboard || []) {
+        const key = String(entry.userAddress || "").toLowerCase();
+        if (!key) continue;
+        const current = dedupedMap.get(key);
+        const totalXP = Number(entry.totalXP || 0);
+        if (!current || totalXP > current.totalXP) {
+          dedupedMap.set(key, { ...entry, totalXP });
+        }
+      }
+      const leaderboardEntries = Array.from(dedupedMap.values())
+        .sort((a, b) => Number(b.totalXP || 0) - Number(a.totalXP || 0))
+        .map((entry, index) => ({
+          rank: index + 1,
+          userAddress: entry.userAddress,
+          totalXP: entry.totalXP,
+          formattedLeaderboardScore: Number(entry.totalXP || 0).toLocaleString(),
           isCurrentUser: address?.toLowerCase() === entry.userAddress?.toLowerCase(),
-        }))
-      );
+        }));
 
-      const userEntry = leaderboardData.users.find(
+      setLeaderboard(leaderboardEntries);
+
+      const userEntry = leaderboardEntries.find(
         (entry: any) => address?.toLowerCase() === entry.userAddress?.toLowerCase()
       );
 
@@ -235,10 +250,12 @@ export function useDataFetching(props: UseDataFetchingProps) {
           rank: userEntry.rank,
           formattedLeaderboardScore: userEntry.formattedLeaderboardScore,
         });
-      } else if (userPortfolioData) {
+      } else if (userXpData) {
         setUserScore({
-          rank: userPortfolioData.leaderboardRank,
-          formattedLeaderboardScore: userPortfolioData.formattedLeaderboardScore,
+          rank: 0,
+          formattedLeaderboardScore: Number(
+            userXpData.totalXP || 0
+          ).toLocaleString(),
         });
       }
     } catch (error) {

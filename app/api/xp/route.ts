@@ -16,8 +16,33 @@ export async function GET(request: NextRequest) {
     if (action === "leaderboard") {
       const limit = parseInt(searchParams.get("limit") || "100");
       const collection = await getUserXPCollection();
-      const leaderboard = await collection.find({}).sort({ totalXP: -1 }).limit(limit).toArray();
-      return NextResponse.json({ leaderboard });
+      const leaderboard = await collection
+        .aggregate([
+          {
+            $project: {
+              userAddress: { $toLower: "$userAddress" },
+              totalXP: "$totalXP",
+              updatedAt: "$updatedAt",
+            },
+          },
+          {
+            $group: {
+              _id: "$userAddress",
+              totalXP: { $max: "$totalXP" },
+              updatedAt: { $max: "$updatedAt" },
+            },
+          },
+          { $sort: { totalXP: -1, updatedAt: -1 } },
+          { $limit: limit },
+        ])
+        .toArray();
+      return NextResponse.json({
+        leaderboard: leaderboard.map((entry) => ({
+          userAddress: entry._id,
+          totalXP: entry.totalXP ?? 0,
+          updatedAt: entry.updatedAt ?? null,
+        })),
+      });
     }
 
     if (!userAddress) {
@@ -36,7 +61,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { metaGoalId, attestationId, walletAddress, chainId, chain } = body;
+    const { metaGoalId, attestationId, walletAddress, chainId, chain, action, userAddress } = body;
     const chainParams = { chainId, chain };
 
     if (attestationId && walletAddress) {
@@ -76,8 +101,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (action === "activity") {
+      if (!userAddress) {
+        return NextResponse.json({ error: "userAddress required" }, { status: 400 });
+      }
+      const provider = createProvider(chainParams);
+      const xpService = new XPService(
+        provider,
+        getContractsForChain(chainParams),
+        getVaultsForChain(chainParams)
+      );
+      const result = await xpService.awardActivityXP(userAddress);
+      return NextResponse.json({ success: true, ...result });
+    }
+
     if (!metaGoalId) {
-      return NextResponse.json({ error: "metaGoalId or attestationId/walletAddress required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "metaGoalId or attestationId/walletAddress required" },
+        { status: 400 }
+      );
     }
 
     const provider = createProvider(chainParams);

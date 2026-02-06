@@ -216,9 +216,6 @@ export class GoalSyncService {
             targetDate: "",
             creatorAddress: normalizedAddress,
             createdAt: now,
-            ...(this.chainKey
-              ? { onChainGoalsByChain: { [this.chainKey]: syncedGoals } }
-              : {}),
           }
         },
         { upsert: true }

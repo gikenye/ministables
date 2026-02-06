@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { getDatabase } from '@/lib/mongodb'
 import { eventService } from '@/lib/services/eventService'
+import { ActivityIndexer } from '@/lib/backend/services/activity-indexer.service'
+import { isValidAddress } from '@/lib/backend/utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,6 +140,31 @@ export async function POST(request: NextRequest) {
         receipt: receipt_number,
         transaction_code
       })
+
+      try {
+        if (transaction_code) {
+          const transfer = await db.collection('usdc_transfers').findOne({
+            disbursement_transaction_code: transaction_code
+          })
+          const fromAddress = transfer?.from_address
+          if (fromAddress && isValidAddress(fromAddress)) {
+            await ActivityIndexer.recordActivity({
+              userAddress: fromAddress,
+              chain: "FIAT",
+              type: "offramp_initiated",
+              txHash: transaction_code,
+              timestamp: new Date().toISOString(),
+              data: {
+                asset: "USDC",
+                amount: transfer?.amount_usdc?.toString?.() ?? transfer?.amount_usdc,
+                source: "offramp",
+              },
+            })
+          }
+        }
+      } catch (activityError) {
+        console.warn("Failed to record offramp activity", activityError)
+      }
     } else if (status?.toLowerCase() === 'failed' || status?.toLowerCase() === 'error') {
       const recipientInfo = type === 'MOBILE' ? phone_number : account_number
       eventService.emit('notification', {

@@ -11,6 +11,8 @@ import {
   findChainByVaultAddress,
   resolveChainConfig,
 } from "@/lib/backend/constants";
+import { createProvider } from "@/lib/backend/utils";
+import { ActivityIndexer } from "@/lib/backend/services/activity-indexer.service";
 
 const ASSET_DECIMALS: Record<string, number> = {
   USDC: 6,
@@ -439,6 +441,46 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
         },
       }
     );
+
+    try {
+      const activityChain =
+        allocationChain.chain ||
+        (allocationChain.chainId
+          ? resolveChainConfig({ chainId: allocationChain.chainId })?.key
+          : undefined) ||
+        deposit.chain;
+      const activityTxHash = response.allocationTxHash || input.txHash;
+      if (activityChain && activityTxHash) {
+        let blockNumber = 0;
+        try {
+          const provider = createProvider({
+            chain: activityChain,
+            chainId: allocationChain.chainId,
+          });
+          blockNumber = await provider.getBlockNumber();
+        } catch {
+          blockNumber = 0;
+        }
+
+        await ActivityIndexer.recordActivity({
+          userAddress: input.userAddress,
+          chain: activityChain,
+          type: "onramp_completed",
+          txHash: activityTxHash,
+          blockNumber,
+          timestamp: attemptedAt.toISOString(),
+          data: {
+            goalId: response.goalId,
+            depositId: response.depositId,
+            asset: normalizedAsset,
+            amount: amountValue?.toString(),
+            source: input.source,
+          },
+        });
+      }
+    } catch (activityError) {
+      console.warn("Failed to record onramp activity", activityError);
+    }
 
     return { success: true, skipped: false, response };
   } catch (error) {

@@ -166,7 +166,9 @@ export type ActivityType =
   | "member_invited"
   | "invite_revoked"
   | "member_joined"
-  | "member_removed";
+  | "member_removed"
+  | "onramp_completed"
+  | "offramp_initiated";
 
 export interface ActivityItemBase {
   id: string;
@@ -223,12 +225,22 @@ export interface MemberStatusActivity extends ActivityItemBase {
   member: string;
 }
 
+export interface RampActivity extends ActivityItemBase {
+  type: "onramp_completed" | "offramp_initiated";
+  asset?: VaultAsset | string;
+  amount?: string;
+  goalId?: string;
+  depositId?: string;
+  source?: string;
+}
+
 export type ActivityItem =
   | DepositActivity
   | GoalCreatedActivity
   | DepositAttachmentActivity
   | MemberInviteActivity
-  | MemberStatusActivity;
+  | MemberStatusActivity
+  | RampActivity;
 
 export interface ActivityResponse {
   userAddress: string;
@@ -264,6 +276,7 @@ export interface MetaGoal {
 export interface UserXP {
   userAddress: string;
   totalXP: number;
+  lastActivityId?: string;
   xpHistory: Array<{
     metaGoalId: string;
     goalName: string;
