@@ -107,6 +107,21 @@ function ensureTransactionCodeInPayload(
   };
 }
 
+function isAlreadyProcessedAllocationError(
+  message: string,
+  data: unknown
+): boolean {
+  const dataMessage =
+    data && typeof data === "object" && "error" in data
+      ? (data as { error?: unknown }).error
+      : undefined;
+  const normalized =
+    typeof dataMessage === "string" && dataMessage.length > 0
+      ? dataMessage
+      : message;
+  return normalized === "Transaction already processed";
+}
+
 function normalizeAsset(asset: string): SupportedAsset | null {
   const normalized = asset.toLowerCase();
   const match = SUPPORTED_ASSETS.find(
@@ -530,6 +545,51 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       error instanceof Error ? error.message : "Allocation failed";
     const status = (error as { status?: number }).status;
     const data = (error as { data?: unknown }).data;
+    const alreadyProcessed = isAlreadyProcessedAllocationError(message, data);
+
+    if (alreadyProcessed) {
+      const attempt: AllocationAttempt = {
+        status: "SUCCESS",
+        source: input.source,
+        attemptedAt,
+        request: allocationRequest,
+        response: {
+          error: "Transaction already processed",
+          idempotent: true,
+        },
+        responseStatus: status,
+      };
+
+      await onrampCollection.updateOne(
+        { transactionCode: input.transactionCode },
+        {
+          $set: {
+            "allocation.success": true,
+            "allocation.status": "SUCCESS",
+            "allocation.response": data ?? attempt.response,
+            "allocation.responseStatus": status,
+            "allocation.request": allocationRequest,
+            "allocation.lastAttemptAt": attemptedAt,
+            "allocation.retryable": false,
+            "allocation.error": null,
+            updatedAt: new Date(),
+          },
+          $push: {
+            "allocation.attempts": {
+              $each: [attempt],
+              $slice: -20,
+            },
+          },
+        }
+      );
+
+      return {
+        success: true,
+        skipped: true,
+        reason: "transaction_already_processed",
+      };
+    }
+
     const attempt: AllocationAttempt = {
       status: "FAILED",
       source: input.source,

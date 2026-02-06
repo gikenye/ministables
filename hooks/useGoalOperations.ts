@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import {
   backendApiClient,
   mapTokenSymbolToAsset,
@@ -10,6 +10,7 @@ import { formatUsdFromKes } from "@/lib/utils";
 import { type TokenBalance } from "@/lib/services/balanceService";
 import { parseUnits } from "viem";
 import { activityService } from "@/lib/services/activityService";
+import type { MyGroups } from "@/lib/types/shared";
 
 interface UseGoalOperationsProps {
   address?: string;
@@ -25,6 +26,8 @@ interface UseGoalOperationsProps {
   setJoinGoalError: (error: string | null) => void;
   fetchUserGoals: () => void;
   fetchGroupGoals: () => void;
+  fetchMyGroups: () => void;
+  setMyGroups: Dispatch<SetStateAction<MyGroups | null>>;
   refreshUserPortfolio?: (options?: { silent?: boolean }) => void;
   handleWalletDeposit: (
     depositAmount: string,
@@ -50,9 +53,13 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
     setJoinGoalError,
     fetchUserGoals,
     fetchGroupGoals,
+    fetchMyGroups,
+    setMyGroups,
     refreshUserPortfolio,
     handleWalletDeposit,
   } = props;
+
+  const createGroupGoalInFlightRef = useRef(false);
 
   const handleCreateCustomGoal = useCallback(
     async (customGoalForm: any) => {
@@ -145,6 +152,9 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
 
   const handleCreateGroupGoal = useCallback(
     async (groupGoalForm: any) => {
+      if (createGroupGoalInFlightRef.current) {
+        return;
+      }
       if (!groupGoalForm.name.trim() || !groupGoalForm.amount.trim()) {
         reportWarning("Goal name and amount are required", {
           component: "useGoalOperations",
@@ -191,6 +201,48 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         chainId: chain?.id,
       };
 
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticGoal: GroupSavingsGoal = {
+        metaGoalId: optimisticId,
+        name: groupGoalForm.name,
+        targetAmountToken: usdAmount,
+        targetDate: "0",
+        creatorAddress: address,
+        isPublic: Boolean(groupGoalForm.isPublic),
+        participantCount: 1,
+        createdAt: new Date().toISOString(),
+        participants: address ? [address.toLowerCase()] : [],
+        invitedUsers: groupGoalForm.isPublic ? undefined : [],
+        progressPercent: 0,
+        totalProgressUSD: 0,
+      };
+
+      setMyGroups((prev) => {
+        const base: MyGroups = prev ?? {
+          total: 0,
+          public: { total: 0, goals: [] },
+          private: { total: 0, goals: [] },
+        };
+        const bucketKey = optimisticGoal.isPublic ? "public" : "private";
+        const bucket = base[bucketKey];
+        const goals = [
+          optimisticGoal,
+          ...bucket.goals.filter((goal) => goal.metaGoalId !== optimisticId),
+        ];
+        const updatedBucket = {
+          ...bucket,
+          goals,
+          total: goals.length,
+        };
+        const updated = {
+          ...base,
+          [bucketKey]: updatedBucket,
+        } as MyGroups;
+        updated.total = updated.public.total + updated.private.total;
+        return updated;
+      });
+
+      createGroupGoalInFlightRef.current = true;
       setCreateGroupGoalLoading(true);
       try {
         const response = await fetch("/api/user-positions?action=create-group-goal", {
@@ -199,13 +251,41 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
           body: JSON.stringify(createRequest),
         });
         if (!response.ok) throw new Error("Failed to create group goal");
-        await response.json();
+        const created = await response.json();
+
+        setMyGroups((prev) => {
+          if (!prev) return prev;
+          const bucketKey = optimisticGoal.isPublic ? "public" : "private";
+          const bucket = prev[bucketKey];
+          const nextGoals = bucket.goals.map((goal) => {
+            if (goal.metaGoalId !== optimisticId) return goal;
+            return {
+              ...goal,
+              metaGoalId: created?.metaGoalId || goal.metaGoalId,
+              onChainGoals: created?.onChainGoals ?? goal.onChainGoals,
+              onChainGoalsByChain:
+                created?.onChainGoalsByChain ?? goal.onChainGoalsByChain,
+            };
+          });
+          const updatedBucket = {
+            ...bucket,
+            goals: nextGoals,
+            total: nextGoals.length,
+          };
+          const updated = {
+            ...prev,
+            [bucketKey]: updatedBucket,
+          } as MyGroups;
+          updated.total = updated.public.total + updated.private.total;
+          return updated;
+        });
         
         // Track activity
         activityService.trackGoalCreation(groupGoalForm.name, address);
         
         setCreateGroupGoalModalOpen(false);
         setGroupGoalForm({ name: "", amount: "", timeline: "3", isPublic: true });
+        fetchMyGroups();
         fetchGroupGoals();
         refreshUserPortfolio?.();
         reportInfo("Group goal created successfully", {
@@ -213,6 +293,26 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
           operation: "handleCreateGroupGoal",
         });
       } catch (error) {
+        setMyGroups((prev) => {
+          if (!prev) return prev;
+          const bucketKey = optimisticGoal.isPublic ? "public" : "private";
+          const bucket = prev[bucketKey];
+          const nextGoals = bucket.goals.filter(
+            (goal) => goal.metaGoalId !== optimisticId
+          );
+          if (nextGoals.length === bucket.goals.length) return prev;
+          const updatedBucket = {
+            ...bucket,
+            goals: nextGoals,
+            total: nextGoals.length,
+          };
+          const updated = {
+            ...prev,
+            [bucketKey]: updatedBucket,
+          } as MyGroups;
+          updated.total = updated.public.total + updated.private.total;
+          return updated;
+        });
         reportError("Failed to create group goal", {
           component: "useGoalOperations",
           operation: "handleCreateGroupGoal",
@@ -220,6 +320,7 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
         });
       } finally {
         setCreateGroupGoalLoading(false);
+        createGroupGoalInFlightRef.current = false;
       }
     },
     [
@@ -229,6 +330,8 @@ export function useGoalOperations(props: UseGoalOperationsProps) {
       setCreateGroupGoalModalOpen,
       setGroupGoalForm,
       fetchGroupGoals,
+      fetchMyGroups,
+      setMyGroups,
       refreshUserPortfolio,
     ]
   );

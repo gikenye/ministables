@@ -374,6 +374,34 @@ export interface ApiError {
   error: string;
 }
 
+type BackendApiError = Error & {
+  status?: number;
+  data?: unknown;
+  expected?: boolean;
+};
+
+function extractErrorMessage(errorData: unknown, fallback: string): string {
+  if (
+    errorData &&
+    typeof errorData === "object" &&
+    "error" in errorData &&
+    typeof (errorData as { error?: unknown }).error === "string"
+  ) {
+    return (errorData as { error: string }).error;
+  }
+  return fallback;
+}
+
+function isExpectedAllocateError(
+  endpoint: string,
+  status: number,
+  errorData: unknown
+): boolean {
+  if (endpoint !== API_ENDPOINTS.ALLOCATE || status !== 400) return false;
+  const message = extractErrorMessage(errorData, "");
+  return message === "Transaction already processed";
+}
+
 // Base API client with error handling
 export class BackendApiClient {
   private baseUrl: string;
@@ -408,35 +436,51 @@ export class BackendApiClient {
         const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
-        logger.error("[BackendApiClient] API ERROR", {
+        const expected = isExpectedAllocateError(
+          endpoint,
+          response.status,
+          errorData
+        );
+        const log = expected ? logger.info : logger.error;
+        log("[BackendApiClient] API ERROR", {
           component: "backendApiService",
           operation: "response.error",
           additional: {
-          url,
-          status: response.status,
-          statusText: response.statusText,
-          errorData,
+            url,
+            status: response.status,
+            statusText: response.statusText,
+            errorData,
           },
         });
-        const error = new Error(
-          errorData.error || `HTTP ${response.status}: ${response.statusText}`
-        ) as Error & { status?: number; data?: unknown };
+        const errorMessage = extractErrorMessage(
+          errorData,
+          `HTTP ${response.status}: ${response.statusText}`
+        );
+        const error = new Error(errorMessage) as BackendApiError;
         error.status = response.status;
         error.data = errorData;
+        error.expected = expected;
         throw error;
       }
 
       return await response.json();
     } catch (error) {
-      logger.error("[BackendApiClient] REQUEST FAILED", {
-        component: "backendApiService",
-        operation: "request.error",
-        additional: {
-          url,
-          error: error instanceof Error ? error.message : error,
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-      });
+      const expected =
+        typeof error === "object" &&
+        error !== null &&
+        "expected" in error &&
+        Boolean((error as BackendApiError).expected);
+      if (!expected) {
+        logger.error("[BackendApiClient] REQUEST FAILED", {
+          component: "backendApiService",
+          operation: "request.error",
+          additional: {
+            url,
+            error: error instanceof Error ? error.message : error,
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        });
+      }
       if (error instanceof Error) {
         throw error;
       }

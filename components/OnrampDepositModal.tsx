@@ -17,6 +17,7 @@ import {
   detectCountryFromPhone,
   type OnrampRequest,
 } from "@/lib/services/onrampService";
+import { CHAINS } from "@/config/chainConfig";
 import { useChain } from "@/components/ChainProvider";
 import { mapPretiumError } from "@/lib/utils/errorMapping";
 import { theme } from "@/lib/theme";
@@ -41,8 +42,9 @@ export function OnrampDepositModal({
   onSuccess,
 }: OnrampDepositModalProps) {
   const account = useActiveAccount();
-  const { chain } = useChain();
+  const { chain, setChain } = useChain();
   const MIN_KES_AMOUNT = 100;
+  const availableChains = CHAINS;
 
   const [form, setForm] = useState({
     phoneNumber: "",
@@ -203,7 +205,7 @@ export function OnrampDepositModal({
         shortcode: formattedPhone,
         amount: Number.parseFloat(form.amount),
         mobile_network: form.mobileNetwork,
-        chain: chain?.name || "celo",
+        chain: chain?.name || "Celo",
         asset: selectedAsset,
         address: account.address,
         target_goal_id: targetGoalId,
@@ -248,6 +250,32 @@ export function OnrampDepositModal({
             <ChevronRight className="rotate-90 w-3.5 h-3.5" />
           </button>
         </div>
+
+        {availableChains.length > 1 && (
+          <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2">
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+              Chain
+            </span>
+            <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
+              {availableChains.map((candidate) => {
+                const isActive = candidate.id === chain?.id;
+                return (
+                  <button
+                    key={candidate.id}
+                    onClick={() => setChain(candidate)}
+                    className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition ${
+                      isActive
+                        ? "bg-teal-500 text-black"
+                        : "text-white/40 hover:text-white/70"
+                    }`}
+                  >
+                    {candidate.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           {paymentStatus === "completed" ? (
