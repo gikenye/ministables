@@ -392,9 +392,14 @@ export const ClanTab: React.FC<ClanTabProps> = ({
       }
       if (!copied) {
         if (typeof window !== "undefined") {
-          window.prompt("Copy this invite link:", shareLink);
+          const promptResult = window.prompt("Copy this invite link:", shareLink);
+          if (promptResult !== null) {
+            copied = true;
+          }
         }
-        throw new Error("Copy failed. Please copy the link manually.");
+        if (!copied) {
+          throw new Error("Copy failed. Please copy the link manually.");
+        }
       }
       toast.success(
         selectedGoal.isPublic === false
@@ -470,9 +475,14 @@ export const ClanTab: React.FC<ClanTabProps> = ({
       }
       if (!copied) {
         if (typeof window !== "undefined") {
-          window.prompt("Copy this invite link:", shareLink);
+          const promptResult = window.prompt("Copy this invite link:", shareLink);
+          if (promptResult !== null) {
+            copied = true;
+          }
         }
-        throw new Error("Copy failed. Please copy the link manually.");
+        if (!copied) {
+          throw new Error("Copy failed. Please copy the link manually.");
+        }
       }
       toast.success("New invite link copied.");
       setInviteLinkFeedback({
