@@ -38,6 +38,19 @@ const CHAIN_ID_MAPPING: Record<string, number> = {
   SCROLL: scroll.id,
 };
 
+const SOURCE_ALLOWLIST = new Set(["app", "widget", "api"]);
+const DEFAULT_SOURCE = "app";
+
+function sanitizeSource(input: unknown): string {
+  if (typeof input !== "string") return DEFAULT_SOURCE;
+  const trimmed = input.trim();
+  if (!trimmed) return DEFAULT_SOURCE;
+  const clipped = trimmed.slice(0, 32);
+  const normalized = clipped.toLowerCase();
+  if (!SOURCE_ALLOWLIST.has(normalized)) return DEFAULT_SOURCE;
+  return normalized;
+}
+
 export async function POST(request: NextRequest) {
   try {
     logger.info("Initiating onramp", {
@@ -59,9 +72,10 @@ export async function POST(request: NextRequest) {
       vault_address,
       target_goal_id,
       targetGoalId: targetGoalIdFromBody,
-      source,
+      source: sourceInput,
     } = body;
     const targetGoalId = target_goal_id || targetGoalIdFromBody;
+    const source = sanitizeSource(sourceInput);
 
     const sanitizedRequestBody = sanitizeOnrampInitiatePayload(body);
 

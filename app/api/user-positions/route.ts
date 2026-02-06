@@ -571,6 +571,7 @@ async function handleJoinGoal(request: NextRequest) {
 
   await Promise.all([attachTx.wait(), scoreTx.wait()]);
 
+  const chainKey = resolveChainKey({ chainId, chain });
   const collection = await getMetaGoalsCollection();
   const metaGoal = (await collection.findOne(
     chainKey

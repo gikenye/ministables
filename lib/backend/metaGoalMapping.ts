@@ -35,7 +35,7 @@ export function setGoalsForChain(
     ...(metaGoal.onChainGoalsByChain || {}),
     [chainKey]: goals,
   };
-  metaGoal.onChainGoals = goals;
+  // onChainGoals is a global fallback; do not overwrite it on per-chain writes
   return metaGoal;
 }
 
@@ -55,15 +55,16 @@ export function getAllGoals(metaGoal: MetaGoal): Array<{
   asset: VaultAsset;
   goalId: string;
 }> {
-  if (metaGoal.onChainGoalsByChain) {
-    const entries: Array<{
-      chainKey?: ChainKey;
-      asset: VaultAsset;
-      goalId: string;
-    }> = [];
-    for (const [chainKey, assetMap] of Object.entries(
-      metaGoal.onChainGoalsByChain
-    )) {
+  const onChainGoalsByChain = metaGoal.onChainGoalsByChain;
+  const onChainGoals = metaGoal.onChainGoals;
+  const entries: Array<{
+    chainKey?: ChainKey;
+    asset: VaultAsset;
+    goalId: string;
+  }> = [];
+
+  if (onChainGoalsByChain) {
+    for (const [chainKey, assetMap] of Object.entries(onChainGoalsByChain)) {
       for (const [asset, goalId] of Object.entries(assetMap || {})) {
         if (!goalId) continue;
         entries.push({
@@ -73,13 +74,22 @@ export function getAllGoals(metaGoal: MetaGoal): Array<{
         });
       }
     }
-    if (entries.length > 0) return entries;
   }
 
-  return Object.entries(metaGoal.onChainGoals || {})
-    .filter(([, goalId]) => !!goalId)
-    .map(([asset, goalId]) => ({
+  for (const [asset, goalId] of Object.entries(onChainGoals || {})) {
+    if (!goalId) continue;
+    entries.push({
       asset: asset as VaultAsset,
       goalId: goalId as string,
-    }));
+    });
+  }
+
+  const seen = new Set<string>();
+  const deduped: typeof entries = [];
+  for (const entry of entries) {
+    if (seen.has(entry.goalId)) continue;
+    seen.add(entry.goalId);
+    deduped.push(entry);
+  }
+  return deduped;
 }

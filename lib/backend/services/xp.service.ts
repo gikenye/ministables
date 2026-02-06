@@ -22,6 +22,16 @@ export class XPService {
 
   private chainKey: ChainKey | null;
 
+  private hasCrossChainGoals(metaGoal: MetaGoal): boolean {
+    const onChainGoalsByChain = metaGoal.onChainGoalsByChain;
+    if (!onChainGoalsByChain) return false;
+    for (const [chainKey, assetMap] of Object.entries(onChainGoalsByChain)) {
+      if (this.chainKey && chainKey === this.chainKey) continue;
+      if (Object.values(assetMap || {}).some((goalId) => !!goalId)) return true;
+    }
+    return false;
+  }
+
   async checkAndAwardXP(
     metaGoalId: string
   ): Promise<{ awarded: boolean; recipients?: Record<string, number> }> {
@@ -71,6 +81,10 @@ export class XPService {
     metaGoal: MetaGoal,
     goalManager: ethers.Contract
   ): Promise<boolean> {
+    // If this meta-goal spans multiple chains, do not decide completion locally.
+    if (this.hasCrossChainGoals(metaGoal)) {
+      return false;
+    }
     let hasAnyProgress = false;
     const chainGoals = getGoalsForChain(metaGoal, this.chainKey);
     for (const goalId of Object.values(chainGoals)) {
@@ -89,6 +103,11 @@ export class XPService {
     goalManager: ethers.Contract
   ): Promise<Record<string, number>> {
     const contributions: Record<string, number> = {};
+
+    // Skip local-only XP calculation when meta-goal includes other chains.
+    if (this.hasCrossChainGoals(metaGoal)) {
+      return contributions;
+    }
 
     const chainGoals = getGoalsForChain(metaGoal, this.chainKey);
     for (const [asset, goalId] of Object.entries(chainGoals)) {

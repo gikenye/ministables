@@ -139,6 +139,14 @@ function resolveAllocationChainParams(args: {
     if (resolved) chainId = resolved.config.id;
   }
 
+  if (chainId && !chain) {
+    const resolved = resolveChainConfig({ chainId });
+    if (resolved) {
+      chain = resolved.key;
+      chainId = resolved.config.id;
+    }
+  }
+
   if (!chain || !chainId) {
     const vaultAddress = input.vaultAddress || deposit?.vaultAddress;
     if (vaultAddress) {
