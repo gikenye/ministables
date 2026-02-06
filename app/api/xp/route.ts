@@ -31,19 +31,58 @@ const ACTIVITY_RATE_LIMIT_GLOBAL = Number.isFinite(ACTIVITY_RATE_LIMIT_GLOBAL_MA
   ? ACTIVITY_RATE_LIMIT_GLOBAL_MAX
   : 100;
 
-const activityRateLimitBuckets = new Map<string, number[]>();
+type RateLimitBucket = { timestamps: number[]; lastSeen: number };
+
+declare global {
+  // eslint-disable-next-line no-var
+  var activityRateLimitBuckets: Map<string, RateLimitBucket> | undefined;
+  // eslint-disable-next-line no-var
+  var activityRateLimitCleanup: ReturnType<typeof setInterval> | undefined;
+}
+
+const activityRateLimitBuckets =
+  globalThis.activityRateLimitBuckets ?? new Map<string, RateLimitBucket>();
+globalThis.activityRateLimitBuckets = activityRateLimitBuckets;
+
+const ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL_MS = Number.parseInt(
+  process.env.XP_ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL_MS ??
+    String(ACTIVITY_RATE_LIMIT_WINDOW),
+  10
+);
+
+const ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL =
+  Number.isFinite(ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL_MS) &&
+  ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL_MS > 0
+    ? ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL_MS
+    : ACTIVITY_RATE_LIMIT_WINDOW;
+
+if (!globalThis.activityRateLimitCleanup) {
+  globalThis.activityRateLimitCleanup = setInterval(() => {
+    const cutoff = Date.now() - ACTIVITY_RATE_LIMIT_WINDOW;
+    for (const [key, bucket] of activityRateLimitBuckets) {
+      if (bucket.lastSeen < cutoff) {
+        activityRateLimitBuckets.delete(key);
+      }
+    }
+  }, ACTIVITY_RATE_LIMIT_CLEANUP_INTERVAL);
+}
 
 function isRateLimited(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now();
   const cutoff = now - windowMs;
-  const timestamps = activityRateLimitBuckets.get(key) ?? [];
-  const recent = timestamps.filter((timestamp) => timestamp > cutoff);
-  if (recent.length >= limit) {
-    activityRateLimitBuckets.set(key, recent);
+  const bucket = activityRateLimitBuckets.get(key) ?? {
+    timestamps: [],
+    lastSeen: now,
+  };
+  const recent = bucket.timestamps.filter((timestamp) => timestamp > cutoff);
+  bucket.timestamps = recent;
+  bucket.lastSeen = now;
+  if (bucket.timestamps.length >= limit) {
+    activityRateLimitBuckets.set(key, bucket);
     return true;
   }
-  recent.push(now);
-  activityRateLimitBuckets.set(key, recent);
+  bucket.timestamps.push(now);
+  activityRateLimitBuckets.set(key, bucket);
   return false;
 }
 

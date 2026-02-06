@@ -465,7 +465,7 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
         deposit.chain;
       const activityTxHash = response.allocationTxHash || input.txHash;
       if (activityChain && activityTxHash) {
-        let blockNumber = 0;
+        let blockNumber: number | undefined;
         const responseBlockNumber =
           (response as { blockNumber?: number }).blockNumber ??
           (response as { allocationReceipt?: { blockNumber?: number } })
@@ -494,15 +494,16 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
             }
           }
         } catch {
-          blockNumber = 0;
+          blockNumber = undefined;
         }
 
-        await ActivityIndexer.recordActivity({
+        const activityPayload: Parameters<
+          typeof ActivityIndexer.recordActivity
+        >[0] = {
           userAddress: input.userAddress,
           chain: activityChain,
           type: "onramp_completed",
           txHash: activityTxHash,
-          blockNumber,
           timestamp: attemptedAt.toISOString(),
           data: {
             goalId: response.goalId,
@@ -511,7 +512,12 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
             amount: amountValue?.toString(),
             source: input.source,
           },
-        });
+        };
+        if (typeof blockNumber === "number") {
+          activityPayload.blockNumber = blockNumber;
+        }
+
+        await ActivityIndexer.recordActivity(activityPayload);
       }
     } catch (activityError) {
       console.warn("Failed to record onramp activity", activityError);
