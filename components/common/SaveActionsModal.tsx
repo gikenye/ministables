@@ -1,5 +1,5 @@
 "use client";
-import { FC, useMemo, useState } from "react";
+import { FC, useMemo, useState, useEffect } from "react";
 import {
   ChevronRight,
   Smartphone,
@@ -26,7 +26,7 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
   onClose,
   onActionSelect,
 }) => {
-  const { chain, setChain } = useChain();
+  const { chain } = useChain();
   const account = useActiveAccount();
   const [showGuide, setShowGuide] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -34,13 +34,57 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
     () => CHAINS.filter((candidate) => TOKENS[candidate.id as keyof typeof TOKENS]),
     []
   );
+  const [selectedChainId, setSelectedChainId] = useState<number | null>(
+    chain?.id ?? availableChains[0]?.id ?? null
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeof window === "undefined") {
+      setSelectedChainId(chain?.id ?? availableChains[0]?.id ?? null);
+      return;
+    }
+    const stored = window.localStorage.getItem("minilend.preferredChainId");
+    const parsed = stored ? Number(stored) : NaN;
+    if (Number.isFinite(parsed) && availableChains.some((c) => c.id === parsed)) {
+      setSelectedChainId(parsed);
+      return;
+    }
+    setSelectedChainId(chain?.id ?? availableChains[0]?.id ?? null);
+  }, [isOpen, chain?.id, availableChains]);
+
+  const selectedChain = useMemo(() => {
+    if (!selectedChainId) return chain ?? availableChains[0];
+    return (
+      availableChains.find((candidate) => candidate.id === selectedChainId) ||
+      chain ||
+      availableChains[0]
+    );
+  }, [availableChains, chain, selectedChainId]);
+
+  const getChainLogo = (chainValue: { name?: string }) => {
+    const name = chainValue?.name?.toLowerCase() || "";
+    if (name.includes("celo")) {
+      return {
+        src: "/icons/Celo_Symbol_PMS_U_ProsperityYellow.png",
+        alt: "Celo",
+      };
+    }
+    if (name.includes("base")) {
+      return {
+        src: "/icons/Base_basemark_blue.png",
+        alt: "Base",
+      };
+    }
+    return null;
+  };
 
   const currentChainData = useMemo(() => {
-    if (!chain?.id) return { tokens: [], name: "Unknown Network" };
-    const tokens = TOKENS[chain.id as keyof typeof TOKENS] || [];
-    const name = chain.name.charAt(0).toUpperCase() + chain.name.slice(1);
+    if (!selectedChain?.id) return { tokens: [], name: "Unknown Network" };
+    const tokens = TOKENS[selectedChain.id as keyof typeof TOKENS] || [];
+    const name = selectedChain.name.charAt(0).toUpperCase() + selectedChain.name.slice(1);
     return { tokens, name };
-  }, [chain]);
+  }, [selectedChain]);
 
   const usdcInfo = useMemo(
     () => currentChainData.tokens.find((t) => t.symbol === "USDC"),
@@ -95,18 +139,37 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
                 <div className="flex justify-center">
                   <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
                     {availableChains.map((candidate) => {
-                      const isActive = candidate.id === chain.id;
+                      const isActive = candidate.id === selectedChain?.id;
+                      const logo = getChainLogo(candidate);
                       return (
                         <button
                           key={candidate.id}
-                          onClick={() => setChain(candidate)}
-                          className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition ${
+                          onClick={() => {
+                            setSelectedChainId(candidate.id);
+                            if (typeof window !== "undefined") {
+                              window.localStorage.setItem(
+                                "minilend.preferredChainId",
+                                String(candidate.id)
+                              );
+                            }
+                          }}
+                          className={`h-8 w-8 rounded-full flex items-center justify-center transition border ${
                             isActive
-                              ? "bg-teal-500 text-black"
-                              : "text-white/40 hover:text-white/70"
+                              ? "bg-white/10 border-teal-400/60"
+                              : "border-transparent hover:border-white/20"
                           }`}
                         >
-                          {candidate.name}
+                          {logo ? (
+                            <img
+                              src={logo.src}
+                              alt={logo.alt}
+                              className="h-5 w-5 object-contain"
+                            />
+                          ) : (
+                            <span className="text-[9px] font-black uppercase text-white/60">
+                              {candidate.name}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -175,18 +238,37 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
                 {availableChains.length > 1 ? (
                   <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
                     {availableChains.map((candidate) => {
-                      const isActive = candidate.id === chain.id;
+                      const isActive = candidate.id === selectedChain?.id;
+                      const logo = getChainLogo(candidate);
                       return (
                         <button
                           key={candidate.id}
-                          onClick={() => setChain(candidate)}
-                          className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition ${
+                          onClick={() => {
+                            setSelectedChainId(candidate.id);
+                            if (typeof window !== "undefined") {
+                              window.localStorage.setItem(
+                                "minilend.preferredChainId",
+                                String(candidate.id)
+                              );
+                            }
+                          }}
+                          className={`h-8 w-8 rounded-full flex items-center justify-center transition border ${
                             isActive
-                              ? "bg-teal-500 text-black"
-                              : "text-white/40 hover:text-white/70"
+                              ? "bg-white/10 border-teal-400/60"
+                              : "border-transparent hover:border-white/20"
                           }`}
                         >
-                          {candidate.name}
+                          {logo ? (
+                            <img
+                              src={logo.src}
+                              alt={logo.alt}
+                              className="h-5 w-5 object-contain"
+                            />
+                          ) : (
+                            <span className="text-[9px] font-black uppercase text-white/60">
+                              {candidate.name}
+                            </span>
+                          )}
                         </button>
                       );
                     })}

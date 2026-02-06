@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import {
   Smartphone,
@@ -42,9 +42,53 @@ export function OnrampDepositModal({
   onSuccess,
 }: OnrampDepositModalProps) {
   const account = useActiveAccount();
-  const { chain, setChain } = useChain();
+  const { chain } = useChain();
   const MIN_KES_AMOUNT = 100;
-  const availableChains = CHAINS;
+  const availableChains = useMemo(() => CHAINS, []);
+  const [selectedChainId, setSelectedChainId] = useState<number | null>(
+    chain?.id ?? availableChains[0]?.id ?? null
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeof window === "undefined") {
+      setSelectedChainId(chain?.id ?? availableChains[0]?.id ?? null);
+      return;
+    }
+    const stored = window.localStorage.getItem("minilend.preferredChainId");
+    const parsed = stored ? Number(stored) : NaN;
+    if (Number.isFinite(parsed) && availableChains.some((c) => c.id === parsed)) {
+      setSelectedChainId(parsed);
+      return;
+    }
+    setSelectedChainId(chain?.id ?? availableChains[0]?.id ?? null);
+  }, [isOpen, chain?.id, availableChains]);
+
+  const selectedChain = useMemo(() => {
+    const fallbackChain = chain ?? availableChains[0] ?? null;
+    if (!selectedChainId) return fallbackChain;
+    return (
+      availableChains.find((candidate) => candidate.id === selectedChainId) ||
+      fallbackChain
+    );
+  }, [availableChains, chain, selectedChainId]);
+
+  const getChainLogo = (chainValue: { name?: string }) => {
+    const name = chainValue?.name?.toLowerCase() || "";
+    if (name.includes("celo")) {
+      return {
+        src: "/icons/Celo_Symbol_PMS_U_ProsperityYellow.png",
+        alt: "Celo",
+      };
+    }
+    if (name.includes("base")) {
+      return {
+        src: "/icons/Base_basemark_blue.png",
+        alt: "Base",
+      };
+    }
+    return null;
+  };
 
   const [form, setForm] = useState({
     phoneNumber: "",
@@ -195,6 +239,15 @@ export function OnrampDepositModal({
       return; // block api call to pretium
     }
     if (!account?.address) return;
+    const chainName = selectedChain?.name ?? availableChains[0]?.name;
+    if (!chainName) {
+      setValidation({
+        isValidating: false,
+        isValid: false,
+        error: "No available chains.",
+      });
+      return;
+    }
     setTransaction((prev) => ({ ...prev, isProcessing: true, error: "" }));
     try {
       const formattedPhone = formatPhoneNumber(
@@ -205,7 +258,7 @@ export function OnrampDepositModal({
         shortcode: formattedPhone,
         amount: Number.parseFloat(form.amount),
         mobile_network: form.mobileNetwork,
-        chain: chain?.name || "Celo",
+        chain: chainName,
         asset: selectedAsset,
         address: account.address,
         target_goal_id: targetGoalId,
@@ -258,18 +311,37 @@ export function OnrampDepositModal({
             </span>
             <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
               {availableChains.map((candidate) => {
-                const isActive = candidate.id === chain?.id;
+                const isActive = candidate.id === selectedChain?.id;
+                const logo = getChainLogo(candidate);
                 return (
                   <button
                     key={candidate.id}
-                    onClick={() => setChain(candidate)}
-                    className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition ${
+                    onClick={() => {
+                      setSelectedChainId(candidate.id);
+                      if (typeof window !== "undefined") {
+                        window.localStorage.setItem(
+                          "minilend.preferredChainId",
+                          String(candidate.id)
+                        );
+                      }
+                    }}
+                    className={`h-8 w-8 rounded-full flex items-center justify-center transition border ${
                       isActive
-                        ? "bg-teal-500 text-black"
-                        : "text-white/40 hover:text-white/70"
+                        ? "bg-white/10 border-teal-400/60"
+                        : "border-transparent hover:border-white/20"
                     }`}
                   >
-                    {candidate.name}
+                    {logo ? (
+                      <img
+                        src={logo.src}
+                        alt={logo.alt}
+                        className="h-5 w-5 object-contain"
+                      />
+                    ) : (
+                      <span className="text-[9px] font-black uppercase text-white/60">
+                        {candidate.name}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -418,7 +490,7 @@ export function OnrampDepositModal({
 
               <button
                 onClick={handleDeposit}
-                disabled={!form.amount || transaction.isProcessing}
+                disabled={!form.amount || transaction.isProcessing || !selectedChain}
                 className="w-full py-4 rounded-2xl bg-teal-500 text-black font-black uppercase tracking-widest text-xs hover:bg-teal-400 transition-colors shadow-lg shadow-teal-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {transaction.isProcessing ? (

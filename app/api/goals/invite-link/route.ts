@@ -82,7 +82,6 @@ export async function POST(
 
     const db = await connectToDatabase();
     const inviterExists = await isKnownUser(db, normalizedInviter);
-
     if (!inviterExists) {
       return NextResponse.json({ error: "Inviter not found" }, { status: 403 });
     }
