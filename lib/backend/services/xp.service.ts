@@ -8,14 +8,19 @@ import {
 } from "../constants";
 import { getMetaGoalsCollection, getUserXPCollection } from "../database";
 import { formatAmountForDisplay } from "../utils";
-import type { MetaGoal, VaultAsset } from "../types";
+import type { MetaGoal, VaultAsset, ChainKey } from "../types";
+import { getGoalsForChain, resolveChainKey } from "../metaGoalMapping";
 
 export class XPService {
   constructor(
     private provider: ethers.Provider,
     private contracts: ContractsConfig = CONTRACTS,
     private vaults: VaultMap = VAULTS
-  ) {}
+  ) {
+    this.chainKey = resolveChainKey({ contractAddress: this.contracts.GOAL_MANAGER });
+  }
+
+  private chainKey: ChainKey | null;
 
   async checkAndAwardXP(
     metaGoalId: string
@@ -67,7 +72,8 @@ export class XPService {
     goalManager: ethers.Contract
   ): Promise<boolean> {
     let hasAnyProgress = false;
-    for (const goalId of Object.values(metaGoal.onChainGoals)) {
+    const chainGoals = getGoalsForChain(metaGoal, this.chainKey);
+    for (const goalId of Object.values(chainGoals)) {
       const attachmentCount = await goalManager.attachmentCount(goalId);
       if (attachmentCount === BigInt(0)) continue;
 
@@ -84,7 +90,8 @@ export class XPService {
   ): Promise<Record<string, number>> {
     const contributions: Record<string, number> = {};
 
-    for (const [asset, goalId] of Object.entries(metaGoal.onChainGoals)) {
+    const chainGoals = getGoalsForChain(metaGoal, this.chainKey);
+    for (const [asset, goalId] of Object.entries(chainGoals)) {
       const vaultConfig = this.vaults[asset as VaultAsset];
       const vault = new ethers.Contract(
         vaultConfig.address,

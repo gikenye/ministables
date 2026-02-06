@@ -7,6 +7,8 @@ export interface AllocateRequest {
   txHash: string;
   providerPayload: Record<string, unknown>;
   targetGoalId?: string;
+  chainId?: number;
+  chain?: string;
 }
 
 export interface AllocateResponse {
@@ -240,6 +242,7 @@ export interface ActivityResponse {
 export type ApiResponse<T> = T | ErrorResponse;
 
 export type VaultAsset = "USDC" | "cUSD" | "USDT" | "cKES";
+export type ChainKey = keyof typeof import("./constants").CHAINS;
 
 // Multi-vault goal types
 export interface MetaGoal {
@@ -248,7 +251,8 @@ export interface MetaGoal {
   targetAmountToken: number;
   targetDate: string;
   creatorAddress: string;
-  onChainGoals: Partial<Record<VaultAsset, string>>; // asset -> goalId mapping
+  onChainGoals: Partial<Record<VaultAsset, string>>; // legacy asset -> goalId mapping
+  onChainGoalsByChain?: Partial<Record<ChainKey, Partial<Record<VaultAsset, string>>>>; // chain -> asset -> goalId
   isPublic?: boolean;
   participants?: string[];
   invitedUsers?: string[]; // For private goals
@@ -299,6 +303,7 @@ export interface CreateMultiVaultGoalResponse {
   success: boolean;
   metaGoalId: string;
   onChainGoals: Record<VaultAsset, string>;
+  onChainGoalsByChain?: Partial<Record<ChainKey, Partial<Record<VaultAsset, string>>>>;
   txHashes: Record<VaultAsset, string>;
   shareLink?: string;
 }

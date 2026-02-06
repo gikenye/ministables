@@ -77,6 +77,7 @@ export interface AllocateRequest {
   lockTier?: number; // Lock tier in days (default: 30)
   tokenSymbol?: string; // Optional token symbol for local allocation API
   chainId?: number; // Optional chain ID for local allocation API
+  chain?: string; // Optional chain name for local allocation API
 }
 
 export interface AllocateResponse {
@@ -106,6 +107,7 @@ export interface CreateGoalResponse {
   success: boolean;
   metaGoalId: string;
   onChainGoals: Record<SupportedAsset, string>;
+  onChainGoalsByChain?: Record<string, Record<SupportedAsset, string>>;
   txHashes: Record<SupportedAsset, string>;
   shareLink?: string;
 }
@@ -118,6 +120,7 @@ export interface GoalDetailsResponse {
   targetDate: string;
   creatorAddress: string;
   onChainGoals: Record<SupportedAsset, string>;
+  onChainGoalsByChain?: Record<string, Record<SupportedAsset, string>>;
   totalProgressUSD: number;
   progressPercent: number;
   vaultProgress: Record<
@@ -157,6 +160,7 @@ export interface GroupSavingsGoal {
   participantCount: number;
   createdAt: string;
   onChainGoals?: Record<SupportedAsset, string>;
+  onChainGoalsByChain?: Record<string, Record<SupportedAsset, string>>;
   // Additional fields used by components
   currentAmountUSD?: number;
   totalContributedUSD?: number;

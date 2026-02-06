@@ -1,12 +1,16 @@
 import { BlockchainService } from "./blockchain.service";
 import { getMetaGoalsCollection } from "../database";
 import { resolveTargetAmountToken } from "../utils";
-import type { Goal, GoalAttachment, MetaGoalWithProgress, VaultAsset } from "../types";
+import type { Goal, GoalAttachment, MetaGoalWithProgress, VaultAsset, ChainKey } from "../types";
+import { getGoalsForChain } from "../metaGoalMapping";
 
 const MAX_ATTACHMENTS_TO_FETCH = 100;
 
 export class GoalService {
-  constructor(private blockchainService: BlockchainService) {}
+  constructor(
+    private blockchainService: BlockchainService,
+    private chainKey: ChainKey | null = null
+  ) {}
 
   async getGoalDetails(goalId: string): Promise<Goal> {
     const goalManager = this.blockchainService.getGoalManager();
@@ -81,7 +85,8 @@ export class GoalService {
 
       let totalProgressUSD = 0;
 
-      const progressPromises = Object.entries(metaGoal.onChainGoals).map(
+      const chainGoals = getGoalsForChain(metaGoal, this.chainKey);
+      const progressPromises = Object.entries(chainGoals).map(
         async ([asset, goalIdStr]: [string, unknown]) => {
           try {
             const goalId = BigInt(goalIdStr as string);

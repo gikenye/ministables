@@ -11,11 +11,14 @@ import { createProvider, formatAmountForDisplay } from "../utils";
 import { getMetaGoalsCollection } from "../database";
 import type { VaultAsset, MetaGoal } from "../types";
 import type { Collection } from "mongodb";
+import type { ChainKey } from "../types";
+import { resolveChainKey, setGoalForChain } from "../metaGoalMapping";
 
 export class GoalSyncService {
   private provider: ethers.Provider;
   private goalManager: ethers.Contract;
   private vaults: VaultMap;
+  private chainKey: ChainKey | null;
   private collection: Collection<MetaGoal> | null = null;
 
   constructor(
@@ -30,6 +33,7 @@ export class GoalSyncService {
       GOAL_MANAGER_ABI,
       this.provider
     );
+    this.chainKey = resolveChainKey({ contractAddress: contracts.GOAL_MANAGER });
   }
 
   private async getCollection() {
@@ -69,7 +73,19 @@ export class GoalSyncService {
       }
 
       const collection = await this.getCollection();
-      const existing = await collection.findOne({ [`onChainGoals.${asset}`]: goalId });
+      const existing = await collection.findOne(
+        this.chainKey
+          ? {
+              $or: [
+                {
+                  [`onChainGoalsByChain.${this.chainKey}.${asset}`]:
+                    goalId,
+                },
+                { [`onChainGoals.${asset}`]: goalId },
+              ],
+            }
+          : { [`onChainGoals.${asset}`]: goalId }
+      );
 
       if (existing) {
         return existing;
@@ -86,6 +102,7 @@ export class GoalSyncService {
         createdAt: new Date(Number(onChainGoal.createdAt) * 1000).toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      setGoalForChain(metaGoal, this.chainKey, asset, goalId);
 
       try {
         await collection.insertOne(metaGoal);
@@ -93,7 +110,19 @@ export class GoalSyncService {
         return metaGoal;
       } catch (error) {
         if (error instanceof Error && "code" in error && (error as { code: number }).code === 11000) {
-          const retry = await collection.findOne({ [`onChainGoals.${asset}`]: goalId });
+          const retry = await collection.findOne(
+            this.chainKey
+              ? {
+                  $or: [
+                    {
+                      [`onChainGoalsByChain.${this.chainKey}.${asset}`]:
+                        goalId,
+                    },
+                    { [`onChainGoals.${asset}`]: goalId },
+                  ],
+                }
+              : { [`onChainGoals.${asset}`]: goalId }
+          );
           return retry;
         }
         throw error;
@@ -174,7 +203,10 @@ export class GoalSyncService {
         },
         {
           $set: { 
-            onChainGoals: syncedGoals, 
+            onChainGoals: syncedGoals,
+            ...(this.chainKey
+              ? { [`onChainGoalsByChain.${this.chainKey}`]: syncedGoals }
+              : {}),
             updatedAt: now 
           },
           $setOnInsert: {
@@ -183,7 +215,10 @@ export class GoalSyncService {
             targetAmountToken: 0,
             targetDate: "",
             creatorAddress: normalizedAddress,
-            createdAt: now
+            createdAt: now,
+            ...(this.chainKey
+              ? { onChainGoalsByChain: { [this.chainKey]: syncedGoals } }
+              : {}),
           }
         },
         { upsert: true }
@@ -194,8 +229,17 @@ export class GoalSyncService {
   async getGoalWithFallback(goalId: string): Promise<{ metaGoal: MetaGoal | null; fromChain: boolean }> {
     const collection = await this.getCollection();
     
-    const searchPromises = Object.keys(this.vaults).map(asset => 
-      collection.findOne({ [`onChainGoals.${asset}`]: goalId })
+    const searchPromises = Object.keys(this.vaults).map((asset) =>
+      collection.findOne(
+        this.chainKey
+          ? {
+              $or: [
+                { [`onChainGoalsByChain.${this.chainKey}.${asset}`]: goalId },
+                { [`onChainGoals.${asset}`]: goalId },
+              ],
+            }
+          : { [`onChainGoals.${asset}`]: goalId }
+      )
     );
     
     const results = await Promise.all(searchPromises);

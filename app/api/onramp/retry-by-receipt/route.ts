@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
         transaction.provider?.lastStatusPayload,
       targetGoalId: transaction.targetGoalId,
       source: "retry",
+      chain: transaction.chain,
+      chainId: transaction.chainId,
+      vaultAddress: transaction.vaultAddress,
     });
 
     if (allocationResult.success && !allocationResult.skipped) {

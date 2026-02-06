@@ -5,6 +5,7 @@ import { CONTRACTS, GOAL_MANAGER_ABI, getContractsForChain } from "@/lib/backend
 import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import { createBackendWallet, createProvider, isValidAddress } from "@/lib/backend/utils";
 import type { ErrorResponse } from "@/lib/backend/types";
+import { getGoalsForChain, resolveChainKey } from "@/lib/backend/metaGoalMapping";
 
 function buildInviteMessage(params: {
   metaGoalId: string;
@@ -213,11 +214,13 @@ export async function POST(
     }
 
     const chainParams = { chainId, chain };
+    const chainKey = resolveChainKey(chainParams);
     const provider = createProvider(chainParams);
     const backendWallet = createBackendWallet(provider);
     const contracts = getContractsForChain(chainParams);
     const goalManager = new ethers.Contract(contracts.GOAL_MANAGER, GOAL_MANAGER_ABI, backendWallet);
-    const goalIds = Object.values(metaGoal.onChainGoals || {}).filter(Boolean) as string[];
+    const chainGoals = getGoalsForChain(metaGoal, chainKey);
+    const goalIds = Object.values(chainGoals || {}).filter(Boolean) as string[];
 
     for (const goalId of goalIds) {
       try {

@@ -15,7 +15,12 @@ import {
   resolveTargetAmountToken,
 } from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
-import type { ErrorResponse, VaultAsset } from "@/lib/backend/types";
+import type { ErrorResponse, VaultAsset, MetaGoal } from "@/lib/backend/types";
+import {
+  getGoalsForChain,
+  resolveChainKey,
+  setGoalForChain,
+} from "@/lib/backend/metaGoalMapping";
 
 interface ExpandGoalRequest {
   goalId: string;
@@ -31,6 +36,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
       chainId: (body as { chainId?: string | number }).chainId,
       chain: (body as { chain?: string }).chain,
     };
+    const chainKey = resolveChainKey(chainParams);
 
     const provider = createProvider(chainParams);
     const backendWallet = createBackendWallet(provider);
@@ -39,7 +45,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
     const collection = await getMetaGoalsCollection();
     const vaults = getVaultsForChain(chainParams);
 
-    let metaGoal;
+    let metaGoal: MetaGoal | null;
     let isNewMetaGoal = false;
 
     if (goalId.includes('-')) {
@@ -64,12 +70,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      setGoalForChain(metaGoal, chainKey, existingVault as VaultAsset, goalId);
       isNewMetaGoal = true;
     }
 
     const newOnChainGoals: Partial<Record<VaultAsset, string>> = {};
+    const existingChainGoals = getGoalsForChain(metaGoal as MetaGoal, chainKey);
     for (const asset of newVaults) {
-      if (metaGoal!.onChainGoals[asset]) continue;
+      if (existingChainGoals[asset]) continue;
 
       const vaultConfig = vaults[asset];
       const targetAmountToken = resolveTargetAmountToken(metaGoal!);
@@ -92,7 +100,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
       
       if (goalEvent) {
         newOnChainGoals[asset] = goalEvent.args.goalId.toString();
-        metaGoal!.onChainGoals[asset] = goalEvent.args.goalId.toString();
+        setGoalForChain(metaGoal as MetaGoal, chainKey, asset, goalEvent.args.goalId.toString());
       }
     }
 
@@ -103,7 +111,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
     } else if (metaGoal) {
       await collection.updateOne(
         { metaGoalId: metaGoal!.metaGoalId },
-        { $set: { onChainGoals: metaGoal!.onChainGoals, updatedAt: new Date().toISOString() } }
+        { $set: { onChainGoals: metaGoal!.onChainGoals, onChainGoalsByChain: metaGoal!.onChainGoalsByChain, updatedAt: new Date().toISOString() } }
       );
     }
 

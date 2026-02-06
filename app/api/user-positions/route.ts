@@ -24,6 +24,12 @@ import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { BlockchainService } from "@/lib/backend/services/blockchain.service";
 import { CrossChainService } from "@/lib/backend/services/cross-chain.service";
 import { RequestValidator } from "@/lib/backend/validators/request.validator";
+import {
+  getGoalsForChain,
+  getAllGoals,
+  resolveChainKey,
+  setGoalsForChain,
+} from "@/lib/backend/metaGoalMapping";
 import type {
   ErrorResponse,
   AssetBalance,
@@ -272,6 +278,7 @@ async function handleCreateGoal(request: NextRequest) {
     chainId,
     chain,
   });
+  const chainKey = resolveChainKey({ chainId, chain });
   const backendWallet = createBackendWallet(provider);
   const goalManager = new ethers.Contract(
     contracts.GOAL_MANAGER,
@@ -346,6 +353,7 @@ async function handleCreateGoal(request: NextRequest) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  setGoalsForChain(metaGoal, chainKey, onChainGoals);
 
   const collection = await getMetaGoalsCollection();
   await collection.insertOne(metaGoal as MetaGoal);
@@ -357,6 +365,7 @@ async function handleCreateGoal(request: NextRequest) {
     success: true,
     metaGoalId,
     onChainGoals,
+    onChainGoalsByChain: metaGoal.onChainGoalsByChain,
     txHashes,
     shareLink,
   });
@@ -393,6 +402,7 @@ async function handleCreateGroupGoal(request: NextRequest) {
     chainId,
     chain,
   });
+  const chainKey = resolveChainKey({ chainId, chain });
   const backendWallet = createBackendWallet(provider);
   const goalManager = new ethers.Contract(
     contracts.GOAL_MANAGER,
@@ -469,6 +479,7 @@ async function handleCreateGroupGoal(request: NextRequest) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  setGoalsForChain(metaGoal, chainKey, onChainGoals);
 
   const collection = await getMetaGoalsCollection();
   await collection.insertOne(metaGoal);
@@ -480,6 +491,7 @@ async function handleCreateGroupGoal(request: NextRequest) {
     success: true,
     metaGoalId,
     onChainGoals,
+    onChainGoalsByChain: metaGoal.onChainGoalsByChain,
     txHashes,
     shareLink,
   });
@@ -560,9 +572,16 @@ async function handleJoinGoal(request: NextRequest) {
   await Promise.all([attachTx.wait(), scoreTx.wait()]);
 
   const collection = await getMetaGoalsCollection();
-  const metaGoal = (await collection.findOne({
-    [`onChainGoals.${asset}`]: goalId,
-  })) as (MetaGoal & { participants?: string[] }) | null;
+  const metaGoal = (await collection.findOne(
+    chainKey
+      ? {
+          $or: [
+            { [`onChainGoalsByChain.${chainKey}.${asset}`]: goalId },
+            { [`onChainGoals.${asset}`]: goalId },
+          ],
+        }
+      : { [`onChainGoals.${asset}`]: goalId }
+  )) as (MetaGoal & { participants?: string[] }) | null;
 
   if (
     metaGoal &&
@@ -984,6 +1003,7 @@ async function fetchGroupGoalMembers(metaGoal: MetaGoal, chainParams: ChainParam
     GOAL_MANAGER_ABI,
     provider
   );
+  const chainKey = resolveChainKey(chainParams);
 
   const memberStats: Record<
     string,
@@ -996,7 +1016,8 @@ async function fetchGroupGoalMembers(metaGoal: MetaGoal, chainParams: ChainParam
     }
   > = {};
 
-  for (const [asset, goalIdStr] of Object.entries(metaGoal.onChainGoals)) {
+  const chainGoals = getGoalsForChain(metaGoal, chainKey);
+  for (const [asset, goalIdStr] of Object.entries(chainGoals)) {
     const goalId = BigInt(goalIdStr as string);
     const attachmentCount = await goalManager.attachmentCount(goalId);
 
@@ -1103,6 +1124,7 @@ async function handleCancelGoal(request: NextRequest) {
   }
 
   const { provider, contracts } = resolveChainContext({ chainId, chain });
+  const chainKey = resolveChainKey({ chainId, chain });
   const backendWallet = createBackendWallet(provider);
   const goalManager = new ethers.Contract(
     contracts.GOAL_MANAGER,
@@ -1115,7 +1137,8 @@ async function handleCancelGoal(request: NextRequest) {
   const alreadyCancelled: string[] = [];
   const statusUnknown: string[] = [];
 
-  for (const [asset, goalIdStr] of Object.entries(metaGoal.onChainGoals)) {
+  const chainGoals = getGoalsForChain(metaGoal, chainKey);
+  for (const [asset, goalIdStr] of Object.entries(chainGoals)) {
     try {
       const goalId = BigInt(goalIdStr as string);
       const [, , , , , , , cancelled, completed] = await goalManager.goals(
@@ -1144,7 +1167,7 @@ async function handleCancelGoal(request: NextRequest) {
 
   const remainingGoals: Record<string, string> = {};
 
-  for (const [asset, goalIdStr] of Object.entries(metaGoal.onChainGoals)) {
+  for (const [asset, goalIdStr] of Object.entries(chainGoals)) {
     try {
       const goalId = BigInt(goalIdStr as string);
       const [, , , , , , , cancelled] = await goalManager.goals(goalId);
@@ -1162,15 +1185,23 @@ async function handleCancelGoal(request: NextRequest) {
     }
   }
 
+  const updatedMetaGoal = setGoalsForChain(
+    metaGoal,
+    chainKey,
+    remainingGoals as Record<VaultAsset, string>
+  );
+  const remainingCount = getAllGoals(updatedMetaGoal).length;
+
   if (statusUnknown.length > 0) {
-    if (Object.keys(remainingGoals).length === 0) {
+    if (remainingCount === 0) {
       await collection.deleteOne({ metaGoalId });
     } else {
       await collection.updateOne(
         { metaGoalId },
         {
           $set: {
-            onChainGoals: remainingGoals,
+            onChainGoals: updatedMetaGoal.onChainGoals,
+            onChainGoalsByChain: updatedMetaGoal.onChainGoalsByChain,
             updatedAt: new Date().toISOString(),
             cachedMembers: [],
             lastSync: null,
@@ -1197,14 +1228,15 @@ async function handleCancelGoal(request: NextRequest) {
     );
   }
 
-  if (Object.keys(remainingGoals).length === 0) {
+  if (remainingCount === 0) {
     await collection.deleteOne({ metaGoalId });
   } else {
     await collection.updateOne(
       { metaGoalId },
       {
         $set: {
-          onChainGoals: remainingGoals,
+          onChainGoals: updatedMetaGoal.onChainGoals,
+          onChainGoalsByChain: updatedMetaGoal.onChainGoalsByChain,
           updatedAt: new Date().toISOString(),
           cachedMembers: [],
           lastSync: null,
@@ -1231,6 +1263,7 @@ async function handleCancelGoal(request: NextRequest) {
 async function handleGetGroupGoalDetails(request: NextRequest) {
   const body = await request.json();
   const { metaGoalId, chainId, chain } = body;
+  const chainKey = resolveChainKey({ chainId, chain });
 
   if (!metaGoalId) {
     return NextResponse.json(
@@ -1269,7 +1302,8 @@ async function handleGetGroupGoalDetails(request: NextRequest) {
     attachedAt: string;
   }> = [];
 
-  for (const [asset, goalIdStr] of Object.entries(metaGoal.onChainGoals)) {
+  const chainGoals = getGoalsForChain(metaGoal, chainKey);
+  for (const [asset, goalIdStr] of Object.entries(chainGoals)) {
     const goalId = BigInt(goalIdStr as string);
     const vaultConfig = vaults[asset as VaultAsset];
     if (!vaultConfig) {
@@ -1336,7 +1370,7 @@ async function handleGetGroupGoalDetails(request: NextRequest) {
     metaGoalId,
     goalName: metaGoal.name,
     targetAmountToken,
-    goalIds: metaGoal.onChainGoals,
+    goalIds: chainGoals,
     balances,
     transactions,
   });

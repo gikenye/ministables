@@ -7,6 +7,10 @@ import {
   type AllocateResponse,
   type SupportedAsset,
 } from "@/lib/services/backendApiService";
+import {
+  findChainByVaultAddress,
+  resolveChainConfig,
+} from "@/lib/backend/constants";
 
 const ASSET_DECIMALS: Record<string, number> = {
   USDC: 6,
@@ -43,6 +47,9 @@ interface AllocateOnrampInput {
   targetGoalId?: string;
   source: AllocationSource;
   force?: boolean;
+  chainId?: number;
+  chain?: string;
+  vaultAddress?: string;
 }
 
 function resolveAmountInWei(asset: string, amountValue: string): string {
@@ -90,6 +97,63 @@ function normalizeAsset(asset: string): SupportedAsset | null {
     (supported) => supported.toLowerCase() === normalized
   );
   return match || null;
+}
+
+function extractChainFromProviderPayload(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.chain === "string") return record.chain;
+  const data = record.data;
+  if (data && typeof data === "object") {
+    const dataRecord = data as Record<string, unknown>;
+    if (typeof dataRecord.chain === "string") return dataRecord.chain;
+  }
+  return undefined;
+}
+
+function resolveAllocationChainParams(args: {
+  input: AllocateOnrampInput;
+  deposit?: {
+    chain?: string;
+    chainId?: number;
+    vaultAddress?: string;
+    provider?: {
+      lastWebhookPayload?: unknown;
+      lastStatusPayload?: unknown;
+      initiateResponse?: unknown;
+    };
+  } | null;
+}): { chainId?: number; chain?: string } {
+  const { input, deposit } = args;
+  let chainId = input.chainId ?? deposit?.chainId;
+  let chain =
+    input.chain ??
+    deposit?.chain ??
+    extractChainFromProviderPayload(input.providerPayload) ??
+    extractChainFromProviderPayload(deposit?.provider?.lastWebhookPayload) ??
+    extractChainFromProviderPayload(deposit?.provider?.lastStatusPayload) ??
+    extractChainFromProviderPayload(deposit?.provider?.initiateResponse);
+
+  if (!chainId && chain) {
+    const resolved = resolveChainConfig({ chain });
+    if (resolved) chainId = resolved.config.id;
+  }
+
+  if (!chain || !chainId) {
+    const vaultAddress = input.vaultAddress || deposit?.vaultAddress;
+    if (vaultAddress) {
+      const byVault = findChainByVaultAddress(vaultAddress);
+      if (byVault) {
+        chainId = chainId ?? byVault.config.id;
+        chain = chain ?? byVault.key;
+      }
+    }
+  }
+
+  return {
+    chainId,
+    chain,
+  };
 }
 
 export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
@@ -146,6 +210,9 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
           lastStatusPayload?: unknown;
           initiateResponse?: unknown;
         };
+        chain?: string;
+        chainId?: number;
+        vaultAddress?: string;
       }
     | null = null;
 
@@ -232,6 +299,9 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       lastStatusPayload?: unknown;
       initiateResponse?: unknown;
     };
+    chain?: string;
+    chainId?: number;
+    vaultAddress?: string;
   };
 
   const amountValue =
@@ -302,6 +372,13 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       ? { providerPayload: normalizedProviderPayload }
       : {}),
   };
+
+  const allocationChain = resolveAllocationChainParams({
+    input,
+    deposit,
+  });
+  if (allocationChain.chainId) allocationRequest.chainId = allocationChain.chainId;
+  if (allocationChain.chain) allocationRequest.chain = allocationChain.chain;
 
   const baseUrl =
     process.env.ALLOCATE_API_URL ||

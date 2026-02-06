@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       vault_address,
       target_goal_id,
       targetGoalId: targetGoalIdFromBody,
+      source,
     } = body;
     const targetGoalId = target_goal_id || targetGoalIdFromBody;
 
@@ -192,6 +193,9 @@ export async function POST(request: NextRequest) {
       amount: amount.toString(),
       transactionCode,
       targetGoalId: targetGoalId || undefined,
+      source,
+      chain,
+      chainId: vaultChainId,
       phoneNumber: shortcode,
       mobileNetwork: mobile_network,
       countryCode: currency_code,
@@ -214,6 +218,7 @@ export async function POST(request: NextRequest) {
           vaultAddr,
           asset,
           chain,
+          vaultChainId,
           targetGoalId || undefined
         ),
       5000
@@ -246,6 +251,7 @@ async function pollAndAllocate(
   vaultAddress: string,
   asset: string,
   chain: string,
+  chainId?: number,
   targetGoalId?: string
 ) {
   let attempts = 0;
@@ -385,6 +391,9 @@ async function pollAndAllocate(
           providerPayload: statusData,
           targetGoalId,
           source: "poller",
+          chain,
+          chainId,
+          vaultAddress,
         });
         return;
       }

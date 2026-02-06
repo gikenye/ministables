@@ -8,6 +8,9 @@ export interface OnrampDeposit {
   amount: string;
   transactionCode: string;
   targetGoalId?: string;
+  source?: string;
+  chain?: string;
+  chainId?: number;
   txHash?: string;
   phoneNumber: string;
   mobileNetwork: string;

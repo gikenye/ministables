@@ -10,6 +10,7 @@ export interface OnrampRequest {
   callback_url?: string;
   type?: string;
   target_goal_id?: string;
+  source?: string;
 }
 
 export interface OnrampResponse {

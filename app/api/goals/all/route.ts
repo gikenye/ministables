@@ -4,6 +4,7 @@ import { CONTRACTS, GOAL_MANAGER_ABI, getContractsForChain } from "@/lib/backend
 import { createProvider, resolveTargetAmountToken } from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import type { ErrorResponse, MetaGoalWithProgress, VaultAsset } from "@/lib/backend/types";
+import { getGoalsForChain, resolveChainKey } from "@/lib/backend/metaGoalMapping";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MetaGoalWi
       chainId: searchParams.get("chainId"),
       chain: searchParams.get("chain"),
     };
+    const chainKey = resolveChainKey(chainParams);
     
     const limit = Math.min(isNaN(rawLimit) ? DEFAULT_LIMIT : Math.max(1, rawLimit), MAX_LIMIT);
     const skip = isNaN(rawSkip) ? 0 : Math.max(0, rawSkip);
@@ -51,7 +53,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<MetaGoalWi
 
         let totalProgressUSD = 0;
 
-        const progressPromises = Object.entries(metaGoal.onChainGoals).map(
+        const chainGoals = getGoalsForChain(metaGoal, chainKey);
+        const progressPromises = Object.entries(chainGoals).map(
           async ([asset, goalIdStr]: [string, unknown]) => {
             try {
               const goalId = BigInt(goalIdStr as string);
@@ -113,6 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MetaGoalWi
           metaGoal as typeof metaGoal & { targetAmountUSD?: number };
         return {
           ...metaGoalBase,
+          onChainGoals: chainGoals,
           targetAmountToken,
           totalProgressUSD,
           progressPercent,

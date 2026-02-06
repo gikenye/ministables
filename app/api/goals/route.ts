@@ -17,6 +17,11 @@ import {
   mapLimit,
   resolveTargetAmountToken,
 } from "@/lib/backend/utils";
+import {
+  getGoalsForChain,
+  resolveChainKey,
+  setGoalsForChain,
+} from "@/lib/backend/metaGoalMapping";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
 import type {
@@ -136,6 +141,7 @@ export async function GET(
       chainId: searchParams.get("chainId"),
       chain: searchParams.get("chain"),
     };
+    const chainKey = resolveChainKey(chainParams);
 
     if (creatorAddress && !isValidAddress(creatorAddress)) {
       return NextResponse.json(
@@ -196,7 +202,7 @@ export async function GET(
 
     const supportedAssets = new Set(Object.keys(vaults));
     const filteredMetaGoals = metaGoals.filter((metaGoal) =>
-      Object.keys(metaGoal.onChainGoals || {}).some((asset) =>
+      Object.keys(getGoalsForChain(metaGoal, chainKey)).some((asset) =>
         supportedAssets.has(asset)
       )
     );
@@ -226,7 +232,8 @@ export async function GET(
 
           let totalProgressUSD = 0;
 
-          const onChainEntries = Object.entries(metaGoal.onChainGoals || {});
+          const chainGoals = getGoalsForChain(metaGoal, chainKey);
+          const onChainEntries = Object.entries(chainGoals || {});
           const knownEntries = onChainEntries.filter(([asset]) =>
             supportedAssets.has(asset)
           );
@@ -395,7 +402,7 @@ export async function GET(
           const participantsArray = Array.from(participantsSet);
           const needsUpdate =
             Object.keys(activeGoals).length !==
-              Object.keys(metaGoal.onChainGoals).length ||
+              Object.keys(chainGoals).length ||
             JSON.stringify(
               (
                 metaGoal as MetaGoal & { participants?: string[] }
@@ -404,11 +411,17 @@ export async function GET(
 
           if (!hasUnknownAssets && needsUpdate) {
             try {
+              const updatedMetaGoal = setGoalsForChain(
+                metaGoal,
+                chainKey,
+                activeGoals
+              );
               await collection.updateOne(
                 { metaGoalId: metaGoal.metaGoalId },
                 {
                   $set: {
-                    onChainGoals: activeGoals,
+                    onChainGoals: updatedMetaGoal.onChainGoals,
+                    onChainGoalsByChain: updatedMetaGoal.onChainGoalsByChain,
                     participants: participantsArray,
                     updatedAt: new Date().toISOString(),
                   },
@@ -515,6 +528,7 @@ export async function POST(
       chainId,
       chain,
     });
+    const chainKey = resolveChainKey({ chainId, chain });
     const backendWallet = createBackendWallet(provider);
     const goalManager = new ethers.Contract(
       contracts.GOAL_MANAGER,
@@ -587,6 +601,7 @@ export async function POST(
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    setGoalsForChain(metaGoal, chainKey, onChainGoals);
 
     const collection = await getMetaGoalsCollection();
     await collection.insertOne(metaGoal as MetaGoal);
@@ -595,6 +610,7 @@ export async function POST(
       success: true,
       metaGoalId,
       onChainGoals,
+      onChainGoalsByChain: metaGoal.onChainGoalsByChain,
       txHashes,
     });
   } catch (error) {

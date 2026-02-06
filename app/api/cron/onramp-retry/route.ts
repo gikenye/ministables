@@ -181,6 +181,9 @@ export async function GET(request: NextRequest) {
           targetGoalId: deposit.targetGoalId,
           source: "retry",
           force: true,
+          chain: deposit.chain,
+          chainId: deposit.chainId,
+          vaultAddress: deposit.vaultAddress,
         });
 
         if (allocationResult.success && !allocationResult.skipped) {
@@ -234,6 +237,9 @@ export async function GET(request: NextRequest) {
           targetGoalId: deposit.targetGoalId,
           source: "retry",
           force: true,
+          chain: deposit.chain,
+          chainId: deposit.chainId,
+          vaultAddress: deposit.vaultAddress,
         });
 
         if (allocationResult.success && !allocationResult.skipped) {
