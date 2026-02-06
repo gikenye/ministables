@@ -83,10 +83,7 @@ export async function POST(
     const db = await connectToDatabase();
     const inviterExists = await isKnownUser(db, normalizedInviter);
     if (!inviterExists) {
-      console.warn("Inviter not found; rotating invite link anyway", {
-        metaGoalId,
-        inviterAddress: normalizedInviter,
-      });
+      return NextResponse.json({ error: "Inviter not found" }, { status: 403 });
     }
 
     const token = randomBytes(18).toString("hex");

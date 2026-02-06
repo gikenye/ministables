@@ -65,11 +65,11 @@ export function OnrampDepositModal({
   }, [isOpen, chain?.id, availableChains]);
 
   const selectedChain = useMemo(() => {
-    if (!selectedChainId) return chain ?? availableChains[0];
+    const fallbackChain = chain ?? availableChains[0] ?? null;
+    if (!selectedChainId) return fallbackChain;
     return (
       availableChains.find((candidate) => candidate.id === selectedChainId) ||
-      chain ||
-      availableChains[0]
+      fallbackChain
     );
   }, [availableChains, chain, selectedChainId]);
 
@@ -239,6 +239,15 @@ export function OnrampDepositModal({
       return; // block api call to pretium
     }
     if (!account?.address) return;
+    const chainName = selectedChain?.name ?? availableChains[0]?.name;
+    if (!chainName) {
+      setValidation({
+        isValidating: false,
+        isValid: false,
+        error: "No available chains.",
+      });
+      return;
+    }
     setTransaction((prev) => ({ ...prev, isProcessing: true, error: "" }));
     try {
       const formattedPhone = formatPhoneNumber(
@@ -249,7 +258,7 @@ export function OnrampDepositModal({
         shortcode: formattedPhone,
         amount: Number.parseFloat(form.amount),
         mobile_network: form.mobileNetwork,
-        chain: selectedChain?.name || "Celo",
+        chain: chainName,
         asset: selectedAsset,
         address: account.address,
         target_goal_id: targetGoalId,
@@ -481,7 +490,7 @@ export function OnrampDepositModal({
 
               <button
                 onClick={handleDeposit}
-                disabled={!form.amount || transaction.isProcessing}
+                disabled={!form.amount || transaction.isProcessing || !selectedChain}
                 className="w-full py-4 rounded-2xl bg-teal-500 text-black font-black uppercase tracking-widest text-xs hover:bg-teal-400 transition-colors shadow-lg shadow-teal-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {transaction.isProcessing ? (

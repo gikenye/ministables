@@ -210,6 +210,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const handleDepositClick = () => setIsSaveActionsOpen(true);
   const handleInvite = () => {
     setInviteAddress("");
+    setInviteLinkFeedback({ status: "idle" });
     setIsInviteModalOpen(true);
   };
 
