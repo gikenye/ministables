@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BottomSheet } from "@/components/ui";
-import { TOKENS } from "@/config/chainConfig";
+import { CHAINS, TOKENS } from "@/config/chainConfig";
 import { useChain } from "@/components/ChainProvider";
 import { useActiveAccount } from "thirdweb/react";
 import { toast } from "sonner";
@@ -26,10 +26,14 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
   onClose,
   onActionSelect,
 }) => {
-  const { chain } = useChain();
+  const { chain, setChain } = useChain();
   const account = useActiveAccount();
   const [showGuide, setShowGuide] = useState(false);
   const [copied, setCopied] = useState(false);
+  const availableChains = useMemo(
+    () => CHAINS.filter((candidate) => TOKENS[candidate.id as keyof typeof TOKENS]),
+    []
+  );
 
   const currentChainData = useMemo(() => {
     if (!chain?.id) return { tokens: [], name: "Unknown Network" };
@@ -86,6 +90,29 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
                   Select your preferred method
                 </p>
               </div>
+
+              {availableChains.length > 1 && (
+                <div className="flex justify-center">
+                  <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
+                    {availableChains.map((candidate) => {
+                      const isActive = candidate.id === chain.id;
+                      return (
+                        <button
+                          key={candidate.id}
+                          onClick={() => setChain(candidate)}
+                          className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition ${
+                            isActive
+                              ? "bg-teal-500 text-black"
+                              : "text-white/40 hover:text-white/70"
+                          }`}
+                        >
+                          {candidate.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <button
@@ -145,12 +172,33 @@ const SaveActionsModal: FC<SaveActionsModalProps> = ({
                 >
                   <ArrowLeft size={14} /> Back
                 </button>
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-teal-500/10 border border-teal-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
-                  <span className="text-[9px] font-black text-teal-400 uppercase">
-                    {currentChainData.name}
-                  </span>
-                </div>
+                {availableChains.length > 1 ? (
+                  <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
+                    {availableChains.map((candidate) => {
+                      const isActive = candidate.id === chain.id;
+                      return (
+                        <button
+                          key={candidate.id}
+                          onClick={() => setChain(candidate)}
+                          className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition ${
+                            isActive
+                              ? "bg-teal-500 text-black"
+                              : "text-white/40 hover:text-white/70"
+                          }`}
+                        >
+                          {candidate.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-teal-500/10 border border-teal-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+                    <span className="text-[9px] font-black text-teal-400 uppercase">
+                      {currentChainData.name}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 space-y-6">

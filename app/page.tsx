@@ -174,6 +174,8 @@ export default function AppPage() {
     setJoinGoalError: state.setJoinGoalError,
     fetchUserGoals: dataFetching.fetchUserGoals,
     fetchGroupGoals: dataFetching.fetchGroupGoals,
+    fetchMyGroups: dataFetching.fetchMyGroups,
+    setMyGroups: state.setMyGroups,
     refreshUserPortfolio: dataFetching.refreshUserPortfolio,
     handleWalletDeposit: walletOperations.handleQuickSaveDeposit,
   });

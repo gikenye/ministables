@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { BottomSheet } from "@/components/ui";
@@ -34,6 +34,8 @@ export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isShaking, setIsShaking] = useState(false);
+  const submitLockRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const steps = [
     {
@@ -66,7 +68,7 @@ export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
 
   const currentField = steps[currentStep];
   const isLastStep = currentStep === steps.length - 1;
-  const isDisabled = !!isLoading;
+  const isDisabled = !!isLoading || isSubmitting;
 
   const amountValue = Number(groupGoalForm.amount || 0);
   const amountUsd =
@@ -91,6 +93,9 @@ export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
     }
 
     if (isLastStep) {
+      if (submitLockRef.current) return;
+      submitLockRef.current = true;
+      setIsSubmitting(true);
       onCreateGroupGoal();
       return;
     }
@@ -104,6 +109,22 @@ export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
     }
     setCurrentStep((prev) => prev - 1);
   };
+
+  useEffect(() => {
+    if (!isLoading) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      setCurrentStep(0);
+      setIsShaking(false);
+    }
+  }, [isOpen]);
 
   return (
     <BottomSheet
@@ -255,7 +276,7 @@ export const CreateGroupGoalModal: React.FC<CreateGroupGoalModalProps> = ({
               onClick={handleNext}
               className="flex-[1.5] py-2.5 bg-[#4ade80] text-black rounded-xl text-[11px] font-black uppercase tracking-widest transition active:scale-95 disabled:opacity-50"
             >
-              {isLoading ? (
+              {isLoading || isSubmitting ? (
                 <Loader2 className="animate-spin mx-auto" size={18} />
               ) : isLastStep ? (
                 "Create Clan"
