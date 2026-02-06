@@ -26,6 +26,20 @@ const ALLOCATION_TIMEOUT_MS = Number(
   process.env.ONRAMP_ALLOCATION_TIMEOUT_MS || 15000
 );
 
+async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ALLOCATION_TIMEOUT_MS}ms`));
+    }, ALLOCATION_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 type AllocationSource = "poller" | "webhook" | "retry";
 
 interface AllocationAttempt {
@@ -466,11 +480,17 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
           if (typeof responseBlockNumber === "number") {
             blockNumber = responseBlockNumber;
           } else {
-            const receipt = await provider.getTransactionReceipt(activityTxHash);
+            const receipt = await withTimeout(
+              provider.getTransactionReceipt(activityTxHash),
+              "getTransactionReceipt"
+            );
             if (receipt?.blockNumber) {
               blockNumber = receipt.blockNumber;
             } else {
-              blockNumber = await provider.getBlockNumber();
+              blockNumber = await withTimeout(
+                provider.getBlockNumber(),
+                "getBlockNumber"
+              );
             }
           }
         } catch {

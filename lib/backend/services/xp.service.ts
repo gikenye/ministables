@@ -205,6 +205,12 @@ export class XPService {
   async awardActivityXP(
     userAddress: string
   ): Promise<{ awarded: boolean; earned: number; totalXP: number }> {
+    return XPService.awardActivityXP(userAddress);
+  }
+
+  static async awardActivityXP(
+    userAddress: string
+  ): Promise<{ awarded: boolean; earned: number; totalXP: number }> {
     const normalizedAddress = userAddress.toLowerCase();
     const db = await getDatabase();
     const activities = db.collection<{ _id: ObjectId; userAddress: string }>(
@@ -263,7 +269,7 @@ export class XPService {
       { upsert: !existing, returnDocument: "after" }
     );
 
-    if (!updated?.value) {
+    if (!updated) {
       return {
         awarded: false,
         earned: 0,
@@ -274,7 +280,7 @@ export class XPService {
     return {
       awarded: true,
       earned: count,
-      totalXP: updated.value.totalXP || (existing?.totalXP || 0) + count,
+      totalXP: updated.totalXP ?? ((existing?.totalXP ?? 0) + count),
     };
   }
 }
