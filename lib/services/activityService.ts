@@ -15,30 +15,41 @@ export interface ActivityItem {
   toGoal?: string;
 }
 
+const ACTIVITY_STORAGE_DEBOUNCE_MS = 400;
+const FETCH_ACTIVITY_TIMEOUT_MS = 5000;
+const MAX_ACTIVITIES_IN_MEMORY = 50;
+
 class ActivityService {
   private activities: ActivityItem[] = [];
+  private pendingByKey = new Map<string, ActivityItem[]>();
+  private saveTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   async fetchUserActivity(userAddress: string, limit = 10): Promise<ActivityItem[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_ACTIVITY_TIMEOUT_MS);
+
     try {
-      // Try to fetch from API first
-      const response = await fetch(`/api/activity?userId=${userAddress}&limit=${limit}`);
-      
+      const response = await fetch(
+        `/api/activity?userId=${userAddress}&limit=${limit}`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const data = await response.json();
         return data.activities || [];
       }
-      
-      // Fallback to local storage if API fails
+
       return this.getLocalActivity(userAddress, limit);
     } catch (error) {
-      reportError("Failed to fetch user activity", {
-        component: "ActivityService",
-        operation: "fetchUserActivity",
-        userAddress,
-        additional: { error }
-      });
-      
-      // Return local activities as fallback
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name !== "AbortError") {
+        reportError("Failed to fetch user activity", {
+          component: "ActivityService",
+          operation: "fetchUserActivity",
+          additional: { error, userAddress },
+        });
+      }
       return this.getLocalActivity(userAddress, limit);
     }
   }
@@ -51,33 +62,44 @@ class ActivityService {
     };
 
     this.activities.unshift(newActivity);
-    
-    // Keep only last 50 activities in memory
-    if (this.activities.length > 50) {
-      this.activities = this.activities.slice(0, 50);
+    if (this.activities.length > MAX_ACTIVITIES_IN_MEMORY) {
+      this.activities = this.activities.slice(0, MAX_ACTIVITIES_IN_MEMORY);
     }
 
-    // Store in localStorage for persistence
-    this.saveToLocalStorage(newActivity);
+    const storageKey = this.getStorageKey(newActivity.userAddress);
+    const pending = this.pendingByKey.get(storageKey) ?? [];
+    pending.unshift(newActivity);
+    this.pendingByKey.set(storageKey, pending);
+
+    this.scheduleFlushToStorage();
   }
 
-  private saveToLocalStorage(activity: ActivityItem): void {
+  private getStorageKey(userAddress?: string): string {
+    const normalized = userAddress?.toLowerCase();
+    return normalized ? `minilend_activities_${normalized}` : "minilend_activities";
+  }
+
+  private scheduleFlushToStorage(): void {
+    if (this.saveTimeoutId !== null) return;
+    this.saveTimeoutId = setTimeout(() => {
+      this.saveTimeoutId = null;
+      this.flushToStorage();
+    }, ACTIVITY_STORAGE_DEBOUNCE_MS);
+  }
+
+  private flushToStorage(): void {
+    if (this.pendingByKey.size === 0) return;
     try {
-      const normalizedAddress = activity.userAddress?.toLowerCase();
-      const storageKey = normalizedAddress
-        ? `minilend_activities_${normalizedAddress}`
-        : "minilend_activities";
-      const stored = localStorage.getItem(storageKey);
-      const activities = stored ? JSON.parse(stored) : [];
-      
-      activities.unshift(activity);
-      
-      // Keep only last 50 activities
-      const trimmed = activities.slice(0, 50);
-      
-      localStorage.setItem(storageKey, JSON.stringify(trimmed));
+      for (const [storageKey, pending] of this.pendingByKey) {
+        const stored = localStorage.getItem(storageKey);
+        const activities = stored ? (JSON.parse(stored) as ActivityItem[]) : [];
+        for (let i = pending.length - 1; i >= 0; i--) activities.unshift(pending[i]);
+        const trimmed = activities.slice(0, MAX_ACTIVITIES_IN_MEMORY);
+        localStorage.setItem(storageKey, JSON.stringify(trimmed));
+      }
+      this.pendingByKey.clear();
     } catch (error) {
-      console.warn("Failed to save activity to localStorage:", error);
+      console.warn("Failed to flush activities to localStorage:", error);
     }
   }
 
