@@ -61,10 +61,10 @@ export class GoalSyncService {
 
       const vaultConfig = this.vaults[asset];
       const formattedAmount = formatAmountForDisplay(onChainGoal.targetAmount.toString(), vaultConfig.decimals);
-      const targetAmountUSD = parseFloat(formattedAmount);
+      const targetAmountToken = parseFloat(formattedAmount);
       
-      if (!Number.isFinite(targetAmountUSD) || targetAmountUSD < 0) {
-        console.error(`Invalid targetAmountUSD for goal ${goalId}: ${formattedAmount}`);
+      if (!Number.isFinite(targetAmountToken) || targetAmountToken < 0) {
+        console.error(`Invalid targetAmountToken for goal ${goalId}: ${formattedAmount}`);
         return null;
       }
 
@@ -79,7 +79,7 @@ export class GoalSyncService {
       const metaGoal: MetaGoal = {
         metaGoalId,
         name: onChainGoal.metadataURI || `Goal ${goalId}`,
-        targetAmountUSD,
+        targetAmountToken,
         targetDate: new Date(Number(onChainGoal.targetDate) * 1000).toISOString(),
         creatorAddress: onChainGoal.creator.toLowerCase(),
         onChainGoals: { [asset]: goalId },
@@ -169,7 +169,7 @@ export class GoalSyncService {
       await collection.updateOne(
         {
           creatorAddress: normalizedAddress,
-          targetAmountUSD: 0,
+          targetAmountToken: 0,
           name: "quicksave"
         },
         {
@@ -180,7 +180,7 @@ export class GoalSyncService {
           $setOnInsert: {
             metaGoalId: uuidv4(),
             name: "quicksave",
-            targetAmountUSD: 0,
+            targetAmountToken: 0,
             targetDate: "",
             creatorAddress: normalizedAddress,
             createdAt: now

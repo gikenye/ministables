@@ -30,7 +30,7 @@ export function useCombinedGoals({ userPortfolio, userGoals }: UseCombinedGoalsP
         const parsed = Number(directProgress);
         if (Number.isFinite(parsed)) return parsed;
       }
-      const targetAmount = Number(goal.targetAmountUSD);
+      const targetAmount = Number(goal.targetAmountToken);
       const progressPercent = Number(goal.progressPercent);
       if (Number.isFinite(targetAmount) && Number.isFinite(progressPercent) && targetAmount > 0 && progressPercent > 0) {
         return (targetAmount * progressPercent) / 100;
@@ -45,14 +45,14 @@ export function useCombinedGoals({ userPortfolio, userGoals }: UseCombinedGoalsP
       name: goal.name,
       description:
         goal.targetDate && goal.targetDate !== "0"
-          ? `Target: $${goal.targetAmountUSD} by ${new Date(goal.targetDate).toLocaleDateString()}`
-          : `Target: $${goal.targetAmountUSD}`,
+          ? `Target: $${goal.targetAmountToken} by ${new Date(goal.targetDate).toLocaleDateString()}`
+          : `Target: $${goal.targetAmountToken}`,
       currentAmount: getGoalProgressUsd(goal).toString(),
-      targetAmount: goal.targetAmountUSD?.toString() || "0",
+      targetAmount: goal.targetAmountToken?.toString() || "0",
       progress: Math.min(goal.progressPercent || 0, 100),
       category: "personal" as const,
       status: "active" as const,
-      targetAmountUSD: goal.targetAmountUSD,
+      targetAmountToken: goal.targetAmountToken,
       targetDate: goal.targetDate,
       creatorAddress: goal.creatorAddress,
       onChainGoals: goal.onChainGoals,

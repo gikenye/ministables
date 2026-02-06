@@ -198,6 +198,26 @@ export function formatTokenAmount(amountWei: string, decimals: number): string {
   }
 }
 
+type TargetAmountTokenSource = {
+  targetAmountToken?: number;
+  targetAmountUSD?: number | string;
+};
+
+export function resolveTargetAmountToken(
+  source?: TargetAmountTokenSource | null
+): number {
+  if (!source) return 0;
+  const candidate = source.targetAmountToken ?? source.targetAmountUSD;
+  if (typeof candidate === "number") {
+    return Number.isFinite(candidate) ? candidate : 0;
+  }
+  if (typeof candidate === "string") {
+    const parsed = Number.parseFloat(candidate);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 /**
  * Format amount with proper decimal places for display
  */

@@ -29,7 +29,7 @@ export function transformGroupGoalToEnhanced(goal: GroupSavingsGoal): EnhancedGr
     metaGoalId: goal.metaGoalId,
     name: goal.name,
     description: goal.description,
-    targetAmountUSD: goal.targetAmountUSD,
+    targetAmountToken: goal.targetAmountToken,
     totalProgressUSD: goal.totalProgressUSD || goal.currentAmountUSD || 0,
     creatorAddress: goal.creatorAddress,
     creatorName: undefined,

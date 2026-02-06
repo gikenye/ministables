@@ -32,7 +32,7 @@ export interface UserPositions {
       vault: string;
       asset: string;
       targetAmountWei: string;
-      targetAmountUSD: string;
+      targetAmountToken: string;
       targetDate: string;
       totalValueWei: string;
       totalValueUSD: string;

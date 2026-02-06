@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ethers } from "ethers";
 import { CONTRACTS, GOAL_MANAGER_ABI, getContractsForChain } from "@/lib/backend/constants";
-import { createProvider } from "@/lib/backend/utils";
+import { createProvider, resolveTargetAmountToken } from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import type { ErrorResponse, MetaGoalWithProgress, VaultAsset } from "@/lib/backend/types";
 
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MetaGoalWi
 
     const goalsWithProgress: MetaGoalWithProgress[] = await Promise.all(
       metaGoals.map(async (metaGoal) => {
+        const targetAmountToken = resolveTargetAmountToken(metaGoal);
         const vaultProgress: Record<VaultAsset, {
           goalId: string;
           progressUSD: number;
@@ -55,7 +56,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<MetaGoalWi
             try {
               const goalId = BigInt(goalIdStr as string);
               const [, percentBps] = await goalManager.getGoalProgressFull(goalId);
-              const progressUSD = (Number(percentBps) / 10000) * metaGoal.targetAmountUSD;
+              const progressUSD =
+                (Number(percentBps) / 10000) * targetAmountToken;
               const progressPercent = Number(percentBps) / 100;
               const attachmentCount = Number(await goalManager.attachmentCount(goalId));
 
@@ -100,15 +102,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<MetaGoalWi
         }
 
         const progressPercent =
-          metaGoal.targetAmountUSD > 0
-            ? (totalProgressUSD / metaGoal.targetAmountUSD) * 100
+          targetAmountToken > 0
+            ? (totalProgressUSD / targetAmountToken) * 100
             : 0;
 
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
         const inviteLink = `${baseUrl}/goals/${metaGoal.metaGoalId}`;
 
+        const { targetAmountUSD: _legacyTargetAmount, ...metaGoalBase } =
+          metaGoal as typeof metaGoal & { targetAmountUSD?: number };
         return {
-          ...metaGoal,
+          ...metaGoalBase,
+          targetAmountToken,
           totalProgressUSD,
           progressPercent,
           vaultProgress,

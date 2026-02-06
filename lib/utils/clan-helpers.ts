@@ -16,8 +16,8 @@ export function formatCurrency(usdAmount: number, exchangeRate?: number, locale 
  * Calculate progress percentage for a group
  */
 export function calculateProgress(goal: EnhancedGroupSavingsGoal): number {
-  if (goal.targetAmountUSD <= 0) return 0
-  return Math.min((goal.totalProgressUSD / goal.targetAmountUSD) * 100, 100)
+  if (goal.targetAmountToken <= 0) return 0
+  return Math.min((goal.totalProgressUSD / goal.targetAmountToken) * 100, 100)
 }
 
 /**
@@ -82,7 +82,7 @@ export function generateSampleGroup(overrides?: Partial<EnhancedGroupSavingsGoal
     metaGoalId: `group-${Date.now()}`,
     name: "Kenya Adventure Fund",
     description: "Saving together for our annual trip to Kenya",
-    targetAmountUSD: 5000,
+    targetAmountToken: 5000,
     totalProgressUSD: 2800,
     creatorAddress: "0x123...",
     creatorName: "Alex",

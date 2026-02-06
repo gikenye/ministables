@@ -94,7 +94,7 @@ export function useGoals(category?: string): UseGoalsResult {
             title: goalData.isQuicksave ? `Quick Save (${goalData.asset})` : goalData.name || `Goal ${goalData.goalId}`,
             description: goalData.isQuicksave ? "Save without a specific goal" : "Custom savings goal",
             currentAmount: goalData.userBalanceUSD || goalData.totalValueUSD || "0",
-            targetAmount: goalData.targetAmountUSD || "0",
+            targetAmount: goalData.targetAmountToken || "0",
             progress: parseFloat(goalData.progressPercent) || 0,
             icon: goalData.isQuicksave ? "🐷" : "🎯",
             category: goalData.isQuicksave ? "quick" : "personal",

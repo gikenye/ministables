@@ -75,7 +75,7 @@ const normalizePercent = (value: number) => {
 };
 
 const getGoalProgress = (goal: GroupSavingsGoal) => {
-  const targetAmount = toNumber(goal.targetAmountUSD);
+  const targetAmount = toNumber(goal.targetAmountToken);
   const totalProgress = toNumber(goal.totalProgressUSD);
   const currentAmount = toNumber(goal.currentAmountUSD);
   const progressPercent = toNumber(goal.progressPercent);

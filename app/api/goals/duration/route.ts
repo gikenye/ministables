@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { calculateOptimalDuration, UserHabit, getTargetDateFromDuration } from "@/lib/backend/goal-duration-calculator";
+import {
+  calculateOptimalDuration,
+  UserHabit,
+  getTargetDateFromDuration,
+} from "@/lib/backend/goal-duration-calculator";
+import { resolveTargetAmountToken } from "@/lib/backend/utils";
 import type { ErrorResponse } from "@/lib/backend/types";
 
 interface DurationRequest {
-  targetAmountUSD: number;
+  targetAmountToken: number;
   userHabit?: UserHabit;
   avgDepositAmount?: number;
 }
@@ -18,11 +23,12 @@ interface DurationResponse {
 export async function POST(request: NextRequest): Promise<NextResponse<DurationResponse | ErrorResponse>> {
   try {
     const body: DurationRequest = await request.json();
-    const { targetAmountUSD, userHabit, avgDepositAmount } = body;
+    const { userHabit, avgDepositAmount } = body;
+    const targetAmountToken = resolveTargetAmountToken(body);
 
-    if (!targetAmountUSD || targetAmountUSD <= 0) {
+    if (!targetAmountToken || targetAmountToken <= 0) {
       return NextResponse.json(
-        { error: "targetAmountUSD must be greater than 0" },
+        { error: "targetAmountToken must be greater than 0" },
         { status: 400 }
       );
     }
@@ -34,14 +40,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<DurationR
       );
     }
 
-    const config = calculateOptimalDuration(targetAmountUSD, userHabit, avgDepositAmount);
+    const config = calculateOptimalDuration(targetAmountToken, userHabit, avgDepositAmount);
     
     const minLockPeriodDays = Math.floor(config.minLockPeriod / (24 * 60 * 60));
     const suggestedDurationDays = Math.floor(config.suggestedDuration / (24 * 60 * 60));
     
     let reasoning = "Contract minimum (30 days)";
     if (userHabit && avgDepositAmount) {
-      const estimatedDeposits = Math.ceil(targetAmountUSD / avgDepositAmount);
+      const estimatedDeposits = Math.ceil(targetAmountToken / avgDepositAmount);
       reasoning = `${estimatedDeposits} deposits, ${userHabit.avgDepositFrequency}d frequency, ${userHabit.riskTolerance} risk`;
     }
 
