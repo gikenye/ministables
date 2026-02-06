@@ -457,7 +457,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                       <Globe size={16} /> {isCopyingInviteLink ? "Copying..." : "Share link"}
                     </button>
                   </div>
-                  <button onClick={() => { onOpenWithdrawActions?.(); setSelectedGoal(null); }} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
+                  <button onClick={() => { onOpenWithdrawActions?.(); setSelectedGoal(null); }} className="w-full flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
                     <ArrowDownLeft size={16} /> Withdraw
                   </button>
                 </div>
