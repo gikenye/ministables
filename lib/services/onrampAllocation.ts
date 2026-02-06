@@ -452,12 +452,27 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       const activityTxHash = response.allocationTxHash || input.txHash;
       if (activityChain && activityTxHash) {
         let blockNumber = 0;
+        const responseBlockNumber =
+          (response as { blockNumber?: number }).blockNumber ??
+          (response as { allocationReceipt?: { blockNumber?: number } })
+            .allocationReceipt?.blockNumber ??
+          (response as { receipt?: { blockNumber?: number } }).receipt
+            ?.blockNumber;
         try {
           const provider = createProvider({
             chain: activityChain,
             chainId: allocationChain.chainId,
           });
-          blockNumber = await provider.getBlockNumber();
+          if (typeof responseBlockNumber === "number") {
+            blockNumber = responseBlockNumber;
+          } else {
+            const receipt = await provider.getTransactionReceipt(activityTxHash);
+            if (receipt?.blockNumber) {
+              blockNumber = receipt.blockNumber;
+            } else {
+              blockNumber = await provider.getBlockNumber();
+            }
+          }
         } catch {
           blockNumber = 0;
         }

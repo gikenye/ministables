@@ -92,7 +92,7 @@ export class GoalSyncService {
       }
 
       const metaGoalId = uuidv4();
-      const metaGoal: MetaGoal = {
+      let metaGoal: MetaGoal = {
         metaGoalId,
         name: onChainGoal.metadataURI || `Goal ${goalId}`,
         targetAmountToken,
@@ -102,7 +102,7 @@ export class GoalSyncService {
         createdAt: new Date(Number(onChainGoal.createdAt) * 1000).toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      setGoalForChain(metaGoal, this.chainKey, asset, goalId);
+      metaGoal = setGoalForChain(metaGoal, this.chainKey, asset, goalId);
 
       try {
         await collection.insertOne(metaGoal);

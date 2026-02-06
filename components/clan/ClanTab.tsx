@@ -327,8 +327,9 @@ export const ClanTab: React.FC<ClanTabProps> = ({
 
       toast.success("Invite sent.");
       setIsInviteModalOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || "Invite failed");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Invite failed";
+      toast.error(message);
     } finally {
       setIsInviting(false);
       inviteInFlightRef.current = false;
@@ -358,8 +359,10 @@ export const ClanTab: React.FC<ClanTabProps> = ({
           ? "Private invite link copied."
           : "Invite link copied."
       );
-    } catch (e: any) {
-      toast.error(e.message || "Failed to copy invite link");
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Failed to copy invite link";
+      toast.error(message);
     } finally {
       setIsCopyingInviteLink(false);
       inviteInFlightRef.current = false;
@@ -385,8 +388,10 @@ export const ClanTab: React.FC<ClanTabProps> = ({
       }
       await navigator.clipboard.writeText(shareLink);
       toast.success("New invite link copied.");
-    } catch (e: any) {
-      toast.error(e.message || "Failed to rotate invite link");
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Failed to rotate invite link";
+      toast.error(message);
     } finally {
       setIsRotatingInviteLink(false);
       inviteInFlightRef.current = false;

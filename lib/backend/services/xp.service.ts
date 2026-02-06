@@ -242,20 +242,39 @@ export class XPService {
       completedAt: now,
     };
 
+    const expectedLastActivityId = existing?.lastActivityId ?? null;
+    const baseFilter: Record<string, unknown> = {
+      userAddress: normalizedAddress,
+    };
+    const filter = expectedLastActivityId
+      ? { ...baseFilter, lastActivityId: expectedLastActivityId }
+      : {
+          ...baseFilter,
+          $or: [{ lastActivityId: { $exists: false } }, { lastActivityId: null }],
+        };
     const updated = await xpCollection.findOneAndUpdate(
-      { userAddress: normalizedAddress },
+      filter,
       {
         $inc: { totalXP: count },
         $set: { updatedAt: now, lastActivityId: lastId },
         $push: { xpHistory: historyEntry },
+        $setOnInsert: { userAddress: normalizedAddress },
       },
-      { upsert: true, returnDocument: "after" }
+      { upsert: !existing, returnDocument: "after" }
     );
+
+    if (!updated?.value) {
+      return {
+        awarded: false,
+        earned: 0,
+        totalXP: existing?.totalXP || 0,
+      };
+    }
 
     return {
       awarded: true,
       earned: count,
-      totalXP: updated?.totalXP || (existing?.totalXP || 0) + count,
+      totalXP: updated.value.totalXP || (existing?.totalXP || 0) + count,
     };
   }
 }

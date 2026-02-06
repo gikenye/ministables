@@ -14,7 +14,11 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get("action");
 
     if (action === "leaderboard") {
-      const limit = parseInt(searchParams.get("limit") || "100");
+      const limitParam = searchParams.get("limit");
+      const parsedLimit = Number.parseInt(limitParam || "100", 10);
+      const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 1000)
+        : 100;
       const collection = await getUserXPCollection();
       const leaderboard = await collection
         .aggregate([
