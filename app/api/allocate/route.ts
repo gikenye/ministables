@@ -17,11 +17,17 @@ import {
   formatAmountForDisplay,
   resolveTargetAmountToken,
 } from "@/lib/backend/utils";
+import {
+  getGoalsForChain,
+  resolveChainKey,
+  setGoalForChain,
+} from "@/lib/backend/metaGoalMapping";
 import type {
   AllocateRequest,
   AllocateResponse,
   ErrorResponse,
   VaultAsset,
+  MetaGoal,
 } from "@/lib/backend/types";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
@@ -68,6 +74,7 @@ export async function POST(
       chainId,
       chain,
     } = parsedBody;
+    const chainKey = resolveChainKey({ chainId, chain });
     // Handle both asset and tokenSymbol for backward compatibility
     const finalAsset = asset || tokenSymbol;
     const providerTxCode = (() => {
@@ -355,7 +362,8 @@ export async function POST(
           const metaGoal = await collection.findOne({ metaGoalId });
           
           if (metaGoal) {
-            const onChainGoalId = metaGoal.onChainGoals[finalAsset as VaultAsset];
+            const chainGoals = getGoalsForChain(metaGoal, chainKey);
+            const onChainGoalId = chainGoals[finalAsset as VaultAsset];
             if (onChainGoalId) {
               logger.info("🎯 Meta-goal resolved to on-chain goal", {
                 metaGoalId,
@@ -427,10 +435,15 @@ export async function POST(
         // Check if user has existing goals in other vaults that could be expanded
         try {
           const collection = await getMetaGoalsCollection();
-          const userMetaGoals = await collection.find({ creatorAddress: userAddress.toLowerCase() }).toArray();
+          const userMetaGoals = (await collection
+            .find({ creatorAddress: userAddress.toLowerCase() })
+            .toArray()) as MetaGoal[];
           if (userMetaGoals.length > 0) {
             // Find a meta-goal that doesn't have this asset yet
-            const expandableGoal = userMetaGoals.find((mg: { onChainGoals: Record<string, string> }) => !mg.onChainGoals[finalAsset as VaultAsset]);
+            const expandableGoal = userMetaGoals.find((mg) => {
+              const chainGoals = getGoalsForChain(mg, chainKey);
+              return !chainGoals[finalAsset as VaultAsset];
+            });
             if (expandableGoal) {
               // Auto-expand the goal to include this asset
               const targetAmountToken = resolveTargetAmountToken(expandableGoal);
@@ -454,10 +467,10 @@ export async function POST(
               if (goalEvent) {
                 attachedGoalId = goalEvent.args.goalId;
                 // Update meta-goal in database
-                expandableGoal.onChainGoals[finalAsset as VaultAsset] = attachedGoalId.toString();
+                setGoalForChain(expandableGoal, chainKey, finalAsset as VaultAsset, attachedGoalId.toString());
                 await collection.updateOne(
                   { metaGoalId: expandableGoal.metaGoalId },
-                  { $set: { onChainGoals: expandableGoal.onChainGoals, updatedAt: new Date().toISOString() } }
+                  { $set: { onChainGoals: expandableGoal.onChainGoals, onChainGoalsByChain: expandableGoal.onChainGoalsByChain, updatedAt: new Date().toISOString() } }
                 );
                 logger.info("✅ Auto-expanded meta-goal to include asset", {
                   metaGoalId: expandableGoal.metaGoalId,
@@ -586,7 +599,19 @@ export async function POST(
     if (attachedGoalId !== BigInt(0)) {
       try {
         const collection = await getMetaGoalsCollection();
-        const metaGoal = await collection.findOne({ [`onChainGoals.${finalAsset}`]: attachedGoalId.toString() });
+        const metaGoal = await collection.findOne(
+          chainKey
+            ? {
+                $or: [
+                  {
+                    [`onChainGoalsByChain.${chainKey}.${finalAsset}`]:
+                      attachedGoalId.toString(),
+                  },
+                  { [`onChainGoals.${finalAsset}`]: attachedGoalId.toString() },
+                ],
+              }
+            : { [`onChainGoals.${finalAsset}`]: attachedGoalId.toString() }
+        );
         
         if (metaGoal) {
           responseMetaGoalId = metaGoal.metaGoalId;
@@ -597,7 +622,8 @@ export async function POST(
           );
           let totalProgressUSD = 0;
           
-          for (const [asset, goalId] of Object.entries(metaGoal.onChainGoals)) {
+          const chainGoals = getGoalsForChain(metaGoal, chainKey);
+          for (const [asset, goalId] of Object.entries(chainGoals)) {
             const vaultCfg = vaults[asset as VaultAsset];
             const [totalValue] = await goalManagerRead.getGoalProgressFull(goalId);
             totalProgressUSD += parseFloat(formatAmountForDisplay(totalValue.toString(), vaultCfg.decimals));

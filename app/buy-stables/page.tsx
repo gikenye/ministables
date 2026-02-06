@@ -168,6 +168,7 @@ export default function ProductionBuyStables() {
         chain: form.chain,
         asset: form.asset,
         address: form.walletAddress.trim(),
+        source: "buy-stables",
       };
 
       const result = await onrampService.initiateOnramp(

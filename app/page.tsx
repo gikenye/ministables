@@ -20,7 +20,6 @@ import { GoalsSection } from "@/components/sections/GoalsSection";
 import { LeaderboardSection } from "@/components/sections/LeaderboardSection";
 import { RecentActivitySection } from "@/components/sections/RecentActivitySection";
 import { ClanTab } from "@/components/clan/ClanTab";
-import { NetworkStatusBar } from "@/components/common/NetworkStatusBar";
 
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { useVaultPositions } from "@/hooks/useVaultPositions";
@@ -460,7 +459,6 @@ export default function AppPage() {
           className="max-w-7xl mx-auto relative z-10 px-4 sm:px-6 lg:px-8"
           role="main"
         >
-          <NetworkStatusBar isOnline={state.isOnline} />
 
           {state.activeTab === "goals" && (
             <GoalsSection

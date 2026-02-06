@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ThirdwebProvider } from "thirdweb/react";
 import { client } from "@/lib/thirdweb/client";
 import { Toaster } from "@/components/ui/toaster";
@@ -28,10 +28,62 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [isOnline, setIsOnline] = useState(true);
+
   useEffect(() => {
     void sdk.actions.ready();
     registerServiceWorker();
     initializeDataSaver();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const checkConnectivity = async () => {
+      if (cancelled) return;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      try {
+        const res = await fetch("/api/health", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!cancelled) {
+          setIsOnline(res.ok);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsOnline(false);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    const updateStatus = () => {
+      if (navigator.onLine) {
+        checkConnectivity();
+      } else {
+        setIsOnline(false);
+      }
+    };
+
+    window.addEventListener("online", updateStatus);
+    window.addEventListener("offline", updateStatus);
+    document.addEventListener("visibilitychange", updateStatus);
+    updateStatus();
+    intervalId = setInterval(checkConnectivity, 15000);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", updateStatus);
+      window.removeEventListener("offline", updateStatus);
+      document.removeEventListener("visibilitychange", updateStatus);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   let content = children;
@@ -60,33 +112,12 @@ export default function ClientLayout({
         {!isDisabled("ConnectionStatusBanner") && (
           <div
             id="connection-status"
-            className="fixed bottom-0 left-0 right-0 bg-yellow-500 text-white text-center py-1 text-sm hidden"
+            className={`fixed bottom-0 left-0 right-0 bg-yellow-500 text-white text-center py-1 text-sm ${isOnline ? "hidden" : ""}`}
           >
             You are offline. Some features may be limited.
           </div>
         )}
       </div>
-      {!isDisabled("ConnectionStatusScript") && (
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              function updateOnlineStatus() {
-                const status = document.getElementById('connection-status');
-                if (status) {
-                  if (navigator.onLine) {
-                    status.classList.add('hidden');
-                  } else {
-                    status.classList.remove('hidden');
-                  }
-                }
-              }
-              window.addEventListener('online', updateOnlineStatus);
-              window.addEventListener('offline', updateOnlineStatus);
-              updateOnlineStatus();
-            `,
-          }}
-        />
-      )}
     </>
   );
 }

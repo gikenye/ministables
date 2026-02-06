@@ -80,6 +80,10 @@ async function ensureIndexes(database: Db): Promise<void> {
     { expiresAt: 1 },
     { expireAfterSeconds: 0, name: "expiresAt_ttl" }
   );
+  await database.collection("invite_links").createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0, name: "expiresAt_ttl" }
+  );
 }
 
 export async function getMetaGoalsCollection(): Promise<Collection<MetaGoal>> {

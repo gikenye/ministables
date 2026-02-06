@@ -9,6 +9,7 @@ import {
 } from "@/lib/backend/constants";
 import { createProvider, createBackendWallet, isValidAddress } from "@/lib/backend/utils";
 import { getMetaGoalsCollection } from "@/lib/backend/database";
+import { getGoalsForChain, resolveChainKey } from "@/lib/backend/metaGoalMapping";
 import type {
   AttachDepositRequest,
   AttachDepositResponse,
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AttachDep
       chain: (body as { chain?: string }).chain,
       vaultAddress: depositVault,
     };
+    const chainKey = resolveChainKey(chainParams);
 
     if (!metaGoalId || !depositVault || !depositId || !userAddress) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -57,7 +59,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<AttachDep
     }
 
     // Get the corresponding on-chain goal ID
-    const onChainGoalId = metaGoal.onChainGoals[targetAsset];
+    const chainGoals = getGoalsForChain(metaGoal, chainKey);
+    const onChainGoalId = chainGoals[targetAsset];
     if (!onChainGoalId) {
       return NextResponse.json({ 
         error: `No on-chain goal found for ${targetAsset} vault in this meta-goal` 

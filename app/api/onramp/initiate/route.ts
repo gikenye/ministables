@@ -38,6 +38,19 @@ const CHAIN_ID_MAPPING: Record<string, number> = {
   SCROLL: scroll.id,
 };
 
+const SOURCE_ALLOWLIST = new Set(["app", "widget", "api"]);
+const DEFAULT_SOURCE = "app";
+
+function sanitizeSource(input: unknown): string {
+  if (typeof input !== "string") return DEFAULT_SOURCE;
+  const trimmed = input.trim();
+  if (!trimmed) return DEFAULT_SOURCE;
+  const clipped = trimmed.slice(0, 32);
+  const normalized = clipped.toLowerCase();
+  if (!SOURCE_ALLOWLIST.has(normalized)) return DEFAULT_SOURCE;
+  return normalized;
+}
+
 export async function POST(request: NextRequest) {
   try {
     logger.info("Initiating onramp", {
@@ -59,8 +72,10 @@ export async function POST(request: NextRequest) {
       vault_address,
       target_goal_id,
       targetGoalId: targetGoalIdFromBody,
+      source: sourceInput,
     } = body;
     const targetGoalId = target_goal_id || targetGoalIdFromBody;
+    const source = sanitizeSource(sourceInput);
 
     const sanitizedRequestBody = sanitizeOnrampInitiatePayload(body);
 
@@ -192,6 +207,9 @@ export async function POST(request: NextRequest) {
       amount: amount.toString(),
       transactionCode,
       targetGoalId: targetGoalId || undefined,
+      source,
+      chain,
+      chainId: vaultChainId,
       phoneNumber: shortcode,
       mobileNetwork: mobile_network,
       countryCode: currency_code,
@@ -214,6 +232,7 @@ export async function POST(request: NextRequest) {
           vaultAddr,
           asset,
           chain,
+          vaultChainId,
           targetGoalId || undefined
         ),
       5000
@@ -246,6 +265,7 @@ async function pollAndAllocate(
   vaultAddress: string,
   asset: string,
   chain: string,
+  chainId?: number,
   targetGoalId?: string
 ) {
   let attempts = 0;
@@ -385,6 +405,9 @@ async function pollAndAllocate(
           providerPayload: statusData,
           targetGoalId,
           source: "poller",
+          chain,
+          chainId,
+          vaultAddress,
         });
         return;
       }

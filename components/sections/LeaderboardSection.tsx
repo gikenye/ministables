@@ -13,12 +13,9 @@ interface UserScore {
 export interface LeaderboardEntry {
   rank: number;
   userAddress: string;
-  totalValueUSD: string;
-  leaderboardScore: string;
+  totalXP?: number;
   formattedLeaderboardScore: string;
-  leaderboardRank: number;
   isCurrentUser?: boolean;
-  assetBalances: Array<any>;
 }
 
 interface LeaderboardSectionProps {
@@ -51,7 +48,7 @@ export function LeaderboardSection({
           className="text-3xl font-black tracking-tight"
           style={{ color: theme.colors.text }}
         >
-          Leaderboard
+          Activity
         </h2>
       </header>
 
@@ -96,7 +93,7 @@ export function LeaderboardSection({
                 className="text-xl font-black"
                 style={{ color: theme.colors.text }}
               >
-                ${userScore.formattedLeaderboardScore}
+                {userScore.formattedLeaderboardScore} XP
               </div>
             </div>
           </div>
@@ -120,7 +117,7 @@ export function LeaderboardSection({
             style={{ color: theme.colors.text }}
           >
             <BarChart3 size={16} style={{ color: theme.colors.accent }} />
-            Top Savers
+            Most Active
           </h3>
           <button 
             onClick={refetchLeaderboard}
@@ -208,7 +205,7 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
             className="text-[10px] font-bold uppercase"
             style={{ color: theme.colors.text, opacity: 0.5 }}
           >
-            Points
+            XP
           </div>
         </div>
 

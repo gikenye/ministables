@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Activity, ExternalLink, Target, Wallet } from "lucide-react";
+import { Activity, ArrowDownLeft, ArrowUpRight, ExternalLink, Target, Wallet } from "lucide-react";
 import { theme } from "@/lib/theme";
 import { getTransactionUrl } from "@/config/chainConfig";
-import { base, celo } from "thirdweb/chains";
+import { base, celo, scroll } from "thirdweb/chains";
 
 interface ActivityItem {
   id: string;
-  type: "deposit_attached" | "goal_created";
+  type: "deposit_attached" | "goal_created" | "onramp_completed" | "offramp_initiated";
   txHash: string;
   blockNumber: number;
   timestamp: string;
@@ -16,6 +16,9 @@ interface ActivityItem {
   goalId?: string;
   depositId?: string;
   vault?: string;
+  metadataURI?: string;
+  asset?: string;
+  amount?: string;
 }
 
 interface ActivityFeedProps {
@@ -25,7 +28,8 @@ interface ActivityFeedProps {
 
 const CHAIN_IDS: Record<string, number> = {
   BASE: base.id,
-  CELO: celo.id
+  CELO: celo.id,
+  SCROLL: scroll.id,
 };
 
 export function ActivityFeed({ userAddress, limit = 20 }: ActivityFeedProps) {
@@ -71,15 +75,30 @@ export function ActivityFeed({ userAddress, limit = 20 }: ActivityFeedProps) {
   };
 
   const getActivityIcon = (type: ActivityItem["type"]) => {
-    return type === "goal_created" 
-      ? <Target className="w-5 h-5 p-1 rounded-full bg-white/10 text-purple-400" />
-      : <Wallet className="w-5 h-5 p-1 rounded-full bg-white/10 text-green-400" />;
+    if (type === "goal_created") {
+      return <Target className="w-5 h-5 p-1 rounded-full bg-white/10 text-purple-400" />;
+    }
+    if (type === "onramp_completed") {
+      return <ArrowUpRight className="w-5 h-5 p-1 rounded-full bg-white/10 text-emerald-400" />;
+    }
+    if (type === "offramp_initiated") {
+      return <ArrowDownLeft className="w-5 h-5 p-1 rounded-full bg-white/10 text-cyan-400" />;
+    }
+    return <Wallet className="w-5 h-5 p-1 rounded-full bg-white/10 text-green-400" />;
   };
 
   const getActivityDescription = (activity: ActivityItem) => {
-    return activity.type === "goal_created"
-      ? `Created Goal #${activity.goalId}`
-      : `Deposit #${activity.depositId} to Goal #${activity.goalId}`;
+    if (activity.type === "goal_created") {
+      const name = activity.metadataURI?.trim();
+      return name ? `Created ${name}` : "Created Goal";
+    }
+    if (activity.type === "onramp_completed") {
+      return "Onramp completed";
+    }
+    if (activity.type === "offramp_initiated") {
+      return "Offramp initiated";
+    }
+    return "Deposit to Goal";
   };
 
   if (loading) {
@@ -144,14 +163,16 @@ export function ActivityFeed({ userAddress, limit = 20 }: ActivityFeedProps) {
               </div>
             </div>
 
-            <a
-              href={getExplorerUrl(activity.chain, activity.txHash)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-cyan-400/80 hover:text-cyan-300 transition-colors"
-            >
-              View <ExternalLink className="w-3 h-3" />
-            </a>
+            {activity.txHash && /^0x[0-9a-fA-F]{64}$/.test(activity.txHash) ? (
+              <a
+                href={getExplorerUrl(activity.chain, activity.txHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-cyan-400/80 hover:text-cyan-300 transition-colors"
+              >
+                View <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : null}
           </div>
         </div>
       ))}

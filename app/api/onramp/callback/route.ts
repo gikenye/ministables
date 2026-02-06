@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       if (body.receipt_number) updateData.receiptNumber = body.receipt_number;
       if (body.amount_in_usd) updateData.amountInUsd = body.amount_in_usd;
       if (body.transaction_hash || body.tx_hash) updateData.txHash = body.transaction_hash || body.tx_hash;
+      if (body.chain) updateData.chain = body.chain;
 
       await onrampCollection.updateOne(
         { transactionCode: body.transaction_code },
@@ -84,6 +85,9 @@ export async function POST(request: NextRequest) {
             providerPayload: body,
             targetGoalId: deposit.targetGoalId,
             source: 'webhook',
+            chain: deposit.chain || (typeof body.chain === 'string' ? body.chain : undefined),
+            chainId: deposit.chainId,
+            vaultAddress: deposit.vaultAddress,
           });
         } else {
           logger.warn('Deposit missing required fields for allocation', {

@@ -136,6 +136,8 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteAddress, setInviteAddress] = useState("");
   const [isInviting, setIsInviting] = useState(false);
+  const [isCopyingInviteLink, setIsCopyingInviteLink] = useState(false);
+  const [isRotatingInviteLink, setIsRotatingInviteLink] = useState(false);
   const [clanDepositMethod, setClanDepositMethod] = useState<"ONCHAIN" | "MPESA">("ONCHAIN");
   const [stablecoinBalances, setStablecoinBalances] = useState<TokenBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
@@ -325,10 +327,73 @@ export const ClanTab: React.FC<ClanTabProps> = ({
 
       toast.success("Invite sent.");
       setIsInviteModalOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || "Invite failed");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Invite failed";
+      toast.error(message);
     } finally {
       setIsInviting(false);
+      inviteInFlightRef.current = false;
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
+    inviteInFlightRef.current = true;
+    setIsCopyingInviteLink(true);
+    try {
+      const response = await backendApiClient.createGroupGoalInviteLink(
+        selectedGoal.metaGoalId,
+        activeAccount.address.toLowerCase()
+      );
+      const shareLink =
+        response.shareLink ||
+        (typeof window !== "undefined"
+          ? `${window.location.origin}/goals/${selectedGoal.metaGoalId}?invite=${response.inviteToken}`
+          : "");
+      if (!shareLink) {
+        throw new Error("Failed to generate invite link.");
+      }
+      await navigator.clipboard.writeText(shareLink);
+      toast.success(
+        selectedGoal.isPublic === false
+          ? "Private invite link copied."
+          : "Invite link copied."
+      );
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Failed to copy invite link";
+      toast.error(message);
+    } finally {
+      setIsCopyingInviteLink(false);
+      inviteInFlightRef.current = false;
+    }
+  };
+
+  const handleRotateInviteLink = async () => {
+    if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
+    inviteInFlightRef.current = true;
+    setIsRotatingInviteLink(true);
+    try {
+      const response = await backendApiClient.rotateGroupGoalInviteLink(
+        selectedGoal.metaGoalId,
+        activeAccount.address.toLowerCase()
+      );
+      const shareLink =
+        response.shareLink ||
+        (typeof window !== "undefined"
+          ? `${window.location.origin}/goals/${selectedGoal.metaGoalId}?invite=${response.inviteToken}`
+          : "");
+      if (!shareLink) {
+        throw new Error("Failed to rotate invite link.");
+      }
+      await navigator.clipboard.writeText(shareLink);
+      toast.success("New invite link copied.");
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Failed to rotate invite link";
+      toast.error(message);
+    } finally {
+      setIsRotatingInviteLink(false);
       inviteInFlightRef.current = false;
     }
   };
@@ -393,10 +458,13 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                     <button onClick={handleInvite} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
                       <Share2 size={16} /> Invite
                     </button>
-                    <button onClick={() => { onOpenWithdrawActions?.(); setSelectedGoal(null); }} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
-                      <ArrowDownLeft size={16} /> Withdraw
+                    <button onClick={handleCopyInviteLink} disabled={isCopyingInviteLink} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all disabled:opacity-40">
+                      <Globe size={16} /> {isCopyingInviteLink ? "Copying..." : "Share link"}
                     </button>
                   </div>
+                  <button onClick={() => { onOpenWithdrawActions?.(); setSelectedGoal(null); }} className="w-full flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
+                    <ArrowDownLeft size={16} /> Withdraw
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
@@ -418,6 +486,32 @@ export const ClanTab: React.FC<ClanTabProps> = ({
         {selectedGoal && (
           <div className="p-6 pt-0 pb-12 text-white space-y-5">
             <ModalHeader title="Invite member" onClose={() => setIsInviteModalOpen(false)} />
+            {selectedGoal.isPublic === false && (
+              <div className="rounded-[24px] border border-emerald-400/30 bg-emerald-500/10 p-4 space-y-3">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200">Private goal link</div>
+                <p className="text-sm text-emerald-100/80">
+                  Share this link with trusted members. Anyone with the link can join.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCopyInviteLink}
+                    disabled={isCopyingInviteLink}
+                    className="rounded-[16px] bg-white py-3 text-sm font-black text-black disabled:opacity-40"
+                  >
+                    {isCopyingInviteLink ? "Copying..." : "Copy link"}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleRotateInviteLink}
+                    disabled={isRotatingInviteLink}
+                    className="rounded-[16px] border border-white/30 bg-transparent py-3 text-sm font-black text-white/90 disabled:opacity-40"
+                  >
+                    {isRotatingInviteLink ? "Rotating..." : "Rotate link"}
+                  </motion.button>
+                </div>
+              </div>
+            )}
             <div className="rounded-[28px] border border-white/5 bg-black/40 p-4 space-y-3">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Wallet address</label>
               <div className="rounded-[18px] border border-white/10 bg-black/60 px-4 py-3">
@@ -427,6 +521,16 @@ export const ClanTab: React.FC<ClanTabProps> = ({
             <motion.button whileTap={{ scale: 0.98 }} onClick={handleSendInvite} disabled={isInviting || !inviteAddress.trim()} className="w-full rounded-[20px] bg-white py-4 text-base font-black text-black disabled:opacity-30">
               {isInviting ? "Sending..." : "Send invite"}
             </motion.button>
+            {selectedGoal.isPublic !== false && (
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={handleCopyInviteLink}
+                disabled={isCopyingInviteLink}
+                className="w-full rounded-[20px] border border-white/20 bg-transparent py-4 text-base font-black text-white/80 disabled:opacity-30"
+              >
+                {isCopyingInviteLink ? "Copying..." : "Copy invite link"}
+              </motion.button>
+            )}
           </div>
         )}
       </BottomSheet>

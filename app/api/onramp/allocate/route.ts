@@ -9,7 +9,7 @@ import { logger } from '@/lib/services/logger';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { asset, userAddress, amount, txHash, providerPayload } = body;
+    const { asset, userAddress, amount, txHash, providerPayload, chainId, chain } = body;
 
     if (!asset || !userAddress || !amount || !txHash) {
       return NextResponse.json(
@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
       amount,
       txHash,
       providerPayload,
+      chainId,
+      chain,
     });
 
     logger.info('Allocation successful', {

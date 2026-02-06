@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { RequestValidator } from "@/lib/backend/validators/request.validator";
 import { ActivityIndexer } from "@/lib/backend/services/activity-indexer.service";
 import type { ActivityResponse, ErrorResponse } from "@/lib/backend/types";
+import { XPService } from "@/lib/backend/services/xp.service";
+import { createProvider } from "@/lib/backend/utils";
+import { getContractsForChain, getVaultsForChain } from "@/lib/backend/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +34,17 @@ export async function GET(
 
     const normalizedAddress = userAddress!.toLowerCase();
     const activities = await ActivityIndexer.getActivities(normalizedAddress, limit);
+    try {
+      const provider = createProvider();
+      const xpService = new XPService(
+        provider,
+        getContractsForChain({}),
+        getVaultsForChain({})
+      );
+      await xpService.awardActivityXP(normalizedAddress);
+    } catch (xpError) {
+      console.warn("Failed to award activity XP", xpError);
+    }
 
     const response: ActivityResponse = {
       userAddress: normalizedAddress,
@@ -49,5 +63,4 @@ export async function GET(
     );
   }
 }
-
 

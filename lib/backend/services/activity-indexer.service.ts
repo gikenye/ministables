@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import { CHAINS, ALL_CHAINS } from "../constants";
 import { createProvider } from "../utils";
 import { getDatabase } from "../database";
+import type { ActivityType } from "../types";
 
 interface IndexedActivity {
   userAddress: string;
@@ -17,6 +18,48 @@ interface IndexedActivity {
 export class ActivityIndexer {
   private static COLLECTION = "indexed_activities";
   private static BATCH_SIZE = 10000; // Index 10k blocks at a time
+
+  static async recordActivity(params: {
+    userAddress: string;
+    chain: string;
+    type: ActivityType;
+    txHash: string;
+    blockNumber?: number;
+    timestamp?: string;
+    data?: Record<string, any>;
+  }): Promise<void> {
+    const db = await getDatabase();
+    const collection = db.collection<IndexedActivity>(this.COLLECTION);
+    const normalizedAddress = params.userAddress.toLowerCase();
+    const chain = params.chain.toUpperCase();
+    const timestamp = params.timestamp || new Date().toISOString();
+    const blockNumber = Number.isFinite(params.blockNumber)
+      ? (params.blockNumber as number)
+      : 0;
+
+    await collection.updateOne(
+      {
+        userAddress: normalizedAddress,
+        chain,
+        type: params.type,
+        txHash: params.txHash,
+      },
+      {
+        $set: {
+          userAddress: normalizedAddress,
+          chain,
+          type: params.type,
+          txHash: params.txHash,
+          blockNumber,
+          timestamp,
+          data: params.data || {},
+          indexed: true,
+        },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true }
+    );
+  }
 
   static async indexUserActivities(userAddress: string, chain: string): Promise<void> {
     const db = await getDatabase();
@@ -78,10 +121,11 @@ export class ActivityIndexer {
         const block = await provider.getBlock(event.blockNumber);
         const args = (event as any).args;
 
+        const isGoalCreated = (event as any).eventName === "GoalCreated";
         activities.push({
           userAddress: userAddress.toLowerCase(),
           chain,
-          type: (event as any).eventName === "GoalCreated" ? "goal_created" : "deposit_attached",
+          type: isGoalCreated ? "goal_created" : "deposit_attached",
           txHash: event.transactionHash,
           blockNumber: event.blockNumber,
           timestamp: new Date((block?.timestamp || 0) * 1000).toISOString(),
@@ -89,6 +133,7 @@ export class ActivityIndexer {
             goalId: args?.goalId?.toString(),
             depositId: args?.depositId?.toString(),
             vault: args?.vault,
+            metadataURI: isGoalCreated ? args?.metadataURI?.toString?.() ?? args?.metadataURI : undefined,
           },
           indexed: true,
         });

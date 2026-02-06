@@ -7,6 +7,12 @@ import {
   type AllocateResponse,
   type SupportedAsset,
 } from "@/lib/services/backendApiService";
+import {
+  findChainByVaultAddress,
+  resolveChainConfig,
+} from "@/lib/backend/constants";
+import { createProvider } from "@/lib/backend/utils";
+import { ActivityIndexer } from "@/lib/backend/services/activity-indexer.service";
 
 const ASSET_DECIMALS: Record<string, number> = {
   USDC: 6,
@@ -19,6 +25,20 @@ const ASSET_DECIMALS: Record<string, number> = {
 const ALLOCATION_TIMEOUT_MS = Number(
   process.env.ONRAMP_ALLOCATION_TIMEOUT_MS || 15000
 );
+
+async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ALLOCATION_TIMEOUT_MS}ms`));
+    }, ALLOCATION_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 type AllocationSource = "poller" | "webhook" | "retry";
 
@@ -43,6 +63,9 @@ interface AllocateOnrampInput {
   targetGoalId?: string;
   source: AllocationSource;
   force?: boolean;
+  chainId?: number;
+  chain?: string;
+  vaultAddress?: string;
 }
 
 function resolveAmountInWei(asset: string, amountValue: string): string {
@@ -90,6 +113,71 @@ function normalizeAsset(asset: string): SupportedAsset | null {
     (supported) => supported.toLowerCase() === normalized
   );
   return match || null;
+}
+
+function extractChainFromProviderPayload(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.chain === "string") return record.chain;
+  const data = record.data;
+  if (data && typeof data === "object") {
+    const dataRecord = data as Record<string, unknown>;
+    if (typeof dataRecord.chain === "string") return dataRecord.chain;
+  }
+  return undefined;
+}
+
+function resolveAllocationChainParams(args: {
+  input: AllocateOnrampInput;
+  deposit?: {
+    chain?: string;
+    chainId?: number;
+    vaultAddress?: string;
+    provider?: {
+      lastWebhookPayload?: unknown;
+      lastStatusPayload?: unknown;
+      initiateResponse?: unknown;
+    };
+  } | null;
+}): { chainId?: number; chain?: string } {
+  const { input, deposit } = args;
+  let chainId = input.chainId ?? deposit?.chainId;
+  let chain =
+    input.chain ??
+    deposit?.chain ??
+    extractChainFromProviderPayload(input.providerPayload) ??
+    extractChainFromProviderPayload(deposit?.provider?.lastWebhookPayload) ??
+    extractChainFromProviderPayload(deposit?.provider?.lastStatusPayload) ??
+    extractChainFromProviderPayload(deposit?.provider?.initiateResponse);
+
+  if (!chainId && chain) {
+    const resolved = resolveChainConfig({ chain });
+    if (resolved) chainId = resolved.config.id;
+  }
+
+  if (chainId && !chain) {
+    const resolved = resolveChainConfig({ chainId });
+    if (resolved) {
+      chain = resolved.key;
+      chainId = resolved.config.id;
+    }
+  }
+
+  if (!chain || !chainId) {
+    const vaultAddress = input.vaultAddress || deposit?.vaultAddress;
+    if (vaultAddress) {
+      const byVault = findChainByVaultAddress(vaultAddress);
+      if (byVault) {
+        chainId = chainId ?? byVault.config.id;
+        chain = chain ?? byVault.key;
+      }
+    }
+  }
+
+  return {
+    chainId,
+    chain,
+  };
 }
 
 export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
@@ -146,6 +234,9 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
           lastStatusPayload?: unknown;
           initiateResponse?: unknown;
         };
+        chain?: string;
+        chainId?: number;
+        vaultAddress?: string;
       }
     | null = null;
 
@@ -232,6 +323,9 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       lastStatusPayload?: unknown;
       initiateResponse?: unknown;
     };
+    chain?: string;
+    chainId?: number;
+    vaultAddress?: string;
   };
 
   const amountValue =
@@ -303,6 +397,13 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
       : {}),
   };
 
+  const allocationChain = resolveAllocationChainParams({
+    input,
+    deposit,
+  });
+  if (allocationChain.chainId) allocationRequest.chainId = allocationChain.chainId;
+  if (allocationChain.chain) allocationRequest.chain = allocationChain.chain;
+
   const baseUrl =
     process.env.ALLOCATE_API_URL ||
     process.env.NEXT_PUBLIC_ALLOCATE_API_URL ||
@@ -354,6 +455,73 @@ export async function allocateOnrampDeposit(input: AllocateOnrampInput) {
         },
       }
     );
+
+    try {
+      const activityChain =
+        allocationChain.chain ||
+        (allocationChain.chainId
+          ? resolveChainConfig({ chainId: allocationChain.chainId })?.key
+          : undefined) ||
+        deposit.chain;
+      const activityTxHash = response.allocationTxHash || input.txHash;
+      if (activityChain && activityTxHash) {
+        let blockNumber: number | undefined;
+        const responseBlockNumber =
+          (response as { blockNumber?: number }).blockNumber ??
+          (response as { allocationReceipt?: { blockNumber?: number } })
+            .allocationReceipt?.blockNumber ??
+          (response as { receipt?: { blockNumber?: number } }).receipt
+            ?.blockNumber;
+        try {
+          const provider = createProvider({
+            chain: activityChain,
+            chainId: allocationChain.chainId,
+          });
+          if (typeof responseBlockNumber === "number") {
+            blockNumber = responseBlockNumber;
+          } else {
+            const receipt = await withTimeout(
+              provider.getTransactionReceipt(activityTxHash),
+              "getTransactionReceipt"
+            );
+            if (receipt?.blockNumber) {
+              blockNumber = receipt.blockNumber;
+            } else {
+              blockNumber = await withTimeout(
+                provider.getBlockNumber(),
+                "getBlockNumber"
+              );
+            }
+          }
+        } catch {
+          blockNumber = undefined;
+        }
+
+        const activityPayload: Parameters<
+          typeof ActivityIndexer.recordActivity
+        >[0] = {
+          userAddress: input.userAddress,
+          chain: activityChain,
+          type: "onramp_completed",
+          txHash: activityTxHash,
+          timestamp: attemptedAt.toISOString(),
+          data: {
+            goalId: response.goalId,
+            depositId: response.depositId,
+            asset: normalizedAsset,
+            amount: amountValue?.toString(),
+            source: input.source,
+          },
+        };
+        if (typeof blockNumber === "number") {
+          activityPayload.blockNumber = blockNumber;
+        }
+
+        await ActivityIndexer.recordActivity(activityPayload);
+      }
+    } catch (activityError) {
+      console.warn("Failed to record onramp activity", activityError);
+    }
 
     return { success: true, skipped: false, response };
   } catch (error) {

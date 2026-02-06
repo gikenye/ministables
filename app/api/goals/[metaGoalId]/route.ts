@@ -16,6 +16,7 @@ import {
 import { getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
 import type { ErrorResponse, VaultAsset, MetaGoalWithProgress } from "@/lib/backend/types";
+import { getGoalsForChain, resolveChainKey } from "@/lib/backend/metaGoalMapping";
 
 type ChainParams = {
   chainId?: string | number | null;
@@ -58,6 +59,7 @@ export async function GET(
       chainId: searchParams.get("chainId"),
       chain: searchParams.get("chain"),
     };
+    const chainKey = resolveChainKey(chainParams);
 
     if (!metaGoalId || typeof metaGoalId !== 'string' || metaGoalId.length > 100) {
       return NextResponse.json({ error: "Invalid metaGoalId" }, { status: 400 });
@@ -121,7 +123,8 @@ export async function GET(
       attachmentCount: number;
     }>;
 
-    const progressPromises = Object.entries(metaGoal.onChainGoals).map(
+    const chainGoals = getGoalsForChain(metaGoal, chainKey);
+    const progressPromises = Object.entries(chainGoals).map(
       async ([asset, goalId]) => {
         try {
           const [totalValue] = await goalManager.getGoalProgressFull(goalId);

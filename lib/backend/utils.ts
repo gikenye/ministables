@@ -1,9 +1,5 @@
 import { ethers } from "ethers";
-import {
-  DEFAULT_RPC_URL,
-  VAULTS,
-  resolveChainConfig,
-} from "./constants";
+import { DEFAULT_RPC_URL, VAULTS, resolveChainConfig } from "./constants";
 
 type RpcLimiterState = {
   lastCall: number;
@@ -29,7 +25,7 @@ function sleep(ms: number): Promise<void> {
 async function scheduleRpc<T>(
   rpcUrl: string,
   minIntervalMs: number,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<T> {
   const state = getLimiterState(rpcUrl);
   const run = async () => {
@@ -46,7 +42,7 @@ async function scheduleRpc<T>(
   const resultPromise = state.queue.then(run, run);
   state.queue = resultPromise.then(
     () => undefined,
-    () => undefined
+    () => undefined,
   );
   return resultPromise;
 }
@@ -63,10 +59,12 @@ type ProviderOptions = {
 };
 
 export function createProvider(
-  options?: ProviderOptions | string
+  options?: ProviderOptions | string,
 ): ethers.JsonRpcProvider {
-  const rpcUrlOverride = typeof options === "string" ? options : options?.rpcUrlOverride;
-  const resolved = typeof options === "string" ? null : resolveChainConfig(options || {});
+  const rpcUrlOverride =
+    typeof options === "string" ? options : options?.rpcUrlOverride;
+  const resolved =
+    typeof options === "string" ? null : resolveChainConfig(options || {});
   const rpcUrl =
     rpcUrlOverride ||
     resolved?.config.rpcUrl ||
@@ -74,11 +72,11 @@ export function createProvider(
     process.env.RPC_URL;
   const batchMaxCountRaw = Number.parseInt(
     process.env.RPC_BATCH_MAX || "10",
-    10
+    10,
   );
   const batchStallTimeRaw = Number.parseInt(
     process.env.RPC_BATCH_STALL_MS || "25",
-    10
+    10,
   );
   const batchMaxCount =
     Number.isFinite(batchMaxCountRaw) && batchMaxCountRaw > 0
@@ -96,12 +94,10 @@ export function createProvider(
 
   const minIntervalRaw = Number.parseInt(
     process.env.RPC_MIN_INTERVAL_MS || "0",
-    10
+    10,
   );
   const minIntervalMs =
-    Number.isFinite(minIntervalRaw) && minIntervalRaw > 0
-      ? minIntervalRaw
-      : 0;
+    Number.isFinite(minIntervalRaw) && minIntervalRaw > 0 ? minIntervalRaw : 0;
 
   if (minIntervalMs > 0) {
     const originalSend = provider.send.bind(provider);
@@ -116,11 +112,11 @@ export function createProvider(
  * Create a backend wallet instance for transaction signing
  */
 export function createBackendWallet(
-  provider: ethers.JsonRpcProvider
+  provider: ethers.JsonRpcProvider,
 ): ethers.Wallet {
-  const privateKey = process.env.BACKEND_PRIVATE_KEY;
+  const privateKey = process.env.SERVER_BARTENDER;
   if (!privateKey) {
-    throw new Error("BACKEND_PRIVATE_KEY environment variable is required");
+    throw new Error("SERVER_BARTENDER environment variable is required");
   }
 
   const formattedKey = privateKey.startsWith("0x")
@@ -136,7 +132,7 @@ export async function waitForTransactionReceipt(
   provider: ethers.JsonRpcProvider,
   txHash: string,
   maxRetries = 10,
-  retryDelay = 3000
+  retryDelay = 3000,
 ): Promise<ethers.TransactionReceipt | null> {
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -145,7 +141,10 @@ export async function waitForTransactionReceipt(
         return receipt;
       }
     } catch (error) {
-      console.warn(`Retry ${i + 1}/${maxRetries} failed:`, error instanceof Error ? error.message : String(error));
+      console.warn(
+        `Retry ${i + 1}/${maxRetries} failed:`,
+        error instanceof Error ? error.message : String(error),
+      );
     }
     if (i < maxRetries - 1) {
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
@@ -160,7 +159,7 @@ export async function waitForTransactionReceipt(
 export function findEventInLogs(
   logs: readonly ethers.Log[],
   contract: ethers.Contract,
-  eventName: string
+  eventName: string,
 ): ethers.LogDescription | null {
   const event = logs.find((log) => {
     try {
@@ -204,7 +203,7 @@ type TargetAmountTokenSource = {
 };
 
 export function resolveTargetAmountToken(
-  source?: TargetAmountTokenSource | null
+  source?: TargetAmountTokenSource | null,
 ): number {
   if (!source) return 0;
   const candidate = source.targetAmountToken ?? source.targetAmountUSD;
@@ -224,7 +223,7 @@ export function resolveTargetAmountToken(
 export function formatAmountForDisplay(
   amountWei: string,
   decimals: number,
-  displayDecimals = 2
+  displayDecimals = 2,
 ): string {
   try {
     const formatted = ethers.formatUnits(amountWei, decimals);
@@ -249,7 +248,7 @@ export function formatAmountForDisplay(
 export async function mapLimit<T, R>(
   items: T[],
   limit: number,
-  mapper: (item: T, index: number) => Promise<R>
+  mapper: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
   if (items.length === 0) return [];
 

@@ -7,6 +7,8 @@ export interface AllocateRequest {
   txHash: string;
   providerPayload: Record<string, unknown>;
   targetGoalId?: string;
+  chainId?: number;
+  chain?: string;
 }
 
 export interface AllocateResponse {
@@ -164,7 +166,9 @@ export type ActivityType =
   | "member_invited"
   | "invite_revoked"
   | "member_joined"
-  | "member_removed";
+  | "member_removed"
+  | "onramp_completed"
+  | "offramp_initiated";
 
 export interface ActivityItemBase {
   id: string;
@@ -221,12 +225,22 @@ export interface MemberStatusActivity extends ActivityItemBase {
   member: string;
 }
 
+export interface RampActivity extends ActivityItemBase {
+  type: "onramp_completed" | "offramp_initiated";
+  asset?: VaultAsset | string;
+  amount?: string;
+  goalId?: string;
+  depositId?: string;
+  source?: string;
+}
+
 export type ActivityItem =
   | DepositActivity
   | GoalCreatedActivity
   | DepositAttachmentActivity
   | MemberInviteActivity
-  | MemberStatusActivity;
+  | MemberStatusActivity
+  | RampActivity;
 
 export interface ActivityResponse {
   userAddress: string;
@@ -240,6 +254,7 @@ export interface ActivityResponse {
 export type ApiResponse<T> = T | ErrorResponse;
 
 export type VaultAsset = "USDC" | "cUSD" | "USDT" | "cKES";
+export type ChainKey = keyof typeof import("./constants").CHAINS;
 
 // Multi-vault goal types
 export interface MetaGoal {
@@ -248,7 +263,8 @@ export interface MetaGoal {
   targetAmountToken: number;
   targetDate: string;
   creatorAddress: string;
-  onChainGoals: Partial<Record<VaultAsset, string>>; // asset -> goalId mapping
+  onChainGoals: Partial<Record<VaultAsset, string>>; // legacy asset -> goalId mapping
+  onChainGoalsByChain?: Partial<Record<ChainKey, Partial<Record<VaultAsset, string>>>>; // chain -> asset -> goalId
   isPublic?: boolean;
   participants?: string[];
   invitedUsers?: string[]; // For private goals
@@ -260,6 +276,7 @@ export interface MetaGoal {
 export interface UserXP {
   userAddress: string;
   totalXP: number;
+  lastActivityId?: string;
   xpHistory: Array<{
     metaGoalId: string;
     goalName: string;
@@ -299,6 +316,7 @@ export interface CreateMultiVaultGoalResponse {
   success: boolean;
   metaGoalId: string;
   onChainGoals: Record<VaultAsset, string>;
+  onChainGoalsByChain?: Partial<Record<ChainKey, Partial<Record<VaultAsset, string>>>>;
   txHashes: Record<VaultAsset, string>;
   shareLink?: string;
 }
