@@ -138,6 +138,10 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const [isInviting, setIsInviting] = useState(false);
   const [isCopyingInviteLink, setIsCopyingInviteLink] = useState(false);
   const [isRotatingInviteLink, setIsRotatingInviteLink] = useState(false);
+  const [inviteLinkFeedback, setInviteLinkFeedback] = useState<{
+    status: "idle" | "success" | "error";
+    message?: string;
+  }>({ status: "idle" });
   const [clanDepositMethod, setClanDepositMethod] = useState<"ONCHAIN" | "MPESA">("ONCHAIN");
   const [stablecoinBalances, setStablecoinBalances] = useState<TokenBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
@@ -340,29 +344,74 @@ export const ClanTab: React.FC<ClanTabProps> = ({
     if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
     inviteInFlightRef.current = true;
     setIsCopyingInviteLink(true);
+    setInviteLinkFeedback({ status: "idle" });
     try {
       const response = await backendApiClient.createGroupGoalInviteLink(
         selectedGoal.metaGoalId,
         activeAccount.address.toLowerCase()
       );
+      const origin =
+        (typeof window !== "undefined" &&
+          window.location.origin &&
+          window.location.origin !== "null" &&
+          window.location.origin) ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        "";
       const shareLink =
         response.shareLink ||
-        (typeof window !== "undefined"
-          ? `${window.location.origin}/goals/${selectedGoal.metaGoalId}?invite=${response.inviteToken}`
+        (origin
+          ? `${origin}/goals/${selectedGoal.metaGoalId}?invite=${response.inviteToken}`
           : "");
       if (!shareLink) {
         throw new Error("Failed to generate invite link.");
       }
-      await navigator.clipboard.writeText(shareLink);
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(shareLink);
+          copied = true;
+        } catch {
+          copied = false;
+        }
+      }
+      if (!copied && typeof document !== "undefined") {
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = shareLink;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "absolute";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          copied = document.execCommand("copy");
+          document.body.removeChild(textarea);
+        } catch {
+          copied = false;
+        }
+      }
+      if (!copied) {
+        if (typeof window !== "undefined") {
+          window.prompt("Copy this invite link:", shareLink);
+        }
+        throw new Error("Copy failed. Please copy the link manually.");
+      }
       toast.success(
         selectedGoal.isPublic === false
           ? "Private invite link copied."
           : "Invite link copied."
       );
+      setInviteLinkFeedback({
+        status: "success",
+        message: "Invite link copied.",
+      });
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "Failed to copy invite link";
       toast.error(message);
+      setInviteLinkFeedback({
+        status: "error",
+        message,
+      });
     } finally {
       setIsCopyingInviteLink(false);
       inviteInFlightRef.current = false;
@@ -373,25 +422,70 @@ export const ClanTab: React.FC<ClanTabProps> = ({
     if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
     inviteInFlightRef.current = true;
     setIsRotatingInviteLink(true);
+    setInviteLinkFeedback({ status: "idle" });
     try {
       const response = await backendApiClient.rotateGroupGoalInviteLink(
         selectedGoal.metaGoalId,
         activeAccount.address.toLowerCase()
       );
+      const origin =
+        (typeof window !== "undefined" &&
+          window.location.origin &&
+          window.location.origin !== "null" &&
+          window.location.origin) ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        "";
       const shareLink =
         response.shareLink ||
-        (typeof window !== "undefined"
-          ? `${window.location.origin}/goals/${selectedGoal.metaGoalId}?invite=${response.inviteToken}`
+        (origin
+          ? `${origin}/goals/${selectedGoal.metaGoalId}?invite=${response.inviteToken}`
           : "");
       if (!shareLink) {
         throw new Error("Failed to rotate invite link.");
       }
-      await navigator.clipboard.writeText(shareLink);
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(shareLink);
+          copied = true;
+        } catch {
+          copied = false;
+        }
+      }
+      if (!copied && typeof document !== "undefined") {
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = shareLink;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "absolute";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          copied = document.execCommand("copy");
+          document.body.removeChild(textarea);
+        } catch {
+          copied = false;
+        }
+      }
+      if (!copied) {
+        if (typeof window !== "undefined") {
+          window.prompt("Copy this invite link:", shareLink);
+        }
+        throw new Error("Copy failed. Please copy the link manually.");
+      }
       toast.success("New invite link copied.");
+      setInviteLinkFeedback({
+        status: "success",
+        message: "New invite link copied.",
+      });
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "Failed to rotate invite link";
       toast.error(message);
+      setInviteLinkFeedback({
+        status: "error",
+        message,
+      });
     } finally {
       setIsRotatingInviteLink(false);
       inviteInFlightRef.current = false;
@@ -510,6 +604,17 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                     {isRotatingInviteLink ? "Rotating..." : "Rotate link"}
                   </motion.button>
                 </div>
+                {inviteLinkFeedback.status !== "idle" && (
+                  <p
+                    className={`text-[9px] font-bold uppercase tracking-wide ${
+                      inviteLinkFeedback.status === "success"
+                        ? "text-emerald-200/80"
+                        : "text-red-300/80"
+                    }`}
+                  >
+                    {inviteLinkFeedback.message}
+                  </p>
+                )}
               </div>
             )}
             <div className="rounded-[28px] border border-white/5 bg-black/40 p-4 space-y-3">
@@ -531,6 +636,18 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                 {isCopyingInviteLink ? "Copying..." : "Copy invite link"}
               </motion.button>
             )}
+            {selectedGoal.isPublic !== false &&
+              inviteLinkFeedback.status !== "idle" && (
+                <p
+                  className={`text-[9px] font-bold uppercase tracking-wide text-center ${
+                    inviteLinkFeedback.status === "success"
+                      ? "text-emerald-200/80"
+                      : "text-red-300/80"
+                  }`}
+                >
+                  {inviteLinkFeedback.message}
+                </p>
+              )}
           </div>
         )}
       </BottomSheet>
