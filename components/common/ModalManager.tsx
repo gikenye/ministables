@@ -51,7 +51,8 @@ interface ModalManagerProps {
   selectedGoal: any;
   goalAmount: string;
   onGoalClose: () => void;
-  onGoalSaveNow: () => void;
+  onGoalDetailsClose: () => void;
+  onOpenGoalSaveActions: () => void;
   onGoalAmountContinue: (amount: string) => void;
   showBalances: boolean;
   exchangeRate?: number;
@@ -154,7 +155,8 @@ export function ModalManager(props: ModalManagerProps) {
     selectedGoal,
     goalAmount,
     onGoalClose,
-    onGoalSaveNow,
+    onGoalDetailsClose,
+    onOpenGoalSaveActions,
     onGoalAmountContinue,
     showBalances,
     exchangeRate,
@@ -556,8 +558,9 @@ export function ModalManager(props: ModalManagerProps) {
             // Open the specific withdrawal flow
             setWithdrawalModalOpen(true);
           } else {
-            // Open the deposit amount flow
-            onGoalSaveNow();
+            // Open the deposit flow selector
+            onGoalDetailsClose();
+            onOpenGoalSaveActions();
           }
         }}
       />

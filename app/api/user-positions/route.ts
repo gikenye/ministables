@@ -20,7 +20,7 @@ import {
   findEventInLogs,
   resolveTargetAmountToken,
 } from "@/lib/backend/utils";
-import { getMetaGoalsCollection } from "@/lib/backend/database";
+import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import { BlockchainService } from "@/lib/backend/services/blockchain.service";
 import { CrossChainService } from "@/lib/backend/services/cross-chain.service";
 import { RequestValidator } from "@/lib/backend/validators/request.validator";
@@ -36,6 +36,7 @@ import type {
   VaultAsset,
   MetaGoal,
 } from "@/lib/backend/types";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 export const dynamic = "force-dynamic";
 
@@ -273,6 +274,8 @@ async function handleCreateGoal(request: NextRequest) {
   if (!validation.valid) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
+  const db = await connectToDatabase();
+  await ensureUserInDb(db, creatorAddress, {}, { source: "user-positions.create-goal" });
 
   const { provider, contracts, vaults: chainVaults } = resolveChainContext({
     chainId,
@@ -397,6 +400,8 @@ async function handleCreateGroupGoal(request: NextRequest) {
   if (!validation.valid) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
+  const db = await connectToDatabase();
+  await ensureUserInDb(db, creatorAddress, {}, { source: "user-positions.create-group-goal" });
 
   const { provider, contracts, vaults: chainVaults } = resolveChainContext({
     chainId,

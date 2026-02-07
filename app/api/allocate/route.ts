@@ -29,9 +29,10 @@ import type {
   VaultAsset,
   MetaGoal,
 } from "@/lib/backend/types";
-import { getMetaGoalsCollection } from "@/lib/backend/database";
+import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
 import { logger } from "@/lib/backend/logger";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 export async function POST(
   request: NextRequest
@@ -141,6 +142,8 @@ export async function POST(
         { status: 400 }
       );
     }
+    const db = await connectToDatabase();
+    await ensureUserInDb(db, userAddress, {}, { source: "allocate", additional: { targetGoalId, metaGoalId } });
 
     // Validate and normalize amount
     const normalizedAmount = amount.trim();

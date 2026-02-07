@@ -4,18 +4,21 @@ import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/databas
 import { isValidAddress } from "@/lib/backend/utils";
 import type { ErrorResponse } from "@/lib/backend/types";
 import { ensureUserInDb } from "@/lib/services/userService";
+import type { InviteLinkAction } from "@/lib/utils/inviteLinkMessage";
 
-const INVITE_NONCE_TTL_MS = 5 * 60 * 1000;
+const INVITE_LINK_NONCE_TTL_MS = 5 * 60 * 1000;
 
-type InviteNonce = {
+type InviteLinkNonce = {
   metaGoalId: string;
   inviterAddress: string;
-  invitedAddress: string;
   nonce: string;
   issuedAt: string;
   expiresAt: Date;
   createdAt: Date;
+  action: InviteLinkAction;
 };
+
+const VALID_ACTIONS: InviteLinkAction[] = ["invite-link:create", "invite-link:revoke"];
 
 export async function POST(
   request: NextRequest
@@ -26,15 +29,14 @@ export async function POST(
         nonce?: string;
         issuedAt?: string;
         expiresAt?: string;
-        alreadyInvited?: boolean;
       }
     | ErrorResponse
   >
 > {
   try {
-    const { metaGoalId, invitedAddress, inviterAddress } = await request.json();
+    const { metaGoalId, inviterAddress, action } = await request.json();
 
-    if (!metaGoalId || !invitedAddress || !inviterAddress) {
+    if (!metaGoalId || !inviterAddress || !action) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -42,11 +44,15 @@ export async function POST(
       return NextResponse.json({ error: "Invalid metaGoalId" }, { status: 400 });
     }
 
-    if (typeof invitedAddress !== "string" || typeof inviterAddress !== "string") {
+    if (typeof inviterAddress !== "string" || typeof action !== "string") {
       return NextResponse.json({ error: "Invalid address" }, { status: 400 });
     }
 
-    if (!isValidAddress(invitedAddress) || !isValidAddress(inviterAddress)) {
+    if (!VALID_ACTIONS.includes(action as InviteLinkAction)) {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    }
+
+    if (!isValidAddress(inviterAddress)) {
       return NextResponse.json({ error: "Invalid address" }, { status: 400 });
     }
 
@@ -58,12 +64,8 @@ export async function POST(
     }
 
     const normalizedInviter = inviterAddress.toLowerCase();
-    const normalizedInvited = invitedAddress.toLowerCase();
     const participants = (metaGoal.participants || []).map((participant) =>
       participant.toLowerCase()
-    );
-    const invitedUsers = (metaGoal.invitedUsers || []).map((invited) =>
-      invited.toLowerCase()
     );
     const isCreator =
       metaGoal.creatorAddress.toLowerCase() === normalizedInviter;
@@ -77,38 +79,29 @@ export async function POST(
     }
 
     const db = await connectToDatabase();
-    await ensureUserInDb(
-      db,
-      normalizedInviter,
-      {},
-      { source: "invite.challenge", additional: { metaGoalId } }
-    );
-
-    if (
-      participants.includes(normalizedInvited) ||
-      invitedUsers.includes(normalizedInvited)
-    ) {
-      return NextResponse.json({ success: true, alreadyInvited: true });
-    }
+    await ensureUserInDb(db, normalizedInviter, {}, {
+      source: "invite-link.challenge",
+      additional: { metaGoalId, action },
+    });
 
     const nonce = randomBytes(16).toString("hex");
     const issuedAt = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + INVITE_NONCE_TTL_MS);
+    const expiresAt = new Date(Date.now() + INVITE_LINK_NONCE_TTL_MS);
 
-    const nonceCollection = db.collection<InviteNonce>("invite_nonces");
+    const nonceCollection = db.collection<InviteLinkNonce>("invite_link_nonces");
     await nonceCollection.deleteMany({
       metaGoalId,
       inviterAddress: normalizedInviter,
-      invitedAddress: normalizedInvited,
+      action,
     });
     await nonceCollection.insertOne({
       metaGoalId,
       inviterAddress: normalizedInviter,
-      invitedAddress: normalizedInvited,
       nonce,
       issuedAt,
       expiresAt,
       createdAt: new Date(),
+      action,
     });
 
     return NextResponse.json({
@@ -118,7 +111,7 @@ export async function POST(
       expiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
-    console.error("Invite challenge error:", error);
+    console.error("Invite link challenge error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

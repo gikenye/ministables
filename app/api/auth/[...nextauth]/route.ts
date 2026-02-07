@@ -32,14 +32,11 @@ export const authOptions: NextAuthOptions = {
           try {
             user = await UserService.upsertUser(credentials.address, userData);
           } catch (dbError) {
-            console.warn("Database error, proceeding with session-only auth:", dbError);
-            // Fallback to session-only authentication
-            user = {
-              address: credentials.address,
-              verified: !!credentials.verificationData,
-              identityData: credentials.verificationData ? JSON.parse(credentials.verificationData) : null,
-              username: undefined
-            };
+            console.error(
+              "Auth failed: unable to persist user record for session.",
+              dbError
+            );
+            return null;
           }
           
           return {

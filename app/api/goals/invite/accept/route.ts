@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ethers } from "ethers";
-import type { Db } from "mongodb";
 import { GOAL_MANAGER_ABI, getContractsForChain } from "@/lib/backend/constants";
 import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import { createBackendWallet, createProvider, isValidAddress } from "@/lib/backend/utils";
 import type { ErrorResponse, MetaGoal } from "@/lib/backend/types";
 import { getGoalsForChain, resolveChainKey } from "@/lib/backend/metaGoalMapping";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 type InviteLink = {
   metaGoalId: string;
@@ -124,6 +124,8 @@ export async function POST(
         invitedAddress: normalizedInvited,
       });
     }
+
+    await ensureUserInDb(db, normalizedInvited, {}, { source: "invite.accept", additional: { metaGoalId } });
 
     const { chainKey, chainParams } = resolveChainKeyForInvite(metaGoal, {
       chainId,

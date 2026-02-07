@@ -158,6 +158,7 @@ export default function AppPage() {
     setDepositError: transactionHandlers.setDepositError,
     setTransactionStatus: transactionHandlers.setTransactionStatus,
     setDepositSuccess: transactionHandlers.setDepositSuccess,
+    selectedGoal: state.selectedGoal,
   });
 
   const goalOperations = useGoalOperations({
@@ -447,7 +448,7 @@ export default function AppPage() {
       <DesktopSidebar
         activeTab={state.activeTab}
         onTabChange={state.setActiveTab}
-        onQuickSave={() => state.setSaveActionsModalOpen(true)}
+        onQuickSave={modalHandlers.openSaveActionsForQuickSave}
         onNewGoal={() => state.setCustomGoalModalOpen(true)}
       />
 
@@ -487,7 +488,7 @@ export default function AppPage() {
               fetchUserPortfolio={dataFetching.refreshUserPortfolio}
               fetchUserGoals={dataFetching.fetchUserGoals}
               toggleBalanceVisibility={state.toggleBalanceVisibility}
-              setSaveActionsModalOpen={state.setSaveActionsModalOpen}
+              onOpenSaveActions={modalHandlers.openSaveActionsForQuickSave}
               setWithdrawActionsModalOpen={state.setWithdrawActionsModalOpen}
               sendTransaction={sendTransaction}
             />
@@ -538,7 +539,7 @@ export default function AppPage() {
         <MobileBottomNav
           activeTab={state.activeTab}
           onTabChange={state.setActiveTab}
-          onSaveClick={() => state.setSaveActionsModalOpen(true)}
+          onSaveClick={modalHandlers.openSaveActionsForQuickSave}
           setAnnouncements={state.setAnnouncements}
         />
 
@@ -567,7 +568,8 @@ export default function AppPage() {
           selectedGoal={state.selectedGoal}
           goalAmount={state.goalAmount}
           onGoalClose={modalHandlers.closeAllGoalModals}
-          onGoalSaveNow={modalHandlers.handleGoalSaveNow}
+          onGoalDetailsClose={modalHandlers.closeGoalDetailsOnly}
+          onOpenGoalSaveActions={modalHandlers.openSaveActionsForGoal}
           onGoalAmountContinue={modalHandlers.handleGoalAmountContinue}
           showBalances={state.showBalances}
           exchangeRate={getKESRate() || undefined}

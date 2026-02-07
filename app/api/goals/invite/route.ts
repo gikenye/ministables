@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ethers } from "ethers";
-import type { Db } from "mongodb";
+import { getServerSession } from "next-auth";
 import { CONTRACTS, GOAL_MANAGER_ABI, getContractsForChain } from "@/lib/backend/constants";
 import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import { createBackendWallet, createProvider, isValidAddress } from "@/lib/backend/utils";
 import type { ErrorResponse } from "@/lib/backend/types";
 import { getGoalsForChain, resolveChainKey } from "@/lib/backend/metaGoalMapping";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 function buildInviteMessage(params: {
   metaGoalId: string;
@@ -41,15 +43,6 @@ function isAlreadyMemberError(error: unknown): boolean {
     (combined.includes("already") || combined.includes("exists")) &&
     (combined.includes("member") || combined.includes("participant"))
   );
-}
-
-async function isKnownUser(db: Db, address: string): Promise<boolean> {
-  const normalizedAddress = address.toLowerCase();
-  const user = await db
-    .collection("users")
-    .findOne({ address: normalizedAddress }, { projection: { _id: 1 } });
-
-  return Boolean(user);
 }
 
 type InviteNonce = {
@@ -106,6 +99,7 @@ export async function POST(
       chainId,
       chain,
     } = await request.json();
+    const session = await getServerSession(authOptions);
 
     if (
       !metaGoalId ||
@@ -188,11 +182,16 @@ export async function POST(
     }
 
     const db = await connectToDatabase();
-    const inviterExists = await isKnownUser(db, normalizedInviter);
-
-    if (!inviterExists) {
-      return NextResponse.json({ error: "Inviter not found" }, { status: 403 });
-    }
+    await ensureUserInDb(
+      db,
+      normalizedInviter,
+      {
+        verified: session?.user?.verified,
+        identityData: session?.user?.identityData,
+        username: session?.user?.username,
+      },
+      { source: "invite.send", additional: { metaGoalId } }
+    );
 
     const nonceStatus = await consumeInviteNonce(db, {
       metaGoalId,

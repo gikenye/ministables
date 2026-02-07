@@ -22,7 +22,7 @@ import {
   resolveChainKey,
   setGoalsForChain,
 } from "@/lib/backend/metaGoalMapping";
-import { getMetaGoalsCollection } from "@/lib/backend/database";
+import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import { GoalSyncService } from "@/lib/backend/services/goal-sync.service";
 import type {
   CreateMultiVaultGoalRequest,
@@ -32,6 +32,7 @@ import type {
   MetaGoal,
   MetaGoalWithProgress,
 } from "@/lib/backend/types";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 export const dynamic = "force-dynamic";
 const DEFAULT_RPC_CONCURRENCY = 3;
@@ -523,6 +524,8 @@ export async function POST(
         { status: 400 }
       );
     }
+    const db = await connectToDatabase();
+    await ensureUserInDb(db, creatorAddress, {}, { source: "goals.create" });
 
     const { provider, contracts, vaults: chainVaults } = resolveChainContext({
       chainId,
