@@ -14,13 +14,14 @@ import {
   getContractCompliantTargetDate,
   resolveTargetAmountToken,
 } from "@/lib/backend/utils";
-import { getMetaGoalsCollection } from "@/lib/backend/database";
+import { connectToDatabase, getMetaGoalsCollection } from "@/lib/backend/database";
 import type { ErrorResponse, VaultAsset, MetaGoal } from "@/lib/backend/types";
 import {
   getGoalsForChain,
   resolveChainKey,
   setGoalForChain,
 } from "@/lib/backend/metaGoalMapping";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 interface ExpandGoalRequest {
   goalId: string;
@@ -37,6 +38,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
       chain: (body as { chain?: string }).chain,
     };
     const chainKey = resolveChainKey(chainParams);
+    const db = await connectToDatabase();
+    await ensureUserInDb(db, userAddress, {}, { source: "goals.expand" });
 
     const provider = createProvider(chainParams);
     const backendWallet = createBackendWallet(provider);

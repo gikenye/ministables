@@ -11,13 +11,17 @@ import {
   Globe,
   Share2,
   ArrowDownLeft,
+  Copy,
+  Check,
+  Loader2,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { useActiveAccount } from "thirdweb/react";
 import { backendApiClient } from "@/lib/services/backendApiService";
 import type { GroupGoalMembersResponse, GroupSavingsGoal } from "@/lib/services/backendApiService";
 import { Account, MyGroups } from "@/lib/types/shared";
+import { buildInviteLinkMessage } from "@/lib/utils/inviteLinkMessage";
 import { useChain } from "@/components/ChainProvider";
 import { BottomSheet, ModalHeader } from "@/components/ui";
 import { AmountInputModal } from "@/components/common";
@@ -136,12 +140,14 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteAddress, setInviteAddress] = useState("");
   const [isInviting, setIsInviting] = useState(false);
-  const [isCopyingInviteLink, setIsCopyingInviteLink] = useState(false);
-  const [isRotatingInviteLink, setIsRotatingInviteLink] = useState(false);
+  const [copyInviteLinkStage, setCopyInviteLinkStage] = useState<"idle" | "challenge" | "sign" | "copy">("idle");
+  const [rotateInviteLinkStage, setRotateInviteLinkStage] = useState<"idle" | "challenge" | "sign" | "copy">("idle");
   const [inviteLinkFeedback, setInviteLinkFeedback] = useState<{
     status: "idle" | "success" | "error";
     message?: string;
   }>({ status: "idle" });
+  const [inviteShareLink, setInviteShareLink] = useState<string | null>(null);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
   const [clanDepositMethod, setClanDepositMethod] = useState<"ONCHAIN" | "MPESA">("ONCHAIN");
   const [stablecoinBalances, setStablecoinBalances] = useState<TokenBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
@@ -152,6 +158,13 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const [activeTab, setActiveTab] = useState<"overview" | "members">("overview");
   const isOnchainDeposit = clanDepositMethod === "ONCHAIN";
   const walletAddress = activeAccount?.address || account?.address;
+  const isCopyingInviteLink = copyInviteLinkStage !== "idle";
+  const isRotatingInviteLink = rotateInviteLinkStage !== "idle";
+  const inviteLinkDisplay =
+    inviteShareLink || (copyInviteLinkStage !== "idle"
+      ? "Generating secure invite link..."
+      : "Tap to generate invite link");
+  const inviteCopyIdleLabel = inviteShareLink ? "Tap to copy" : "Tap to generate";
 
   // Determine if any modal/overlay is currently active
   const isAnyModalOpen = useMemo(() => {
@@ -171,6 +184,60 @@ export const ClanTab: React.FC<ClanTabProps> = ({
     () => (selectedGoal ? getGoalProgress(selectedGoal) : null),
     [selectedGoal]
   );
+
+  const getCopyInviteLinkLabel = (idleLabel: string) => {
+    switch (copyInviteLinkStage) {
+      case "challenge":
+        return "Preparing link...";
+      case "sign":
+        return "Confirm in wallet...";
+      case "copy":
+        return "Copying link...";
+      default:
+        return idleLabel;
+    }
+  };
+
+  const getRotateInviteLinkLabel = (idleLabel: string) => {
+    switch (rotateInviteLinkStage) {
+      case "challenge":
+        return "Preparing new link...";
+      case "sign":
+        return "Confirm in wallet...";
+      case "copy":
+        return "Copying link...";
+      default:
+        return idleLabel;
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fall back to legacy copy path below.
+      }
+    }
+    if (typeof document !== "undefined") {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return copied;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  };
 
   useEffect(() => {
     if (!selectedGoal?.metaGoalId) {
@@ -211,6 +278,8 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const handleInvite = () => {
     setInviteAddress("");
     setInviteLinkFeedback({ status: "idle" });
+    setInviteShareLink(null);
+    setInviteLinkCopied(false);
     setIsInviteModalOpen(true);
   };
 
@@ -344,13 +413,53 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const handleCopyInviteLink = async () => {
     if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
     inviteInFlightRef.current = true;
-    setIsCopyingInviteLink(true);
-    setInviteLinkFeedback({ status: "idle" });
     try {
-      const response = await backendApiClient.createGroupGoalInviteLink(
+      setInviteLinkCopied(false);
+      setInviteLinkFeedback({ status: "idle" });
+      if (inviteShareLink) {
+        setCopyInviteLinkStage("copy");
+        const copied = await copyToClipboard(inviteShareLink);
+        if (!copied) {
+          throw new Error("Copy failed. Please copy the link manually.");
+        }
+        toast.success(
+          selectedGoal.isPublic === false
+            ? "Private invite link copied."
+            : "Invite link copied."
+        );
+        setInviteLinkCopied(true);
+        setTimeout(() => setInviteLinkCopied(false), 2000);
+        setInviteLinkFeedback({
+          status: "success",
+          message: "Invite link copied.",
+        });
+        return;
+      }
+
+      setCopyInviteLinkStage("challenge");
+      setInviteLinkFeedback({ status: "idle" });
+      const normalizedInviter = activeAccount.address.toLowerCase();
+      const challenge = await backendApiClient.getGroupGoalInviteLinkChallenge(
         selectedGoal.metaGoalId,
-        activeAccount.address.toLowerCase()
+        normalizedInviter,
+        "invite-link:create"
       );
+      setCopyInviteLinkStage("sign");
+      const message = buildInviteLinkMessage({
+        metaGoalId: selectedGoal.metaGoalId,
+        inviterAddress: normalizedInviter,
+        nonce: challenge.nonce,
+        issuedAt: challenge.issuedAt,
+        action: "invite-link:create",
+      });
+      const signature = await activeAccount.signMessage({ message });
+      const response = await backendApiClient.createGroupGoalInviteLink({
+        metaGoalId: selectedGoal.metaGoalId,
+        inviterAddress: normalizedInviter,
+        nonce: challenge.nonce,
+        issuedAt: challenge.issuedAt,
+        signature,
+      });
       const origin =
         (typeof window !== "undefined" &&
           window.location.origin &&
@@ -366,46 +475,19 @@ export const ClanTab: React.FC<ClanTabProps> = ({
       if (!shareLink) {
         throw new Error("Failed to generate invite link.");
       }
-      let copied = false;
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(shareLink);
-          copied = true;
-        } catch {
-          copied = false;
-        }
-      }
-      if (!copied && typeof document !== "undefined") {
-        try {
-          const textarea = document.createElement("textarea");
-          textarea.value = shareLink;
-          textarea.setAttribute("readonly", "");
-          textarea.style.position = "absolute";
-          textarea.style.left = "-9999px";
-          document.body.appendChild(textarea);
-          textarea.select();
-          copied = document.execCommand("copy");
-          document.body.removeChild(textarea);
-        } catch {
-          copied = false;
-        }
-      }
+      setInviteShareLink(shareLink);
+      setCopyInviteLinkStage("copy");
+      const copied = await copyToClipboard(shareLink);
       if (!copied) {
-        if (typeof window !== "undefined") {
-          const promptResult = window.prompt("Copy this invite link:", shareLink);
-          if (promptResult !== null) {
-            copied = true;
-          }
-        }
-        if (!copied) {
-          throw new Error("Copy failed. Please copy the link manually.");
-        }
+        throw new Error("Copy failed. Please copy the link manually.");
       }
       toast.success(
         selectedGoal.isPublic === false
           ? "Private invite link copied."
           : "Invite link copied."
       );
+      setInviteLinkCopied(true);
+      setTimeout(() => setInviteLinkCopied(false), 2000);
       setInviteLinkFeedback({
         status: "success",
         message: "Invite link copied.",
@@ -419,7 +501,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
         message,
       });
     } finally {
-      setIsCopyingInviteLink(false);
+      setCopyInviteLinkStage("idle");
       inviteInFlightRef.current = false;
     }
   };
@@ -427,13 +509,32 @@ export const ClanTab: React.FC<ClanTabProps> = ({
   const handleRotateInviteLink = async () => {
     if (inviteInFlightRef.current || !selectedGoal || !activeAccount?.address) return;
     inviteInFlightRef.current = true;
-    setIsRotatingInviteLink(true);
+    setInviteLinkCopied(false);
+    setRotateInviteLinkStage("challenge");
     setInviteLinkFeedback({ status: "idle" });
     try {
-      const response = await backendApiClient.rotateGroupGoalInviteLink(
+      const normalizedInviter = activeAccount.address.toLowerCase();
+      const challenge = await backendApiClient.getGroupGoalInviteLinkChallenge(
         selectedGoal.metaGoalId,
-        activeAccount.address.toLowerCase()
+        normalizedInviter,
+        "invite-link:revoke"
       );
+      setRotateInviteLinkStage("sign");
+      const message = buildInviteLinkMessage({
+        metaGoalId: selectedGoal.metaGoalId,
+        inviterAddress: normalizedInviter,
+        nonce: challenge.nonce,
+        issuedAt: challenge.issuedAt,
+        action: "invite-link:revoke",
+      });
+      const signature = await activeAccount.signMessage({ message });
+      const response = await backendApiClient.rotateGroupGoalInviteLink({
+        metaGoalId: selectedGoal.metaGoalId,
+        inviterAddress: normalizedInviter,
+        nonce: challenge.nonce,
+        issuedAt: challenge.issuedAt,
+        signature,
+      });
       const origin =
         (typeof window !== "undefined" &&
           window.location.origin &&
@@ -449,42 +550,15 @@ export const ClanTab: React.FC<ClanTabProps> = ({
       if (!shareLink) {
         throw new Error("Failed to rotate invite link.");
       }
-      let copied = false;
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(shareLink);
-          copied = true;
-        } catch {
-          copied = false;
-        }
-      }
-      if (!copied && typeof document !== "undefined") {
-        try {
-          const textarea = document.createElement("textarea");
-          textarea.value = shareLink;
-          textarea.setAttribute("readonly", "");
-          textarea.style.position = "absolute";
-          textarea.style.left = "-9999px";
-          document.body.appendChild(textarea);
-          textarea.select();
-          copied = document.execCommand("copy");
-          document.body.removeChild(textarea);
-        } catch {
-          copied = false;
-        }
-      }
+      setInviteShareLink(shareLink);
+      setRotateInviteLinkStage("copy");
+      const copied = await copyToClipboard(shareLink);
       if (!copied) {
-        if (typeof window !== "undefined") {
-          const promptResult = window.prompt("Copy this invite link:", shareLink);
-          if (promptResult !== null) {
-            copied = true;
-          }
-        }
-        if (!copied) {
-          throw new Error("Copy failed. Please copy the link manually.");
-        }
+        throw new Error("Copy failed. Please copy the link manually.");
       }
       toast.success("New invite link copied.");
+      setInviteLinkCopied(true);
+      setTimeout(() => setInviteLinkCopied(false), 2000);
       setInviteLinkFeedback({
         status: "success",
         message: "New invite link copied.",
@@ -498,7 +572,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
         message,
       });
     } finally {
-      setIsRotatingInviteLink(false);
+      setRotateInviteLinkStage("idle");
       inviteInFlightRef.current = false;
     }
   };
@@ -564,7 +638,7 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                       <Share2 size={16} /> Invite
                     </button>
                     <button onClick={handleCopyInviteLink} disabled={isCopyingInviteLink} className="flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all disabled:opacity-40">
-                      <Globe size={16} /> {isCopyingInviteLink ? "Copying..." : "Share link"}
+                      <Globe size={16} /> {getCopyInviteLinkLabel("Share link")}
                     </button>
                   </div>
                   <button onClick={() => { onOpenWithdrawActions?.(); setSelectedGoal(null); }} className="w-full flex items-center justify-center gap-2 py-4 bg-white/5 rounded-[20px] border border-white/5 text-white/60 font-black text-[10px] uppercase tracking-widest active:bg-white active:text-black transition-all">
@@ -597,22 +671,58 @@ export const ClanTab: React.FC<ClanTabProps> = ({
                 <p className="text-sm text-emerald-100/80">
                   Share this link with trusted members. Anyone with the link can join.
                 </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
+                <div className="space-y-3">
+                  <button
                     onClick={handleCopyInviteLink}
                     disabled={isCopyingInviteLink}
-                    className="rounded-[16px] bg-white py-3 text-sm font-black text-black disabled:opacity-40"
+                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-teal-500/5 border border-teal-500/10 hover:border-teal-400/40 transition-all group active:scale-[0.98] disabled:opacity-60"
                   >
-                    {isCopyingInviteLink ? "Copying..." : "Copy link"}
-                  </motion.button>
+                    <div className="flex items-center space-x-3 overflow-hidden">
+                      <div className="w-9 h-9 shrink-0 rounded-xl bg-teal-400/10 flex items-center justify-center group-hover:bg-teal-400/20 transition-colors">
+                        <Copy className="w-4 h-4 text-teal-400" />
+                      </div>
+                      <div className="text-left overflow-hidden">
+                        <p className="text-[8px] font-black text-teal-400/60 uppercase tracking-widest mb-0.5">
+                          {getCopyInviteLinkLabel(inviteCopyIdleLabel)}
+                        </p>
+                        <p className="text-[11px] text-white font-bold font-mono truncate">
+                          {inviteLinkDisplay}
+                        </p>
+                      </div>
+                    </div>
+                    <AnimatePresence mode="wait">
+                      {inviteLinkCopied ? (
+                        <motion.div
+                          key="copied"
+                          initial={{ scale: 0.5 }}
+                          animate={{ scale: 1 }}
+                          exit={{ scale: 0.5 }}
+                        >
+                          <Check className="w-5 h-5 text-teal-400" />
+                        </motion.div>
+                      ) : isCopyingInviteLink ? (
+                        <motion.div
+                          key="loading"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                        >
+                          <Loader2 className="w-5 h-5 text-teal-300 animate-spin" />
+                        </motion.div>
+                      ) : (
+                        <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ChevronRight className="w-4 h-4 text-white/20" />
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </button>
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={handleRotateInviteLink}
                     disabled={isRotatingInviteLink}
-                    className="rounded-[16px] border border-white/30 bg-transparent py-3 text-sm font-black text-white/90 disabled:opacity-40"
+                    className="w-full rounded-[16px] border border-white/30 bg-transparent py-3 text-sm font-black text-white/90 disabled:opacity-40"
                   >
-                    {isRotatingInviteLink ? "Rotating..." : "Rotate link"}
+                    {getRotateInviteLinkLabel("Rotate link")}
                   </motion.button>
                 </div>
                 {inviteLinkFeedback.status !== "idle" && (
@@ -638,14 +748,50 @@ export const ClanTab: React.FC<ClanTabProps> = ({
               {isInviting ? "Sending..." : "Send invite"}
             </motion.button>
             {selectedGoal.isPublic !== false && (
-              <motion.button
-                whileTap={{ scale: 0.98 }}
+              <button
                 onClick={handleCopyInviteLink}
                 disabled={isCopyingInviteLink}
-                className="w-full rounded-[20px] border border-white/20 bg-transparent py-4 text-base font-black text-white/80 disabled:opacity-30"
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-teal-500/5 border border-teal-500/10 hover:border-teal-400/40 transition-all group active:scale-[0.98] disabled:opacity-60"
               >
-                {isCopyingInviteLink ? "Copying..." : "Copy invite link"}
-              </motion.button>
+                <div className="flex items-center space-x-3 overflow-hidden">
+                  <div className="w-9 h-9 shrink-0 rounded-xl bg-teal-400/10 flex items-center justify-center group-hover:bg-teal-400/20 transition-colors">
+                    <Copy className="w-4 h-4 text-teal-400" />
+                  </div>
+                  <div className="text-left overflow-hidden">
+                    <p className="text-[8px] font-black text-teal-400/60 uppercase tracking-widest mb-0.5">
+                      {getCopyInviteLinkLabel(inviteCopyIdleLabel)}
+                    </p>
+                    <p className="text-[11px] text-white font-bold font-mono truncate">
+                      {inviteLinkDisplay}
+                    </p>
+                  </div>
+                </div>
+                <AnimatePresence mode="wait">
+                  {inviteLinkCopied ? (
+                    <motion.div
+                      key="copied"
+                      initial={{ scale: 0.5 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0.5 }}
+                    >
+                      <Check className="w-5 h-5 text-teal-400" />
+                    </motion.div>
+                  ) : isCopyingInviteLink ? (
+                    <motion.div
+                      key="loading"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <Loader2 className="w-5 h-5 text-teal-300 animate-spin" />
+                    </motion.div>
+                  ) : (
+                    <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ChevronRight className="w-4 h-4 text-white/20" />
+                    </div>
+                  )}
+                </AnimatePresence>
+              </button>
             )}
             {selectedGoal.isPublic !== false &&
               inviteLinkFeedback.status !== "idle" && (

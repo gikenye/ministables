@@ -29,6 +29,33 @@ function resolveDefaultBaseUrl(): string {
   return SERVER_ALLOCATE_API_URL;
 }
 
+let corsWarningEmitted = false;
+
+function warnIfCrossOrigin(baseUrl: string) {
+  if (corsWarningEmitted) return;
+  if (typeof window === "undefined") return;
+  if (!baseUrl) return;
+  try {
+    const resolved = new URL(baseUrl, window.location.origin);
+    if (resolved.origin !== window.location.origin) {
+      corsWarningEmitted = true;
+      logger.warn(
+        "BackendApiClient using cross-origin baseUrl. Ensure CORS allows credentials.",
+        {
+          component: "backendApiService",
+          operation: "config",
+          additional: {
+            baseUrl: resolved.origin,
+            appOrigin: window.location.origin,
+          },
+        }
+      );
+    }
+  } catch {
+    // ignore invalid baseUrl
+  }
+}
+
 function appendChainParams(
   params: URLSearchParams,
   chainId?: number,
@@ -118,6 +145,14 @@ export interface InviteLinkResponse {
   shareLink?: string;
   issuedAt?: string;
   expiresAt?: string;
+}
+
+export interface InviteLinkChallengeResponse {
+  success?: boolean;
+  nonce: string;
+  issuedAt: string;
+  expiresAt?: string;
+  error?: string;
 }
 
 export interface AcceptInviteResponse {
@@ -414,6 +449,7 @@ export class BackendApiClient {
         { component: "backendApiService", operation: "init" }
       );
     }
+    warnIfCrossOrigin(this.baseUrl);
   }
 
   private async request<T>(
@@ -422,6 +458,7 @@ export class BackendApiClient {
   ): Promise<T> {
     const url = this.baseUrl ? `${this.baseUrl}${endpoint}` : endpoint;
     const config: RequestInit = {
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
@@ -696,6 +733,17 @@ export class BackendApiClient {
     });
   }
 
+  async getGroupGoalInviteLinkChallenge(
+    metaGoalId: string,
+    inviterAddress: string,
+    action: "invite-link:create" | "invite-link:revoke"
+  ): Promise<InviteLinkChallengeResponse> {
+    return this.request(`${API_ENDPOINTS.GOALS}/invite-link/challenge`, {
+      method: "POST",
+      body: JSON.stringify({ metaGoalId, inviterAddress, action }),
+    });
+  }
+
   async sendGroupGoalInvite(request: {
     metaGoalId: string;
     invitedAddress: string;
@@ -710,23 +758,29 @@ export class BackendApiClient {
     });
   }
 
-  async createGroupGoalInviteLink(
-    metaGoalId: string,
-    inviterAddress: string
-  ): Promise<InviteLinkResponse> {
+  async createGroupGoalInviteLink(request: {
+    metaGoalId: string;
+    inviterAddress: string;
+    nonce: string;
+    issuedAt: string;
+    signature: string;
+  }): Promise<InviteLinkResponse> {
     return this.request(`${API_ENDPOINTS.GOALS}/invite-link`, {
       method: "POST",
-      body: JSON.stringify({ metaGoalId, inviterAddress }),
+      body: JSON.stringify(request),
     });
   }
 
-  async rotateGroupGoalInviteLink(
-    metaGoalId: string,
-    inviterAddress: string
-  ): Promise<InviteLinkResponse> {
+  async rotateGroupGoalInviteLink(request: {
+    metaGoalId: string;
+    inviterAddress: string;
+    nonce: string;
+    issuedAt: string;
+    signature: string;
+  }): Promise<InviteLinkResponse> {
     return this.request(`${API_ENDPOINTS.GOALS}/invite-link/revoke`, {
       method: "POST",
-      body: JSON.stringify({ metaGoalId, inviterAddress }),
+      body: JSON.stringify(request),
     });
   }
 

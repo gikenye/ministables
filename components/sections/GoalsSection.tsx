@@ -38,7 +38,7 @@ interface GoalsSectionProps {
   fetchUserPortfolio: () => void;
   fetchUserGoals: () => void;
   toggleBalanceVisibility: () => void;
-  setSaveActionsModalOpen: (open: boolean) => void;
+  onOpenSaveActions: () => void;
   setWithdrawActionsModalOpen: (open: boolean) => void;
   sendTransaction: any;
 }
@@ -67,7 +67,7 @@ export function GoalsSection({
   fetchUserPortfolio,
   fetchUserGoals,
   toggleBalanceVisibility,
-  setSaveActionsModalOpen,
+  onOpenSaveActions,
   setWithdrawActionsModalOpen,
   sendTransaction,
 }: GoalsSectionProps) {
@@ -119,7 +119,7 @@ export function GoalsSection({
                 isLoading={combinedLoading}
                 showBalance={showBalances}
                 onToggleBalance={toggleBalanceVisibility}
-                onDeposit={() => setSaveActionsModalOpen(true)}
+                onDeposit={onOpenSaveActions}
                 onWithdraw={() => setWithdrawActionsModalOpen(true)}
                 defaultToken={defaultToken}
                 chain={chain}

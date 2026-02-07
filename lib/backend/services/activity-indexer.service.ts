@@ -1,8 +1,9 @@
 import { ethers } from "ethers";
-import { CHAINS, ALL_CHAINS } from "../constants";
+import { CHAINS } from "../constants";
 import { createProvider } from "../utils";
 import { getDatabase } from "../database";
 import type { ActivityType } from "../types";
+import { ensureUserInDb } from "@/lib/services/userService";
 
 interface IndexedActivity {
   userAddress: string;
@@ -153,15 +154,7 @@ export class ActivityIndexer {
   ): Promise<any[]> {
     const db = await getDatabase();
     const collection = db.collection<IndexedActivity>(this.COLLECTION);
-
-    // Trigger background indexing for all chains (non-blocking)
-    Promise.all(
-      ALL_CHAINS.map((chain) =>
-        this.indexUserActivities(userAddress, chain).catch((err) =>
-          console.warn(`Failed to index ${chain}:`, err)
-        )
-      )
-    );
+    await ensureUserInDb(db, userAddress, {}, { source: "activity-indexer" });
 
     // Return already indexed activities
     const activities = await collection

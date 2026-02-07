@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { GroupSavingsGoal } from "@/lib/services/backendApiService";
 
 interface UseModalHandlersProps {
@@ -27,6 +27,7 @@ interface UseModalHandlersProps {
   setDepositError: (error: string | null) => void;
   setTransactionStatus: (status: string | null) => void;
   setDepositSuccess: (success: any) => void;
+  selectedGoal?: any;
 }
 
 export function useModalHandlers(props: UseModalHandlersProps) {
@@ -56,7 +57,10 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setDepositError,
     setTransactionStatus,
     setDepositSuccess,
+    selectedGoal,
   } = props;
+
+  const saveActionsContextRef = useRef<"quick" | "goal">("quick");
 
   const resetDepositState = useCallback(() => {
     setIsDepositLoading(false);
@@ -70,18 +74,43 @@ export function useModalHandlers(props: UseModalHandlersProps) {
     setDepositSuccess,
   ]);
 
-const handleSaveActionSelect = useCallback(
+  const resolveTargetGoalId = useCallback((goal?: any) => {
+    if (!goal) return null;
+    const onChainGoals = goal.onChainGoals || goal.goalIds;
+    if (!onChainGoals) return null;
+    return (
+      onChainGoals.USDC ||
+      onChainGoals.USDT ||
+      onChainGoals.CUSD ||
+      onChainGoals.cUSD ||
+      Object.values(onChainGoals)[0] ||
+      null
+    );
+  }, []);
+
+  const handleSaveActionSelect = useCallback(
     (actionId: string) => {
       setSaveActionsModalOpen(false);
+      const context = saveActionsContextRef.current;
 
       if (actionId === "onramp") {
         setDepositMethod("MPESA");
-        setOnrampTargetGoalId(null);
+        setOnrampTargetGoalId(
+          context === "goal" ? resolveTargetGoalId(selectedGoal) : null
+        );
         setShowOnrampModal(true);
+        saveActionsContextRef.current = "quick";
+        return;
       } 
       else if (actionId === "onchain") {
         setDepositMethod("ONCHAIN");
-        setQuickSaveAmountOpen(true);
+        setOnrampTargetGoalId(null);
+        if (context === "goal") {
+          setGoalAmountOpen(true);
+        } else {
+          setQuickSaveAmountOpen(true);
+        }
+        saveActionsContextRef.current = "quick";
       }
     },
     [
@@ -90,8 +119,21 @@ const handleSaveActionSelect = useCallback(
       setOnrampTargetGoalId,
       setDepositMethod,
       setQuickSaveAmountOpen,
+      setGoalAmountOpen,
+      resolveTargetGoalId,
+      selectedGoal,
     ]
   );
+
+  const openSaveActionsForQuickSave = useCallback(() => {
+    saveActionsContextRef.current = "quick";
+    setSaveActionsModalOpen(true);
+  }, [setSaveActionsModalOpen]);
+
+  const openSaveActionsForGoal = useCallback(() => {
+    saveActionsContextRef.current = "goal";
+    setSaveActionsModalOpen(true);
+  }, [setSaveActionsModalOpen]);
 
   const handleQuickSaveSaveNow = useCallback(() => {
     setQuickSaveDetailsOpen(false);
@@ -152,6 +194,10 @@ const handleSaveActionSelect = useCallback(
     setGoalAmountOpen(true);
   }, [setGoalDetailsOpen, setGoalAmountOpen]);
 
+  const closeGoalDetailsOnly = useCallback(() => {
+    setGoalDetailsOpen(false);
+  }, [setGoalDetailsOpen]);
+
   const handleGoalAmountContinue = useCallback(
     (amount: string) => {
       setGoalAmount(amount);
@@ -202,9 +248,12 @@ const handleSaveActionSelect = useCallback(
     closeAllQuickSaveModals,
     handleGoalCardClick,
     handleGoalSaveNow,
+    closeGoalDetailsOnly,
     handleGoalAmountContinue,
     closeAllGoalModals,
     closeCustomGoalModal,
     handleJoinGroupGoal,
+    openSaveActionsForQuickSave,
+    openSaveActionsForGoal,
   };
 }
