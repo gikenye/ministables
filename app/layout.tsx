@@ -2,11 +2,69 @@ import "./globals.css";
 import ClientLayout from "./ClientLayout";
 import type { Metadata, Viewport } from "next";
 
+const SITE_URL = "https://ministables.vercel.app";
+const OG_IMAGE = `${SITE_URL}/new-logo.png`;
+
 export const metadata: Metadata = {
-  title: "Minilend - Save and you will be rewarded",
-  description: "Save for your goals, borrow for your needs",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Minilend - Save and you will be rewarded",
+    template: "%s | Minilend",
+  },
+  description:
+    "Minilend is a savings protocol for group savings in stablecoins on Celo, Base & Scroll. Save for your goals, borrow for your needs. Compliant DeFi with zkSelf.",
+  keywords: [
+    "Minilend",
+    "savings",
+    "stablecoins",
+    "DeFi",
+    "Celo",
+    "Base",
+    "Scroll",
+    "group savings",
+    "savings goals",
+    "USDC",
+    "lending",
+  ],
+  authors: [{ name: "Minilend", url: SITE_URL }],
+  creator: "Minilend",
+  publisher: "Minilend",
   generator: "hagia sophia",
   manifest: "/manifest.json",
+  alternates: {
+    canonical: SITE_URL,
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: SITE_URL,
+    siteName: "Minilend",
+    title: "Minilend - Save and you will be rewarded",
+    description:
+      "Savings protocol for group savings in stablecoins. Save for your goals, borrow for your needs. Celo, Base & Scroll.",
+    images: [
+      {
+        url: OG_IMAGE,
+        width: 512,
+        height: 512,
+        alt: "Minilend - Smart savings vault",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Minilend - Save and you will be rewarded",
+    description: "Savings protocol for group savings in stablecoins. Save for your goals, borrow for your needs.",
+    images: [OG_IMAGE],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -55,10 +113,40 @@ export const viewport: Viewport = {
   themeColor: "#0e6037",
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}#organization`,
+      name: "Minilend",
+      url: SITE_URL,
+      logo: `${SITE_URL}/new-logo.png`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}#website`,
+      url: SITE_URL,
+      name: "Minilend",
+      description:
+        "Savings protocol for group savings in stablecoins on Celo, Base and Scroll. Save for your goals, borrow for your needs.",
+      publisher: { "@id": `${SITE_URL}#organization` },
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <ClientLayout>{children}</ClientLayout>;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <ClientLayout>{children}</ClientLayout>
+    </>
+  );
 }

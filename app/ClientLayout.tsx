@@ -45,6 +45,12 @@ export default function ClientLayout({
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.SEO_CONFIG={title:"Minilend - Save and you will be rewarded",description:"Minilend is a savings protocol for group savings in stablecoins on Celo, Base & Scroll. Save for your goals, borrow for your needs.",canonical:"https://ministables.vercel.app",image:"https://ministables.vercel.app/new-logo.png",siteName:"Minilend",siteUrl:"https://ministables.vercel.app",locale:"en_US",type:"website",twitterCard:"summary_large_image"};`,
+          }}
+        />
+        <script src="/seo/seo-core.js" defer />
       </head>
       <body className={`${inter.className} pb-safe`}>
         <SpaceBackground />

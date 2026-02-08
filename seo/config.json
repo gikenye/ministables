@@ -1,0 +1,14 @@
+{
+  "title": "Minilend - Save and you will be rewarded",
+  "description": "Minilend is a savings protocol for group savings in stablecoins on Celo, Base & Scroll. Save for your goals, borrow for your needs. Compliant DeFi with zkSelf.",
+  "canonical": "https://ministables.vercel.app",
+  "image": "https://ministables.vercel.app/new-logo.png",
+  "siteName": "Minilend",
+  "siteUrl": "https://ministables.vercel.app",
+  "locale": "en_US",
+  "type": "website",
+  "twitterCard": "summary_large_image",
+  "breadcrumb": [
+    { "name": "Home", "url": "/" }
+  ]
+}
